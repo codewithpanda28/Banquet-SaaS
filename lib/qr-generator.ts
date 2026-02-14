@@ -1,67 +1,67 @@
 import QRCode from 'qrcode'
 
 export interface QRCodeOptions {
-    width?: number
-    margin?: number
-    color?: {
-        dark?: string
-        light?: string
-    }
+  width?: number
+  margin?: number
+  color?: {
+    dark?: string
+    light?: string
+  }
 }
 
 // Generate QR Code as Data URL
 export async function generateQRDataURL(
-    url: string,
-    options: QRCodeOptions = {}
+  url: string,
+  options: QRCodeOptions = {}
 ): Promise<string> {
-    const defaultOptions = {
-        width: 300,
-        margin: 2,
-        color: {
-            dark: '#000000',
-            light: '#FFFFFF',
-        },
-    }
+  const defaultOptions = {
+    width: 300,
+    margin: 2,
+    color: {
+      dark: '#000000',
+      light: '#FFFFFF',
+    },
+  }
 
-    const qrOptions = { ...defaultOptions, ...options }
+  const qrOptions = { ...defaultOptions, ...options }
 
-    try {
-        const dataUrl = await QRCode.toDataURL(url, qrOptions)
-        return dataUrl
-    } catch (error) {
-        console.error('Error generating QR code:', error)
-        throw new Error('Failed to generate QR code')
-    }
+  try {
+    const dataUrl = await QRCode.toDataURL(url, qrOptions)
+    return dataUrl
+  } catch (error) {
+    console.error('Error generating QR code:', error)
+    throw new Error('Failed to generate QR code')
+  }
 }
 
 // Generate table QR code
 export async function generateTableQR(tableNumber: number): Promise<string> {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'
-    const menuUrl = `${baseUrl}/menu?table=${tableNumber}&type=dine_in`
+  const baseUrl = process.env.NEXT_PUBLIC_CUSTOMER_URL || 'http://localhost:3001'
+  const menuUrl = `${baseUrl}/menu?table=${tableNumber}&type=dine_in`
 
-    return generateQRDataURL(menuUrl, { width: 400 })
+  return generateQRDataURL(menuUrl, { width: 400 })
 }
 
 // Download QR Code
 export function downloadQR(dataUrl: string, fileName: string): void {
-    const link = document.createElement('a')
-    link.href = dataUrl
-    link.download = `${fileName}.png`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+  const link = document.createElement('a')
+  link.href = dataUrl
+  link.download = `${fileName}.png`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
 }
 
 // Print QR Code
 export function printQR(
-    dataUrl: string,
-    tableNumber: number,
-    restaurantName: string
+  dataUrl: string,
+  tableNumber: number,
+  restaurantName: string
 ): void {
-    const printWindow = window.open('', '_blank')
-    if (!printWindow) return
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) return
 
-    printWindow.document.write(`
+  printWindow.document.write(`
     <html>
       <head>
         <title>Table ${tableNumber} QR Code</title>
@@ -113,15 +113,15 @@ export function printQR(
     </html>
   `)
 
-    printWindow.document.close()
+  printWindow.document.close()
 
-    // Wait for image to load before printing
-    const img = printWindow.document.querySelector('img')
-    if (img) {
-        img.onload = () => {
-            setTimeout(() => {
-                printWindow.print()
-            }, 250)
-        }
+  // Wait for image to load before printing
+  const img = printWindow.document.querySelector('img')
+  if (img) {
+    img.onload = () => {
+      setTimeout(() => {
+        printWindow.print()
+      }, 250)
     }
+  }
 }

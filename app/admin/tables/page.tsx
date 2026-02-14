@@ -42,8 +42,9 @@ export default function TablesPage() {
         const codes: Record<string, string> = {}
         for (const table of tables) {
             try {
-                // In a real app, this URL would point to your customer-facing menu app
-                const qrValue = `${window.location.origin}/customer/menu?restaurantId=${RESTAURANT_ID}&tableId=${table.id}`
+                // Point to the separate Customer Dashboard app
+                const baseUrl = process.env.NEXT_PUBLIC_CUSTOMER_URL || 'http://localhost:3001'
+                const qrValue = `${baseUrl}/menu?table=${table.table_number}&type=dine_in`
                 const url = await QRCode.toDataURL(qrValue, {
                     width: 300,
                     margin: 2,
