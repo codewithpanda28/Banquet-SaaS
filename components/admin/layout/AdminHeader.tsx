@@ -271,14 +271,13 @@ export function AdminHeader() {
         }
     }
 
-    const handleLogout = async () => {
-        try {
-            await supabase.auth.signOut()
-            router.push('/login')
-            toast.success('Logged out successfully')
-        } catch (error) {
-            toast.error('Error logging out')
-        }
+    const handleLogout = () => {
+        // Clear login session
+        localStorage.removeItem('admin_logged_in')
+        localStorage.removeItem('admin_email')
+
+        toast.success('✅ Logged out successfully')
+        router.push('/login')
     }
 
     return (
