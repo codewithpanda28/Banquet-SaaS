@@ -30,6 +30,7 @@ export default function OrdersPage() {
     const [searchTerm, setSearchTerm] = useState('')
     const [orderTypeFilter, setOrderTypeFilter] = useState<string>('all')
     const [activeTab, setActiveTab] = useState('active')
+    const [processingPayment, setProcessingPayment] = useState(false)
 
     useEffect(() => {
         fetchOrders()
@@ -55,6 +56,7 @@ export default function OrdersPage() {
         `)
                 .eq('restaurant_id', RESTAURANT_ID)
                 .order('created_at', { ascending: false })
+                .limit(50)
 
             if (error) throw error
             setOrders(data || [])
@@ -212,6 +214,57 @@ export default function OrdersPage() {
         }
     }
 
+    async function handlePayment(method: 'cash' | 'upi') {
+        if (!selectedOrder) return
+
+        try {
+            setProcessingPayment(true)
+
+            // 1. Update Payment Status in Database
+            const { error } = await supabase
+                .from('orders')
+                .update({
+                    payment_status: 'paid',
+                    payment_method: method,
+                    status: 'completed' // Mark as completed when paid
+                })
+                .eq('id', selectedOrder.id)
+
+            if (error) throw error
+
+            // 2. Trigger Automation Webhook
+            const webhookUrl = process.env.NEXT_PUBLIC_PAYMENT_WEBHOOK_URL
+            if (webhookUrl && !webhookUrl.includes('your-n8n-webhook-url')) {
+                const payload = {
+                    event: 'payment_received',
+                    bill_id: selectedOrder.bill_id,
+                    customer_name: selectedOrder.customers?.name || 'Walk-in',
+                    customer_phone: selectedOrder.customers?.phone,
+                    amount: selectedOrder.total,
+                    payment_method: method,
+                    items: selectedOrder.order_items?.map((i: any) => `${i.item_name} x ${i.quantity}`).join(', '),
+                    timestamp: new Date().toISOString()
+                }
+
+                // Send non-blocking request to webhook
+                fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }).catch(err => console.error('Webhook failed:', err))
+            }
+
+            toast.success(`Payment marked as ${method.toUpperCase()} & Message Sent 🚀`)
+            setSelectedOrder(null)
+            fetchOrders()
+        } catch (error) {
+            console.error('Error processing payment:', error)
+            toast.error('Failed to update payment')
+        } finally {
+            setProcessingPayment(false)
+        }
+    }
+
     const getStatusBadge = (status: string) => {
         const config: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline', label: string }> = {
             pending: { variant: 'outline', label: 'Pending' },
@@ -331,11 +384,11 @@ export default function OrdersPage() {
                                             </div>
                                             <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                                                 <span className="font-medium text-foreground">
-                                                    {order.customers?.name || 'Walk-in'}
+                                                    {order.customers?.name || order.customer_name || 'Walk-in'}
                                                 </span>
-                                                {order.customers?.phone && (
+                                                {(order.customers?.phone || order.customer_phone) && (
                                                     <span className="flex items-center gap-1">
-                                                        {order.customers?.phone}
+                                                        {order.customers?.phone || order.customer_phone}
                                                     </span>
                                                 )}
                                                 {order.restaurant_tables && (
@@ -391,11 +444,11 @@ export default function OrdersPage() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-sm text-muted-foreground uppercase text-[10px] font-bold tracking-wider">Customer Name</p>
-                                    <p className="font-bold text-lg">{selectedOrder.customers?.name || 'Walk-in'}</p>
+                                    <p className="font-bold text-lg">{selectedOrder.customers?.name || selectedOrder.customer_name || 'Walk-in'}</p>
                                 </div>
                                 <div>
                                     <p className="text-sm text-muted-foreground uppercase text-[10px] font-bold tracking-wider">Phone Number</p>
-                                    <p className="font-bold text-lg">{selectedOrder.customers?.phone || 'N/A'}</p>
+                                    <p className="font-bold text-lg">{selectedOrder.customers?.phone || selectedOrder.customer_phone || 'N/A'}</p>
                                 </div>
                                 <div>
                                     <p className="text-sm text-muted-foreground uppercase text-[10px] font-bold tracking-wider">Order Type</p>
@@ -436,10 +489,30 @@ export default function OrdersPage() {
                                     ₹{selectedOrder.total.toFixed(2)}
                                 </span>
                             </div>
+
+
+
+                            {/* Payment Actions */}
+                            <div className="flex gap-3 mt-6 pt-4 border-t">
+                                <Button
+                                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                                    onClick={() => handlePayment('cash')}
+                                    disabled={processingPayment || selectedOrder.payment_status === 'paid'}
+                                >
+                                    {processingPayment ? 'Processing...' : 'Cash Paid 💵'}
+                                </Button>
+                                <Button
+                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                                    onClick={() => handlePayment('upi')}
+                                    disabled={processingPayment || selectedOrder.payment_status === 'paid'}
+                                >
+                                    {processingPayment ? 'Processing...' : 'UPI Paid 📱'}
+                                </Button>
+                            </div>
                         </div>
                     )}
                 </DialogContent>
             </Dialog>
-        </div>
+        </div >
     )
 }

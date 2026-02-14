@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { PageHeader } from '@/components/admin/layout/PageHeader'
 import { DollarSign, ShoppingCart, TrendingUp, Clock, Download, Eye, MapPin } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -22,6 +22,7 @@ export default function DashboardPage() {
     const [recentOrders, setRecentOrders] = useState<Order[]>([])
     const [selectedOrder, setSelectedOrder] = useState<any>(null)
     const [loading, setLoading] = useState(true)
+    const [processingPayment, setProcessingPayment] = useState(false)
 
     useEffect(() => {
         fetchDashboardData()
@@ -47,7 +48,7 @@ export default function DashboardPage() {
         }
     }, [])
 
-    async function fetchDashboardData() {
+    const fetchDashboardData = useCallback(async () => {
         try {
             setLoading(true)
 
@@ -107,7 +108,7 @@ export default function DashboardPage() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [])
 
     async function handleViewDetails(orderId: string) {
         try {
@@ -160,7 +161,7 @@ export default function DashboardPage() {
                 ['Bill ID', 'Customer', 'Type', 'Total', 'Status', 'Time'],
                 ...recentOrders.map((order: any) => [
                     order.bill_id,
-                    order.customers?.name || 'Walk-in',
+                    order.customers?.name || order.customer_name || 'Walk-in',
                     order.order_type.replace('_', ' '),
                     `₹${order.total.toFixed(2)}`,
                     order.status,
@@ -180,6 +181,57 @@ export default function DashboardPage() {
         } catch (error) {
             console.error('Error downloading report:', error)
             toast.error('Failed to download report')
+        }
+    }
+
+    async function handlePayment(method: 'cash' | 'upi') {
+        if (!selectedOrder) return
+
+        try {
+            setProcessingPayment(true)
+
+            // 1. Update Payment Status in Database
+            const { error } = await supabase
+                .from('orders')
+                .update({
+                    payment_status: 'paid',
+                    payment_method: method,
+                    status: 'completed' // Mark as completed when paid
+                })
+                .eq('id', selectedOrder.id)
+
+            if (error) throw error
+
+            // 2. Trigger Automation Webhook
+            const webhookUrl = process.env.NEXT_PUBLIC_PAYMENT_WEBHOOK_URL
+            if (webhookUrl && !webhookUrl.includes('your-n8n-webhook-url')) {
+                const payload = {
+                    event: 'payment_received',
+                    bill_id: selectedOrder.bill_id,
+                    customer_name: selectedOrder.customers?.name || selectedOrder.customer_name || 'Walk-in',
+                    customer_phone: selectedOrder.customers?.phone || selectedOrder.customer_phone,
+                    amount: selectedOrder.total,
+                    payment_method: method,
+                    items: selectedOrder.order_items?.map((i: any) => `${i.item_name} x ${i.quantity}`).join(', '),
+                    timestamp: new Date().toISOString()
+                }
+
+                // Send non-blocking request to webhook
+                fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }).catch(err => console.error('Webhook failed:', err))
+            }
+
+            toast.success(`Payment marked as ${method.toUpperCase()} & Message Sent 🚀`)
+            setSelectedOrder(null)
+            fetchDashboardData() // Refresh dashboard data
+        } catch (error) {
+            console.error('Error processing payment:', error)
+            toast.error('Failed to update payment')
+        } finally {
+            setProcessingPayment(false)
         }
     }
 
@@ -311,7 +363,7 @@ export default function DashboardPage() {
                                     <div>
                                         <p className="font-semibold truncate max-w-[150px]">{order.bill_id}</p>
                                         <p className="text-sm text-muted-foreground">
-                                            {order.customers?.name || 'Walk-in'} • {order.order_type?.replace('_', ' ')}
+                                            {order.customers?.name || order.customer_name || 'Walk-in'} • {order.order_type?.replace('_', ' ')}
                                             {order.restaurant_tables && ` • Table ${order.restaurant_tables.table_number}`}
                                         </p>
                                     </div>
@@ -349,11 +401,11 @@ export default function DashboardPage() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <p className="text-sm text-muted-foreground uppercase text-[10px] font-bold tracking-wider">Customer Name</p>
-                                    <p className="font-bold text-lg">{selectedOrder.customers?.name || 'Walk-in'}</p>
+                                    <p className="font-bold text-lg">{selectedOrder.customers?.name || selectedOrder.customer_name || 'Walk-in'}</p>
                                 </div>
                                 <div>
                                     <p className="text-sm text-muted-foreground uppercase text-[10px] font-bold tracking-wider">Phone Number</p>
-                                    <p className="font-bold text-lg">{selectedOrder.customers?.phone || 'N/A'}</p>
+                                    <p className="font-bold text-lg">{selectedOrder.customers?.phone || selectedOrder.customer_phone || 'N/A'}</p>
                                 </div>
                                 <div>
                                     <p className="text-sm text-muted-foreground uppercase text-[10px] font-bold tracking-wider">Order Type</p>
@@ -393,6 +445,24 @@ export default function DashboardPage() {
                                 <span className="text-2xl font-bold text-primary">
                                     ₹{selectedOrder.total.toFixed(2)}
                                 </span>
+                            </div>
+
+                            {/* Payment Actions */}
+                            <div className="flex gap-3 mt-6 pt-4 border-t">
+                                <Button
+                                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                                    onClick={() => handlePayment('cash')}
+                                    disabled={processingPayment || selectedOrder.payment_status === 'paid'}
+                                >
+                                    {processingPayment ? 'Processing...' : 'Cash Paid 💵'}
+                                </Button>
+                                <Button
+                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
+                                    onClick={() => handlePayment('upi')}
+                                    disabled={processingPayment || selectedOrder.payment_status === 'paid'}
+                                >
+                                    {processingPayment ? 'Processing...' : 'UPI Paid 📱'}
+                                </Button>
                             </div>
                         </div>
                     )}
