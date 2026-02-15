@@ -1,7 +1,6 @@
 'use client'
 
 import { AdminLayout } from '@/components/admin/layout/AdminLayout'
-import { Toaster } from '@/components/ui/sonner'
 import { ReactNode, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -20,7 +19,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     return (
         <AdminLayout>
             {children}
-            <Toaster />
         </AdminLayout>
     )
+
 }

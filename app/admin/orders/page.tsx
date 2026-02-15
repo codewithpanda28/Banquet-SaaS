@@ -16,7 +16,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { Search, Download, Eye, Printer, ShoppingBag, Truck, Utensils, Clock, MapPin, User, Phone, DollarSign, Smartphone } from 'lucide-react'
+import { Search, Download, Eye, Printer, ShoppingBag, Truck, Utensils, Clock, MapPin, User, Phone, DollarSign, Smartphone, XCircle, UtensilsCrossed, Users, CheckCircle2, Calendar } from 'lucide-react'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 import { Order } from '@/types'
 import { format } from 'date-fns'
@@ -331,29 +331,29 @@ export default function OrdersPage() {
             </PageHeader>
 
             {/* Filters */}
-            <Card className="glass-panel border-0 relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-primary/5 pointer-events-none" />
+            <Card className="glass-card border-0 relative overflow-hidden mb-6">
+                <div className="absolute inset-0 bg-gradient-to-r from-green-50/50 via-transparent to-green-50/50 pointer-events-none" />
                 <CardContent className="pt-6 relative z-10">
                     <div className="flex flex-col md:flex-row gap-6 items-end">
                         <div className="flex-1 space-y-2 w-full">
-                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Search Orders</Label>
+                            <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Search Orders</Label>
                             <div className="relative">
-                                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                                 <Input
                                     placeholder="Search by Bill ID, Customer Name or Phone..."
-                                    className="pl-10 h-10 bg-background/50 border-input/50 focus:bg-background transition-all"
+                                    className="pl-10 h-10 bg-gray-50 border-gray-200 focus:bg-white focus:border-green-500 transition-all text-black placeholder:text-gray-400"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                 />
                             </div>
                         </div>
                         <div className="w-full md:w-56 space-y-2">
-                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Filter by Type</Label>
+                            <Label className="text-xs font-bold uppercase tracking-wider text-gray-500">Filter by Type</Label>
                             <Select value={orderTypeFilter} onValueChange={setOrderTypeFilter}>
-                                <SelectTrigger className="h-10 bg-background/50 border-input/50">
+                                <SelectTrigger className="h-10 bg-gray-50 border-gray-200 text-black focus:ring-green-500">
                                     <SelectValue placeholder="All types" />
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className="bg-white border-gray-200 text-black">
                                     <SelectItem value="all">All Types</SelectItem>
                                     <SelectItem value="dine_in">🍽️ Dine In</SelectItem>
                                     <SelectItem value="takeaway">🥡 Takeaway</SelectItem>
@@ -367,41 +367,41 @@ export default function OrdersPage() {
 
             <Tabs defaultValue="active" className="w-full" onValueChange={setActiveTab}>
                 <div className="flex justify-center mb-6">
-                    <TabsList className="bg-muted/50 p-1 rounded-full border border-border/50">
-                        <TabsTrigger value="active" className="rounded-full px-6 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
-                            Active Orders <Badge className="ml-2 bg-white/20 text-white hover:bg-white/30 border-0">{orders.filter((o) => ['pending', 'confirmed', 'preparing', 'ready'].includes(o.status)).length}</Badge>
+                    <TabsList className="bg-gray-100 p-1 rounded-full border border-gray-200">
+                        <TabsTrigger value="active" className="rounded-full px-6 data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm transition-all text-gray-500 font-medium">
+                            Active Orders <Badge className="ml-2 bg-green-100 text-green-700 hover:bg-green-200 border-0">{orders.filter((o) => ['pending', 'confirmed', 'preparing', 'ready'].includes(o.status)).length}</Badge>
                         </TabsTrigger>
-                        <TabsTrigger value="completed" className="rounded-full px-6 data-[state=active]:bg-green-600 data-[state=active]:text-white transition-all">
-                            Completed <span className="ml-2 opacity-70 text-xs">{orders.filter((o) => o.status === 'completed').length}</span>
+                        <TabsTrigger value="completed" className="rounded-full px-6 data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm transition-all text-gray-500 font-medium">
+                            Completed <span className="ml-2 opacity-70 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">{orders.filter((o) => o.status === 'completed').length}</span>
                         </TabsTrigger>
-                        <TabsTrigger value="cancelled" className="rounded-full px-6 data-[state=active]:bg-destructive data-[state=active]:text-white transition-all">
-                            Cancelled <span className="ml-2 opacity-70 text-xs">{orders.filter((o) => o.status === 'cancelled').length}</span>
+                        <TabsTrigger value="cancelled" className="rounded-full px-6 data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm transition-all text-gray-500 font-medium">
+                            Cancelled <span className="ml-2 opacity-70 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{orders.filter((o) => o.status === 'cancelled').length}</span>
                         </TabsTrigger>
                     </TabsList>
                 </div>
 
                 <TabsContent value={activeTab} className="space-y-4">
                     {filteredOrders.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center p-12 glass-panel rounded-3xl border-dashed border-2">
-                            <ShoppingBag className="h-12 w-12 text-muted-foreground/30 mb-4" />
-                            <p className="text-xl font-medium text-muted-foreground">No orders found</p>
-                            <p className="text-sm text-muted-foreground/50">Try changing filters or wait for new orders</p>
+                        <div className="flex flex-col items-center justify-center p-12 glass-card rounded-3xl border-dashed border-2 bg-gray-50/50">
+                            <ShoppingBag className="h-12 w-12 text-gray-300 mb-4" />
+                            <p className="text-xl font-medium text-gray-500">No orders found</p>
+                            <p className="text-sm text-gray-400">Try changing filters or wait for new orders</p>
                         </div>
                     ) : (
                         filteredOrders.map((order: any) => (
                             <div
                                 key={order.id}
-                                className="glass-card p-0 rounded-2xl border border-white/5 overflow-hidden group hover:border-primary/30 transition-all duration-300"
+                                className="glass-card p-0 rounded-2xl border border-gray-100 overflow-hidden group hover:border-green-500/50 hover:shadow-lg transition-all duration-300 bg-white"
                             >
                                 <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 relative">
-                                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-primary to-transparent" />
+                                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-green-500 to-transparent" />
 
                                     {/* Left Side: Info */}
                                     <div className="flex-1 space-y-3">
                                         <div className="flex items-center gap-3">
-                                            <h3 className="text-2xl font-black tracking-tight text-foreground">{order.bill_id}</h3>
+                                            <h3 className="text-2xl font-black tracking-tight text-gray-900">{order.bill_id}</h3>
                                             {getStatusBadge(order.status)}
-                                            <Badge variant="secondary" className="bg-secondary/50 backdrop-blur-sm border-0">
+                                            <Badge variant="secondary" className="bg-gray-100 text-gray-700 border-0">
                                                 {order.order_type === 'dine_in' && <Utensils className="h-3 w-3 mr-1" />}
                                                 {order.order_type === 'takeaway' && <ShoppingBag className="h-3 w-3 mr-1" />}
                                                 {order.order_type === 'delivery' && <Truck className="h-3 w-3 mr-1" />}
@@ -409,25 +409,25 @@ export default function OrdersPage() {
                                             </Badge>
                                         </div>
 
-                                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-muted-foreground">
+                                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-gray-500">
                                             <div className="flex items-center gap-2">
-                                                <User className="h-4 w-4 text-primary/70" />
-                                                <span className="font-medium text-foreground">{order.customers?.name || order.customer_name || 'Walk-in'}</span>
+                                                <User className="h-4 w-4 text-green-600" />
+                                                <span className="font-medium text-gray-900">{order.customers?.name || order.customer_name || 'Walk-in'}</span>
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <Clock className="h-4 w-4 text-primary/70" />
+                                                <Clock className="h-4 w-4 text-green-600" />
                                                 <span>{format(new Date(order.created_at), 'hh:mm a')}</span>
                                             </div>
                                             {order.restaurant_tables && (
                                                 <div className="flex items-center gap-2">
-                                                    <MapPin className="h-4 w-4 text-primary/70" />
+                                                    <MapPin className="h-4 w-4 text-green-600" />
                                                     <span>Table {order.restaurant_tables.table_number}</span>
                                                 </div>
                                             )}
                                         </div>
 
                                         {order.special_instructions && (
-                                            <div className="flex items-start gap-2 text-xs bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 p-2 rounded-lg border border-yellow-500/10 max-w-md">
+                                            <div className="flex items-start gap-2 text-xs bg-yellow-50 text-yellow-800 p-2 rounded-lg border border-yellow-100 max-w-md">
                                                 <span className="font-bold shrink-0">Note:</span>
                                                 <span className="italic">{order.special_instructions}</span>
                                             </div>
@@ -435,20 +435,20 @@ export default function OrdersPage() {
                                     </div>
 
                                     {/* Right Side: Actions & Price */}
-                                    <div className="flex items-center gap-6 border-l border-border/50 pl-6 border-dashed">
+                                    <div className="flex items-center gap-6 border-l border-gray-100 pl-6 border-dashed">
                                         <div className="text-right">
-                                            <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">Total Amount</p>
-                                            <p className="text-3xl font-black text-foreground">₹{order.total.toFixed(0)}</p>
+                                            <p className="text-[10px] uppercase font-bold text-gray-400 tracking-widest">Total Amount</p>
+                                            <p className="text-3xl font-black text-gray-900">₹{order.total.toFixed(0)}</p>
                                             <div className="flex items-center justify-end gap-1 mt-1">
                                                 <span className={cn("h-2 w-2 rounded-full", order.payment_status === 'paid' ? "bg-green-500" : "bg-red-500")} />
-                                                <p className="text-xs font-medium text-muted-foreground uppercase">{order.payment_status}</p>
+                                                <p className="text-xs font-medium text-gray-500 uppercase">{order.payment_status}</p>
                                             </div>
                                         </div>
 
                                         <div className="flex flex-col gap-2">
                                             <Button
                                                 size="sm"
-                                                className="bg-primary/10 text-primary hover:bg-primary hover:text-white font-bold transition-all shadow-none"
+                                                className="bg-green-50 text-green-700 hover:bg-green-600 hover:text-white font-bold transition-all shadow-none border border-green-200"
                                                 onClick={() => handleViewOrder(order.id)}
                                             >
                                                 <Eye className="h-4 w-4 mr-2" /> View
@@ -456,7 +456,7 @@ export default function OrdersPage() {
                                             <Button
                                                 size="sm"
                                                 variant="ghost"
-                                                className="text-muted-foreground hover:text-foreground"
+                                                className="text-gray-500 hover:text-gray-900 hover:bg-gray-100"
                                                 onClick={() => handlePrintOrder(order)}
                                             >
                                                 <Printer className="h-4 w-4 mr-2" /> Print
@@ -470,105 +470,145 @@ export default function OrdersPage() {
                 </TabsContent>
             </Tabs>
 
+
             {/* Order Details Dialog */}
             <Dialog open={!!selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)}>
                 <DialogContent className="max-w-xl bg-background p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
                     <DialogTitle className="sr-only">Order Details</DialogTitle>
                     {selectedOrder && (
-                        <div className="flex flex-col">
-                            {/* Header Gradient */}
-                            <div className="bg-gradient-to-r from-primary to-purple-800 p-6 text-white relative overflow-hidden">
-                                <div className="absolute -right-10 -top-10 h-32 w-32 bg-white/20 rounded-full blur-2xl" />
-                                <div className="relative z-10 flex justify-between items-start">
-                                    <div className="space-y-1">
-                                        <div className="flex items-center gap-2">
-                                            <Badge className="bg-white/20 hover:bg-white/30 border-0 text-white backdrop-blur-md">
-                                                {selectedOrder.order_type.replace('_', ' ')}
+                        <div className="flex flex-col bg-white">
+                            {/* Premium Header */}
+                            <div className="flex flex-col gap-1 p-6 pb-2">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                                            Order #{selectedOrder.bill_id}
+                                            <Badge className={cn(
+                                                "ml-2 text-[10px] px-2 py-0.5 uppercase tracking-wide border-0",
+                                                selectedOrder.status === 'completed' ? "bg-green-100 text-green-700 hover:bg-green-200" :
+                                                    selectedOrder.status === 'pending' ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200" :
+                                                        "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                                            )}>
+                                                {selectedOrder.status}
                                             </Badge>
-                                            <span className="text-white/60 text-xs font-mono">#{selectedOrder.bill_id}</span>
-                                        </div>
-                                        <h2 className="text-2xl font-black tracking-tight">{selectedOrder.customers?.name || 'Walk-in Customer'}</h2>
-                                        <div className="flex items-center gap-3 text-sm font-medium text-white/80">
-                                            <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {selectedOrder.customers?.phone || 'No Phone'}</span>
-                                            <span className="h-1 w-1 bg-white/40 rounded-full" />
-                                            <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {format(new Date(selectedOrder.created_at), 'hh:mm a')}</span>
-                                        </div>
+                                        </h2>
+                                        <p className="text-sm text-gray-500 font-medium mt-1 flex items-center gap-2">
+                                            <Calendar className="h-3.5 w-3.5" />
+                                            {format(new Date(selectedOrder.created_at), 'PPP')} at {format(new Date(selectedOrder.created_at), 'p')}
+                                        </p>
                                     </div>
-                                    <div className="flex flex-col items-end gap-2">
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-gray-900" onClick={() => setSelectedOrder(null)}>
+                                        <XCircle className="h-6 w-6" />
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="px-6 py-2">
+                                <div className="h-px bg-gray-100 w-full" />
+                            </div>
+
+                            {/* Info Grid */}
+                            <div className="grid grid-cols-2 gap-6 p-6 pt-2">
+                                <div className="space-y-3">
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                                        <Users className="h-3.5 w-3.5" /> Customer
+                                    </p>
+                                    <div>
+                                        <p className="font-semibold text-gray-900 text-base">{selectedOrder.customers?.name || 'Walk-in Customer'}</p>
+                                        <p className="text-sm text-gray-500 font-medium">{selectedOrder.customers?.phone || 'No Phone'}</p>
+                                    </div>
+                                    {(selectedOrder.delivery_address || selectedOrder.customers?.address) && (
+                                        <p className="text-xs text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-100 leading-relaxed">
+                                            {selectedOrder.delivery_address || selectedOrder.customers?.address}
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="space-y-3">
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                                        <UtensilsCrossed className="h-3.5 w-3.5" /> Order Info
+                                    </p>
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-500 font-medium">Type:</span>
+                                            <span className="font-semibold text-gray-900 capitalize">{selectedOrder.order_type?.replace('_', ' ') || 'Dine In'}</span>
+                                        </div>
                                         {selectedOrder.restaurant_tables && (
-                                            <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-xl text-center border border-white/10">
-                                                <p className="text-[10px] font-bold uppercase tracking-wider text-white/60 mb-0.5">Table</p>
-                                                <p className="text-xl font-black leading-none">{selectedOrder.restaurant_tables.table_number}</p>
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-gray-500 font-medium">Table No:</span>
+                                                <span className="font-semibold text-gray-900">#{selectedOrder.restaurant_tables.table_number}</span>
                                             </div>
                                         )}
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-500 font-medium">Payment:</span>
+                                            <span className={cn("font-semibold capitalize", selectedOrder.payment_status === 'paid' ? "text-green-600" : "text-orange-600")}>
+                                                {selectedOrder.payment_status || 'Pending'}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Content */}
-                            <div className="p-6 space-y-6 bg-background">
-                                {/* Items List */}
-                                <div>
-                                    <div className="flex items-center justify-between mb-3 px-1">
-                                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Order Items</p>
-                                        <span className="text-xs font-medium text-muted-foreground">{selectedOrder.order_items?.length || 0} items</span>
+                            {/* Items Table */}
+                            <div className="px-6 pb-6 space-y-4">
+                                <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                                    <div className="grid grid-cols-12 bg-gray-50 border-b border-gray-200 p-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                                        <div className="col-span-6 pl-2">Item</div>
+                                        <div className="col-span-2 text-center">Qty</div>
+                                        <div className="col-span-4 text-right pr-2">Total</div>
                                     </div>
-                                    <div className="bg-secondary/30 rounded-2xl border border-border overflow-hidden">
-                                        {selectedOrder.order_items?.map((item: any, i: number) => (
-                                            <div key={i} className="flex justify-between items-center p-3 border-b border-border/50 last:border-0 hover:bg-white/5 transition-colors group">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="h-8 w-8 rounded-lg flex items-center justify-center bg-background border shadow-sm text-foreground font-black text-sm group-hover:scale-110 transition-transform">
-                                                        {item.quantity}
-                                                    </span>
-                                                    <span className="font-medium text-sm text-foreground">{item.item_name}</span>
+                                    <div className="divide-y divide-gray-100 max-h-[250px] overflow-y-auto custom-scrollbar">
+                                        {selectedOrder.order_items?.map((item: any) => (
+                                            <div key={item.id} className="grid grid-cols-12 p-3 items-center hover:bg-gray-50/50 transition-colors">
+                                                <div className="col-span-6 pl-2">
+                                                    <p className="text-sm font-semibold text-gray-800">{item.item_name}</p>
+                                                    <p className="text-[10px] text-gray-400 font-medium">₹{(item.total / item.quantity).toFixed(0)} each</p>
                                                 </div>
-                                                <span className="font-bold text-sm text-foreground">₹{item.total.toFixed(0)}</span>
+                                                <div className="col-span-2 flex justify-center">
+                                                    <div className="h-6 w-6 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-bold">
+                                                        {item.quantity}
+                                                    </div>
+                                                </div>
+                                                <div className="col-span-4 text-right pr-2">
+                                                    <p className="text-sm font-bold text-gray-900">₹{item.total.toFixed(2)}</p>
+                                                </div>
                                             </div>
-                                        )) || <p className="p-4 text-center text-muted-foreground text-sm">No items found</p>}
+                                        ))}
+                                    </div>
+                                    {/* Summary */}
+                                    <div className="bg-gray-50 p-4 border-t border-gray-200">
+                                        <div className="flex justify-between items-center text-sm mb-1">
+                                            <span className="text-gray-500 font-medium">Subtotal</span>
+                                            <span className="font-semibold text-gray-900">₹{selectedOrder.total.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center pt-3 border-t border-gray-200 mt-2">
+                                            <span className="text-base font-bold text-gray-900">Grand Total</span>
+                                            <span className="text-2xl font-black text-gray-900">₹{selectedOrder.total.toFixed(2)}</span>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Address if Exists */}
-                                {(selectedOrder.delivery_address || selectedOrder.customers?.address) && (
-                                    <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-900/30 flex gap-3 items-start">
-                                        <MapPin className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
-                                        <div>
-                                            <p className="text-xs font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest mb-1">Delivery Address</p>
-                                            <p className="text-sm font-medium leading-relaxed opacity-90">
-                                                {selectedOrder.delivery_address || selectedOrder.customers?.address}
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Payment Section */}
-                                <div className="bg-secondary/50 rounded-2xl p-5 border border-border">
-                                    <div className="flex justify-between items-center mb-1">
-                                        <span className="font-semibold text-lg">Total Amount</span>
-                                        <span className="text-3xl font-black text-primary">₹{selectedOrder.total.toFixed(2)}</span>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground text-right mb-6">Including all taxes & charges</p>
-
+                                {/* Actions Footer */}
+                                <div className="pt-2">
                                     {selectedOrder.status !== 'completed' && selectedOrder.payment_status !== 'paid' ? (
-                                        <div className="grid grid-cols-2 gap-4">
+                                        <div className="grid grid-cols-2 gap-3">
                                             <Button
-                                                className="h-12 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg shadow-green-900/20"
+                                                className="h-11 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm"
                                                 onClick={() => handlePayment('cash')}
                                                 disabled={processingPayment}
                                             >
-                                                <DollarSign className="mr-2 h-4 w-4" /> Cash Paid
+                                                <DollarSign className="mr-2 h-4 w-4" /> Collect Cash
                                             </Button>
                                             <Button
-                                                className="h-12 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-900/20"
+                                                className="h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm"
                                                 onClick={() => handlePayment('upi')}
                                                 disabled={processingPayment}
                                             >
-                                                <Smartphone className="mr-2 h-4 w-4" /> UPI Paid
+                                                <Smartphone className="mr-2 h-4 w-4" /> Collect UPI
                                             </Button>
                                         </div>
                                     ) : (
-                                        <div className="bg-green-100 dark:bg-green-500/10 text-green-700 dark:text-green-400 p-3 rounded-xl text-center font-bold text-sm border border-green-200 dark:border-green-500/20 flex items-center justify-center gap-2">
-                                            <div className="h-5 w-5 rounded-full bg-green-500 text-white flex items-center justify-center">✓</div>
+                                        <div className="w-full h-11 bg-green-50 border border-green-200 text-green-700 rounded-xl flex items-center justify-center font-bold text-sm gap-2">
+                                            <CheckCircle2 className="h-5 w-5 text-green-600" />
                                             Payment Completed via {selectedOrder.payment_method?.toUpperCase()}
                                         </div>
                                     )}
@@ -578,6 +618,6 @@ export default function OrdersPage() {
                     )}
                 </DialogContent>
             </Dialog>
-        </div >
+        </div>
     )
 }

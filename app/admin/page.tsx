@@ -1,35 +1,69 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
-import { PageHeader } from '@/components/admin/layout/PageHeader'
-import { DollarSign, ShoppingCart, TrendingUp, Clock, Download, Eye, MapPin, Sparkles, Zap, Utensils, Users, ChevronRight, ArrowRight, ShoppingBag } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useEffect, useState } from 'react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import {
+    Activity,
+    CreditCard,
+    MoreHorizontal,
+    ShoppingBag,
+    Users,
+    UtensilsCrossed,
+    ArrowUpRight,
+    ArrowDownRight,
+    Clock,
+    CheckCircle2,
+    XCircle,
+    Calendar,
+    ChevronRight,
+    DollarSign,
+    TrendingUp,
+    Smartphone
+} from 'lucide-react'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
-import { DashboardMetrics, Order } from '@/types'
-import { format } from 'date-fns'
+import { startOfDay, endOfDay, subDays, format } from 'date-fns'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Button } from '@/components/ui/button'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
+import Link from 'next/link'
 import { toast } from 'sonner'
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
 import { cn } from '@/lib/utils'
 
-export default function DashboardPage() {
-    const [metrics, setMetrics] = useState<DashboardMetrics>({
-        todayRevenue: 0,
-        todayOrders: 0,
-        avgOrderValue: 0,
+export default function AdminDashboard() {
+    const [stats, setStats] = useState({
+        totalRevenue: 0,
         activeOrders: 0,
+        totalOrders: 0,
+        totalCustomers: 0,
     })
-    const [recentOrders, setRecentOrders] = useState<Order[]>([])
-    const [selectedOrder, setSelectedOrder] = useState<any>(null)
+    const [recentOrders, setRecentOrders] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
+    const [selectedOrder, setSelectedOrder] = useState<any>(null)
+    const [isDetailsOpen, setIsDetailsOpen] = useState(false)
     const [processingPayment, setProcessingPayment] = useState(false)
 
     useEffect(() => {
         fetchDashboardData()
 
+        // Real-time subscription for orders
         const channel = supabase
-            .channel('dashboard-updates')
+            .channel('admin-dashboard')
             .on(
                 'postgres_changes',
                 {
@@ -49,48 +83,58 @@ export default function DashboardPage() {
         }
     }, [])
 
-    const fetchDashboardData = useCallback(async () => {
+    const fetchDashboardData = async () => {
         try {
-            setLoading(true)
+            const todayStart = startOfDay(new Date()).toISOString()
+            const todayEnd = endOfDay(new Date()).toISOString()
 
-            const today = new Date().toISOString().split('T')[0]
-            const { data: todayOrders } = await supabase
+            // Fetch Today's Revenue
+            const { data: revenueData } = await supabase
                 .from('orders')
-                .select('total, status')
+                .select('total')
                 .eq('restaurant_id', RESTAURANT_ID)
-                .gte('created_at', `${today}T00:00:00`)
-                .lte('created_at', `${today}T23:59:59`)
+                .eq('payment_status', 'paid')
+                .gte('created_at', todayStart)
+                .lte('created_at', todayEnd)
 
-            const todayRevenue = todayOrders
-                ?.filter((o) => o.status === 'completed')
-                .reduce((sum, o) => sum + o.total, 0) || 0
+            const totalRevenue = revenueData?.reduce((acc, curr) => acc + (curr.total || 0), 0) || 0
 
-            const todayOrdersCount = todayOrders?.length || 0
-
-            const { count: activeCount } = await supabase
+            // Fetch Active Orders
+            const { count: activeOrders } = await supabase
                 .from('orders')
                 .select('*', { count: 'exact', head: true })
                 .eq('restaurant_id', RESTAURANT_ID)
-                .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
+                .neq('status', 'completed')
+                .neq('status', 'cancelled')
 
-
-            const { data: recent, error: recentError } = await supabase
+            // Fetch Total Orders Today
+            const { count: totalOrders } = await supabase
                 .from('orders')
-                .select(`
-          *,
-          customers (id, name, phone, address),
-          restaurant_tables (table_number)
-        `)
+                .select('*', { count: 'exact', head: true })
+                .eq('restaurant_id', RESTAURANT_ID)
+                .gte('created_at', todayStart)
+                .lte('created_at', todayEnd)
+
+            // Fetch Total Customers (All time)
+            const { count: totalCustomers } = await supabase
+                .from('customers')
+                .select('*', { count: 'exact', head: true })
+                .eq('restaurant_id', RESTAURANT_ID)
+
+            setStats({
+                totalRevenue,
+                activeOrders: activeOrders || 0,
+                totalOrders: totalOrders || 0,
+                totalCustomers: totalCustomers || 0,
+            })
+
+            // Fetch Recent Orders
+            const { data: recent } = await supabase
+                .from('orders')
+                .select('*, customers(name, phone), order_items(*)')
                 .eq('restaurant_id', RESTAURANT_ID)
                 .order('created_at', { ascending: false })
-                .limit(10)
-
-            setMetrics({
-                todayRevenue,
-                todayOrders: todayOrdersCount,
-                avgOrderValue: todayOrdersCount > 0 ? todayRevenue / todayOrdersCount : 0,
-                activeOrders: activeCount || 0,
-            })
+                .limit(5)
 
             setRecentOrders(recent || [])
         } catch (error) {
@@ -98,433 +142,443 @@ export default function DashboardPage() {
         } finally {
             setLoading(false)
         }
-    }, [])
-
-    async function handleViewDetails(orderId: string) {
-        try {
-            const { data, error } = await supabase
-                .from('orders')
-                .select(`
-                    *,
-                    customers (id, name, phone, email, address),
-                    restaurant_tables (table_number),
-                    order_items (*)
-                `)
-                .eq('id', orderId)
-                .single()
-
-            if (error) throw error
-            setSelectedOrder(data)
-        } catch (error) {
-            console.error('❌ Error fetching order details:', error)
-            toast.error('Failed to load order details')
-        }
     }
 
-    function downloadReport() {
-        try {
-            const csvContent = [
-                ['Metric', 'Value'],
-                ['Today Revenue', `₹${metrics.todayRevenue.toFixed(2)}`],
-                ['Today Orders', metrics.todayOrders],
-                ['Average Order Value', `₹${metrics.avgOrderValue.toFixed(2)}`],
-                ['Active Orders', metrics.activeOrders],
-                [''],
-                ['Recent Orders'],
-                ['Bill ID', 'Customer', 'Type', 'Total', 'Status', 'Time'],
-                ...recentOrders.map((order: any) => [
-                    order.bill_id,
-                    order.customers?.name || order.customer_name || 'Walk-in',
-                    order.order_type.replace('_', ' '),
-                    `₹${order.total.toFixed(2)}`,
-                    order.status,
-                    format(new Date(order.created_at), 'dd/MM/yyyy hh:mm a')
-                ])
-            ]
-
-            const csv = csvContent.map(row => row.join(',')).join('\n')
-            const blob = new Blob([csv], { type: 'text/csv' })
-            const url = URL.createObjectURL(blob)
-            const link = document.createElement('a')
-            link.href = url
-            link.download = `dashboard-report-${format(new Date(), 'dd-MM-yyyy')}.csv`
-            link.click()
-            URL.revokeObjectURL(url)
-            toast.success('Report downloaded successfully!')
-        } catch (error) {
-            console.error('Error downloading report:', error)
-            toast.error('Failed to download report')
-        }
+    const handleOrderClick = (order: any) => {
+        setSelectedOrder(order)
+        setIsDetailsOpen(true)
     }
 
-    async function handlePayment(method: 'cash' | 'upi') {
+    const handlePayment = async (method: 'cash' | 'upi') => {
         if (!selectedOrder) return
+        setProcessingPayment(true)
+
+        const customerName = selectedOrder.customers?.name || 'Customer'
+        const phone = selectedOrder.customers?.phone
+        const billId = selectedOrder.bill_id
+        const total = selectedOrder.total
+
+        // Open WhatsApp Message
+        if (phone) {
+            let formattedPhone = phone.replace(/[^0-9]/g, '')
+            if (formattedPhone.length === 10) {
+                formattedPhone = '91' + formattedPhone
+            }
+
+            const message = encodeURIComponent(
+                `*Receipt from Restaurant*\n\n` +
+                `Hi ${customerName},\n` +
+                `Your payment of *₹${total.toFixed(2)}* for Order *${billId}* has been received via *${method.toUpperCase()}*.\n\n` +
+                `Thank you for visiting us! 🙏`
+            )
+
+            const whatsappUrl = `https://wa.me/${formattedPhone}?text=${message}`
+            const waWindow = window.open(whatsappUrl, '_blank')
+            if (!waWindow) {
+                toast.error('WhatsApp popup blocked. Please allow popups for this site.', {
+                    action: {
+                        label: 'Open Link',
+                        onClick: () => window.open(whatsappUrl, '_blank')
+                    }
+                })
+            }
+        }
 
         try {
-            setProcessingPayment(true)
-
-            // 1. Update Payment Status in Database
             const { error } = await supabase
                 .from('orders')
                 .update({
+                    status: 'completed',
                     payment_status: 'paid',
-                    payment_method: method,
-                    status: 'completed' // Mark as completed when paid
+                    payment_method: method
                 })
                 .eq('id', selectedOrder.id)
 
             if (error) throw error
 
-            // Trigger n8n Webhook for Payment Confirmation
-            try {
-                console.log('🚀 Sending Webhook to n8n (Dashboard)...', { method, bill_id: selectedOrder.bill_id })
-
-                const webhookResponse = await fetch('https://n8n.srv1114630.hstgr.cloud/webhook-test/payment-confirmation', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        bill_id: selectedOrder.bill_id,
-                        amount: selectedOrder.total,
-                        customer: {
-                            name: selectedOrder.customers?.name || selectedOrder.customer_name || 'Walk-in',
-                            phone: selectedOrder.customers?.phone || 'N/A',
-                            address: selectedOrder.delivery_address || selectedOrder.customers?.address
-                        },
-                        order_type: selectedOrder.order_type,
-                        table_number: Array.isArray(selectedOrder.restaurant_tables) ? selectedOrder.restaurant_tables[0]?.table_number : selectedOrder.restaurant_tables?.table_number,
-                        items: selectedOrder.order_items?.map((i: any) => ({
-                            name: i.item_name,
-                            quantity: i.quantity,
-                            price: i.price,
-                            total: i.total
-                        })),
-                        payment_method: method,
-                        payment_status: 'paid',
-                        restaurant_id: RESTAURANT_ID,
-                        updated_at: new Date().toISOString(),
-                        source: 'admin_dashboard',
-                        trigger_type: 'payment_marked_manually'
-                    })
-                })
-
-                if (!webhookResponse.ok) {
-                    const errorText = await webhookResponse.text()
-                    console.error('❌ Webhook Failed:', webhookResponse.status, errorText)
-                    toast.error(`Webhook Failed: ${webhookResponse.status}`)
-                } else {
-                    console.log('✅ Webhook Delivered Successfully')
-                }
-            } catch (webhookError) {
-                console.error('❌ Failed to trigger webhook:', webhookError)
-                toast.error('Webhook Error (Check Console)')
+            toast.success(`Order marked as paid via ${method.toUpperCase()}`)
+            if (!phone) {
+                toast.info('Order marked as paid (No phone number found for receipt)')
             }
-
-            toast.success(`Payment marked as ${method.toUpperCase()} & Message Sent 🚀`)
-            setSelectedOrder(null)
-            fetchDashboardData() // Refresh dashboard data
+            setIsDetailsOpen(false)
+            fetchDashboardData() // Refresh data
         } catch (error) {
-            console.error('Error processing payment:', error)
-            toast.error('Failed to update payment')
+            console.error('Payment error:', error)
+            toast.error('Failed to update payment status')
         } finally {
             setProcessingPayment(false)
         }
     }
 
-    const getStatusBadge = (status: string) => {
-        const styles: Record<string, string> = {
-            pending: 'bg-yellow-500/10 text-yellow-500 border-yellow-200/20',
-            confirmed: 'bg-blue-500/10 text-blue-500 border-blue-200/20',
-            preparing: 'bg-orange-500/10 text-orange-500 border-orange-200/20',
-            ready: 'bg-purple-500/10 text-purple-500 border-purple-200/20',
-            served: 'bg-green-500/10 text-green-500 border-green-200/20',
-            completed: 'bg-green-500/10 text-green-500 border-green-200/20',
-            cancelled: 'bg-red-500/10 text-red-500 border-red-200/20',
-        }
-        return (
-            <Badge variant="outline" className={cn("border backdrop-blur-md uppercase text-[10px] font-bold tracking-widest px-2 py-0.5", styles[status])}>
-                {status}
-            </Badge>
-        )
-    }
+    // Function to calculate time ago roughly
+    const getTimeAgo = (dateString: string) => {
+        const date = new Date(dateString)
+        const now = new Date()
+        const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / 60000)
 
-    if (loading) {
-        return (
-            <div className="flex min-h-[400px] items-center justify-center">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-                    <p className="text-muted-foreground animate-pulse font-medium">Loading Dashboard...</p>
-                </div>
-            </div>
-        )
+        if (diffInMinutes < 1) return 'Just now'
+        if (diffInMinutes < 60) return `${diffInMinutes}m ago`
+        const diffInHours = Math.floor(diffInMinutes / 60)
+        if (diffInHours < 24) return `${diffInHours}h ago`
+        return format(date, 'MMM d')
     }
 
     return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-            <PageHeader
-                title="Restaurant Control Center"
-                description="Real-time overview of your business"
-            >
-                <Button onClick={downloadReport} variant="outline" className="glass-panel hover:bg-white/20 border-primary/20 bg-primary/5 hidden sm:flex">
-                    <Download className="mr-2 h-4 w-4 text-primary" />
-                    Download Today's Report
-                </Button>
-            </PageHeader>
-
-            {/* Metrics */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                <Card className="glass-card bg-gradient-to-br from-green-500/10 via-emerald-500/5 to-transparent border-green-200/20 overflow-hidden relative group">
-                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                        <DollarSign className="h-16 w-16" />
-                    </div>
-                    <CardContent className="p-6 relative z-10">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="h-10 w-10 rounded-xl bg-green-500/20 flex items-center justify-center text-green-600 dark:text-green-400">
-                                <DollarSign className="h-6 w-6" />
-                            </div>
-                            <Badge className="bg-green-500/20 text-green-700 dark:text-green-300 border-0 text-[10px] font-extrabold">+12% vs yest</Badge>
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-muted-foreground">Today's Revenue</p>
-                            <h3 className="text-3xl font-black text-foreground mt-1">₹{metrics.todayRevenue.toFixed(0)}</h3>
-                        </div>
-                        <div className="mt-4 h-1 w-full bg-green-100 dark:bg-green-950 rounded-full overflow-hidden">
-                            <div className="h-full bg-green-500 w-[70%]" />
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card className="glass-card bg-gradient-to-br from-blue-500/10 via-cyan-500/5 to-transparent border-blue-200/20 overflow-hidden relative group">
-                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                        <ShoppingCart className="h-16 w-16" />
-                    </div>
-                    <CardContent className="p-6 relative z-10">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="h-10 w-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                                <ShoppingCart className="h-6 w-6" />
-                            </div>
-                            <Badge className="bg-blue-500/20 text-blue-700 dark:text-blue-300 border-0 text-[10px] font-extrabold">+5 Orders</Badge>
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-muted-foreground">Today's Orders</p>
-                            <h3 className="text-3xl font-black text-foreground mt-1">{metrics.todayOrders}</h3>
-                        </div>
-                        <div className="mt-4 h-1 w-full bg-blue-100 dark:bg-blue-950 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-500 w-[60%]" />
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card className="glass-card bg-gradient-to-br from-purple-500/10 via-violet-500/5 to-transparent border-purple-200/20 overflow-hidden relative group">
-                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                        <TrendingUp className="h-16 w-16" />
-                    </div>
-                    <CardContent className="p-6 relative z-10">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="h-10 w-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-600 dark:text-purple-400">
-                                <TrendingUp className="h-6 w-6" />
-                            </div>
-                            <div className="h-2 w-2 rounded-full bg-purple-500 animate-pulse" />
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-muted-foreground">Avg. Order Value</p>
-                            <h3 className="text-3xl font-black text-foreground mt-1">₹{metrics.avgOrderValue.toFixed(0)}</h3>
-                        </div>
-                        <div className="mt-4 h-1 w-full bg-purple-100 dark:bg-purple-950 rounded-full overflow-hidden">
-                            <div className="h-full bg-purple-500 w-[45%]" />
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card className="glass-card bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-transparent border-orange-200/20 overflow-hidden relative group">
-                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-                        <Zap className="h-16 w-16" />
-                    </div>
-                    <CardContent className="p-6 relative z-10">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="h-10 w-10 rounded-xl bg-orange-500/20 flex items-center justify-center text-orange-600 dark:text-orange-400">
-                                <Zap className="h-6 w-6" />
-                            </div>
-                            <Badge className="bg-orange-500/20 text-orange-700 dark:text-orange-300 border-0 text-[10px] font-extrabold">LIVE</Badge>
-                        </div>
-                        <div>
-                            <p className="text-sm font-medium text-muted-foreground">Active Orders</p>
-                            <h3 className="text-3xl font-black text-foreground mt-1">{metrics.activeOrders}</h3>
-                        </div>
-                        <div className="mt-4 h-1 w-full bg-orange-100 dark:bg-orange-950 rounded-full overflow-hidden">
-                            <div className="h-full bg-orange-500 w-[80%]" />
-                        </div>
-                    </CardContent>
-                </Card>
+        <div className="space-y-8 p-8 max-w-[1600px] mx-auto animate-in fade-in duration-500 text-black">
+            {/* Header Section */}
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="space-y-1">
+                    <h2 className="text-4xl font-black tracking-tight text-gradient">Dashboard Overview</h2>
+                    <p className="text-gray-500 font-medium">Real-time insights and performance metrics.</p>
+                </div>
+                <div className="flex items-center gap-2 bg-white/50 p-1 rounded-xl border border-gray-200">
+                    <Button variant="ghost" size="sm" className="rounded-lg text-xs font-semibold h-8 bg-white border border-gray-200 text-black shadow-sm">
+                        Today
+                    </Button>
+                    <Button variant="ghost" size="sm" className="rounded-lg text-xs font-medium h-8 hover:bg-gray-100 text-gray-500">
+                        Week
+                    </Button>
+                    <Button variant="ghost" size="sm" className="rounded-lg text-xs font-medium h-8 hover:bg-gray-100 text-gray-500">
+                        Month
+                    </Button>
+                </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Live Feed / Ticker */}
-                <Card className="col-span-1 glass-panel border bg-background/50 overflow-hidden relative group">
-                    <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/20 pointer-events-none" />
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                            <Sparkles className="h-3 w-3 text-yellow-500" /> Live Kitchen Activity
-                        </CardTitle>
+            {/* Metrics Grid */}
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                {[
+                    {
+                        title: "Total Revenue",
+                        value: `₹${stats.totalRevenue.toLocaleString()}`,
+                        icon: DollarSign,
+                        trend: "+20.1% from yesterday",
+                        trendUp: true,
+                        color: "bg-green-500",
+                        textColor: "text-green-600",
+                        iconBg: "bg-green-100",
+                    },
+                    {
+                        title: "Active Orders",
+                        value: stats.activeOrders.toString(),
+                        icon: Activity,
+                        trend: "+4 since last hour",
+                        trendUp: true,
+                        color: "bg-blue-500",
+                        textColor: "text-blue-600",
+                        iconBg: "bg-blue-100",
+                    },
+                    {
+                        title: "Total Orders",
+                        value: stats.totalOrders.toString(),
+                        icon: ShoppingBag,
+                        trend: "+12% from yesterday",
+                        trendUp: true,
+                        color: "bg-purple-500",
+                        textColor: "text-purple-600",
+                        iconBg: "bg-purple-100",
+                    },
+                    {
+                        title: "Customers",
+                        value: stats.totalCustomers.toString(),
+                        icon: Users,
+                        trend: "+3 new today",
+                        trendUp: true,
+                        color: "bg-orange-500",
+                        textColor: "text-orange-600",
+                        iconBg: "bg-orange-100",
+                    },
+                ].map((stat, index) => (
+                    <Card key={index} className="glass-card border border-gray-100 shadow-sm relative group bg-white hover:border-green-500/30 hover:shadow-lg transition-all duration-300">
+                        <div className={`absolute left-0 top-0 bottom-0 w-1 ${stat.color} rounded-l-xl opacity-80 group-hover:opacity-100 transition-opacity`} />
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+                            <CardTitle className="text-xs font-bold text-gray-500 uppercase tracking-wider group-hover:text-green-700 transition-colors">
+                                {stat.title}
+                            </CardTitle>
+                            <div className={cn("p-2.5 rounded-xl transition-all duration-300 group-hover:scale-110 shadow-sm", stat.iconBg)}>
+                                <stat.icon className={cn("h-4 w-4", stat.textColor)} />
+                            </div>
+                        </CardHeader>
+                        <CardContent className="relative z-10">
+                            <div className="text-3xl font-black tracking-tight text-gray-900">{stat.value}</div>
+                            <p className="text-xs text-gray-500 mt-1 font-medium flex items-center gap-1">
+                                {stat.trendUp ? <TrendingUp className="h-3 w-3 text-green-500" /> : <TrendingUp className="h-3 w-3 text-red-500 rotate-180" />}
+                                <span className={stat.trendUp ? "text-green-600" : "text-red-600"}>{stat.trend}</span>
+                            </p>
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+
+            {/* Main Content Area */}
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
+                {/* Recent Orders */}
+                <Card className="col-span-4 glass-card border-gray-100 bg-white shadow-sm hover:border-green-500/20 hover:shadow-md transition-all duration-300">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2 border-b border-gray-100">
+                        <div className="space-y-1">
+                            <CardTitle className="text-xl font-bold text-gray-900">Recent Orders</CardTitle>
+                            <CardDescription className="text-xs font-medium text-gray-500">
+                                You have {stats.activeOrders} active orders right now.
+                            </CardDescription>
+                        </div>
+                        <Button variant="ghost" size="sm" className="text-green-600 hover:text-green-700 hover:bg-green-50 font-bold text-xs" asChild>
+                            <Link href="/admin/orders">View All <ChevronRight className="h-3 w-3 ml-1" /></Link>
+                        </Button>
                     </CardHeader>
                     <CardContent className="p-0">
-                        <div className="space-y-0 divide-y divide-border/50">
-                            {[1, 2, 3].map((_, i) => (
-                                <div key={i} className="p-4 flex items-center gap-4 hover:bg-white/5 transition-colors cursor-default">
-                                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-                                        <Utensils className="h-4 w-4" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-medium truncate">Chef started preparing <span className="text-primary font-bold">Butter Chicken</span></p>
-                                        <p className="text-[10px] text-muted-foreground">Table 4 • 2 mins ago</p>
-                                    </div>
+                        <div className="space-y-0 text-sm">
+                            {recentOrders.length === 0 ? (
+                                <div className="p-8 text-center text-gray-400">
+                                    No orders yet today.
                                 </div>
-                            ))}
-                        </div>
-                        <div className="p-3 bg-muted/20 text-center border-t border-border/50">
-                            <Button variant="link" className="text-xs h-auto p-0 text-muted-foreground hover:text-primary">
-                                View Kitchen Display System <ArrowRight className="ml-1 h-3 w-3" />
-                            </Button>
+                            ) : (
+                                recentOrders.map((order, i) => (
+                                    <div
+                                        key={order.id}
+                                        className="flex items-center p-4 hover:bg-green-50 transition-all cursor-pointer border-b border-gray-100 last:border-0 group relative overflow-hidden"
+                                        onClick={() => handleOrderClick(order)}
+                                    >
+                                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+
+                                        <div className="flex-1 min-w-0 grid grid-cols-12 gap-4 items-center pl-2">
+                                            {/* ID & Status */}
+                                            <div className="col-span-3">
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold text-gray-900 group-hover:text-green-700 transition-colors">#{order.bill_id}</span>
+                                                    <span className="text-[10px] text-gray-500 flex items-center gap-1">
+                                                        <Clock className="h-2.5 w-2.5" /> {getTimeAgo(order.created_at)}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Customer */}
+                                            <div className="col-span-4">
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar className="h-8 w-8 border border-gray-100 hidden sm:block">
+                                                        <AvatarFallback className={cn("text-[10px] font-bold", i % 2 === 0 ? "bg-blue-50 text-blue-600" : "bg-purple-50 text-purple-600")}>
+                                                            {order.customers?.name?.substring(0, 2).toUpperCase() || 'CU'}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="flex flex-col min-w-0">
+                                                        <span className="font-medium truncate text-gray-900">{order.customers?.name || 'Walk-in'}</span>
+                                                        <span className="text-[10px] text-gray-500 truncate">{order.customers?.phone || 'No Phone'}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Amount */}
+                                            <div className="col-span-2 text-right">
+                                                <span className="font-bold text-gray-900">₹{order.total.toFixed(0)}</span>
+                                            </div>
+
+                                            {/* Status Badge */}
+                                            <div className="col-span-3 text-right">
+                                                <Badge
+                                                    className={cn(
+                                                        "uppercase text-[10px] font-bold tracking-wider border-none px-2 py-0.5 shadow-sm",
+                                                        order.status === 'completed'
+                                                            ? "bg-green-100 text-green-700 group-hover:bg-green-200"
+                                                            : order.status === 'pending'
+                                                                ? "bg-yellow-100 text-yellow-700 group-hover:bg-yellow-200"
+                                                                : "bg-blue-100 text-blue-700 group-hover:bg-blue-200"
+                                                    )}
+                                                >
+                                                    {order.status}
+                                                </Badge>
+                                            </div>
+                                        </div>
+                                        <ChevronRight className="h-4 w-4 text-green-600 ml-4 opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-1" />
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </CardContent>
                 </Card>
 
-                {/* Recent Orders List */}
-                <Card className="col-span-1 lg:col-span-2 glass-panel border bg-background/50">
-                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                        <CardTitle className="text-lg font-bold">Recent Orders</CardTitle>
-                        <Button variant="ghost" size="sm" className="text-xs hover:bg-white/5">View All <ChevronRight className="ml-1 h-3 w-3" /></Button>
-                    </CardHeader>
-                    <CardContent>
-                        {recentOrders.length === 0 ? (
-                            <div className="flex h-40 flex-col items-center justify-center text-muted-foreground gap-2">
-                                <ShoppingBag className="h-8 w-8 opacity-20" />
-                                <p>No orders yet today</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-3">
-                                {recentOrders.map((order: any) => (
-                                    <div
-                                        key={order.id}
-                                        className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-2xl border border-white/5 bg-white/5 hover:bg-white/10 hover:shadow-lg hover:border-primary/20 transition-all group gap-4 cursor-pointer"
-                                        onClick={() => handleViewDetails(order.id)}
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            <div className="h-12 w-12 rounded-2xl bg-secondary/50 flex items-center justify-center font-black text-lg text-muted-foreground group-hover:bg-primary group-hover:text-white transition-colors shadow-inner">
-                                                {order.restaurant_tables?.table_number || '#'}
-                                            </div>
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <p className="font-bold text-foreground leading-none">{order.bill_id}</p>
-                                                    <Badge variant="secondary" className="text-[10px] h-5">{order.order_type.replace('_', ' ')}</Badge>
+                {/* Kitchen Activity / Secondary Metrics */}
+                <div className="col-span-3 space-y-6">
+                    <Card className="glass-card border-gray-100 shadow-sm h-full relative overflow-hidden bg-white hover:border-green-500/20 hover:shadow-md transition-all duration-300">
+                        <div className="absolute inset-0 bg-gradient-to-t from-gray-50 via-transparent to-transparent z-0" />
+                        <CardHeader className="relative z-10 border-b border-gray-50 pb-4">
+                            <CardTitle className="font-bold text-gray-900">Live Kitchen Activity</CardTitle>
+                            <CardDescription className="text-xs text-gray-500">Current order prep status</CardDescription>
+                        </CardHeader>
+                        <CardContent className="relative z-10 px-6 pt-6">
+                            <div className="space-y-6">
+                                {[
+                                    { label: 'Pending', count: stats.activeOrders, color: 'bg-yellow-500', icon: Clock },
+                                    { label: 'Preparing', count: Math.floor(stats.activeOrders * 0.4), color: 'bg-orange-500', icon: UtensilsCrossed },
+                                    { label: 'Ready', count: Math.floor(stats.activeOrders * 0.6), color: 'bg-green-500', icon: CheckCircle2 },
+                                ].map((step, idx) => (
+                                    <div key={idx} className="space-y-2 group">
+                                        <div className="flex items-center justify-between text-sm font-medium">
+                                            <div className="flex items-center gap-2">
+                                                <div className={cn("p-1.5 rounded-md text-white shadow-sm transition-transform group-hover:scale-110", step.color)}>
+                                                    <step.icon className="h-3.5 w-3.5" />
                                                 </div>
-                                                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1.5">
-                                                    <Users className="h-3 w-3" /> {order.customers?.name || 'Guest'}
-                                                </p>
+                                                <span className="text-gray-700">{step.label}</span>
                                             </div>
+                                            <span className="font-bold text-gray-900">{step.count}</span>
                                         </div>
-
-                                        <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto pl-16 sm:pl-0">
-                                            <div className="text-right">
-                                                <p className="font-black text-foreground text-lg leading-none">₹{order.total.toFixed(0)}</p>
-                                                <p className="text-[10px] text-muted-foreground mt-1 text-right">{order.order_items?.length || 1} items</p>
-                                            </div>
-                                            {getStatusBadge(order.status)}
-                                            <div className="h-8 w-8 rounded-full bg-white/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity -mr-2">
-                                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                            </div>
+                                        <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                                            <div
+                                                className={cn("h-full rounded-full transition-all duration-1000", step.color)}
+                                                style={{ width: `${(step.count / (Math.max(stats.activeOrders, 1))) * 100}%` }}
+                                            />
                                         </div>
                                     </div>
                                 ))}
                             </div>
-                        )}
-                    </CardContent>
-                </Card>
+
+                            <div className="mt-8 p-4 rounded-2xl bg-gray-900 border border-gray-800 text-center shadow-xl relative overflow-hidden group hover:scale-[1.02] transition-transform duration-300">
+                                <div className="absolute top-0 right-0 w-20 h-20 bg-green-500/20 rounded-full blur-xl -mr-10 -mt-10" />
+                                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 relative z-10">Kitchen Efficiency</p>
+                                <p className="text-3xl font-black text-white relative z-10">94%</p>
+                                <p className="text-[10px] text-gray-500 mt-1 relative z-10">Avg. prep time: 12m</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
 
-            {/* Order Details Dialog */}
-            <Dialog open={!!selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)}>
-                <DialogContent className="max-w-xl bg-background p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
+
+            {/* Order Details Modal */}
+            <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+                <DialogContent className="max-w-xl bg-white p-0 overflow-hidden border border-gray-100 shadow-2xl rounded-3xl">
                     <DialogTitle className="sr-only">Order Details</DialogTitle>
                     {selectedOrder && (
                         <div className="flex flex-col">
-                            {/* Header Gradient */}
-                            <div className="bg-gradient-to-r from-primary to-purple-800 p-6 text-white relative overflow-hidden">
-                                <div className="absolute -right-10 -top-10 h-32 w-32 bg-white/20 rounded-full blur-2xl" />
-                                <div className="relative z-10 flex justify-between items-start">
+                            {/* Premium Header */}
+                            <div className="flex flex-col gap-1 p-6 pb-2">
+                                <div className="flex justify-between items-start">
                                     <div>
-                                        <p className="text-primary-foreground/80 text-xs font-bold uppercase tracking-wider mb-1">
+                                        <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                                             Order #{selectedOrder.bill_id}
-                                        </p>
-                                        <h2 className="text-3xl font-black">{selectedOrder.customers?.name || 'Walk-in Customer'}</h2>
-                                        <p className="flex items-center gap-2 text-sm mt-1 opacity-90">
-                                            <Users className="h-3 w-3" /> {selectedOrder.customers?.phone || 'No Phone'}
+                                            <Badge className={cn(
+                                                "ml-2 text-[10px] px-2 py-0.5 uppercase tracking-wide border-0",
+                                                selectedOrder.status === 'completed' ? "bg-green-100 text-green-700 hover:bg-green-200" :
+                                                    selectedOrder.status === 'pending' ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200" :
+                                                        "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                                            )}>
+                                                {selectedOrder.status}
+                                            </Badge>
+                                        </h2>
+                                        <p className="text-sm text-gray-500 font-medium mt-1 flex items-center gap-2">
+                                            <Calendar className="h-3.5 w-3.5" />
+                                            {format(new Date(selectedOrder.created_at), 'PPP')} at {format(new Date(selectedOrder.created_at), 'p')}
                                         </p>
                                     </div>
-                                    <div className="flex flex-col items-end gap-2">
-                                        <div className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold border border-white/10">
-                                            Table {selectedOrder.restaurant_tables?.table_number || 'N/A'}
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-gray-900" onClick={() => setIsDetailsOpen(false)}>
+                                        <XCircle className="h-6 w-6" />
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="px-6 py-2">
+                                <div className="h-px bg-gray-100 w-full" />
+                            </div>
+
+                            {/* Info Grid */}
+                            <div className="grid grid-cols-2 gap-6 p-6 pt-2">
+                                <div className="space-y-3">
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                                        <Users className="h-3.5 w-3.5" /> Customer
+                                    </p>
+                                    <div>
+                                        <p className="font-semibold text-gray-900 text-base">{selectedOrder.customers?.name || 'Walk-in Customer'}</p>
+                                        <p className="text-sm text-gray-500 font-medium">{selectedOrder.customers?.phone || 'No Phone'}</p>
+                                    </div>
+                                    {(selectedOrder.delivery_address || selectedOrder.customers?.address) && (
+                                        <p className="text-xs text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-100 leading-relaxed">
+                                            {selectedOrder.delivery_address || selectedOrder.customers?.address}
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="space-y-3">
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                                        <UtensilsCrossed className="h-3.5 w-3.5" /> Order Info
+                                    </p>
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-500 font-medium">Type:</span>
+                                            <span className="font-semibold text-gray-900 capitalize">{selectedOrder.order_type?.replace('_', ' ') || 'Dine In'}</span>
                                         </div>
-                                        <div className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold border border-white/10 uppercase">
-                                            {selectedOrder.status}
+                                        {selectedOrder.restaurant_tables && (
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-gray-500 font-medium">Table No:</span>
+                                                <span className="font-semibold text-gray-900">#{selectedOrder.restaurant_tables.table_number}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-500 font-medium">Payment:</span>
+                                            <span className={cn("font-semibold capitalize", selectedOrder.payment_status === 'paid' ? "text-green-600" : "text-orange-600")}>
+                                                {selectedOrder.payment_status || 'Pending'}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Content */}
-                            <div className="p-6 space-y-6">
-                                {/* Items List */}
-                                <div>
-                                    <div className="flex justify-between items-center mb-3">
-                                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Order Items</p>
-                                        <Badge variant="outline">{selectedOrder.order_items?.length || 0} ITEMS</Badge>
+                            {/* Items Table */}
+                            <div className="px-6 pb-6 space-y-4">
+                                <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                                    <div className="grid grid-cols-12 bg-gray-50 border-b border-gray-200 p-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                                        <div className="col-span-6 pl-2">Item</div>
+                                        <div className="col-span-2 text-center">Qty</div>
+                                        <div className="col-span-4 text-right pr-2">Total</div>
                                     </div>
-                                    <div className="bg-secondary/30 rounded-2xl border border-border overflow-hidden">
-                                        {selectedOrder.order_items?.map((item: any, i: number) => (
-                                            <div key={i} className="flex justify-between items-center p-4 border-b border-border/50 last:border-0 hover:bg-white/5 transition-colors">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="h-6 w-6 rounded flex items-center justify-center bg-primary/10 text-primary font-bold text-xs ring-1 ring-primary/20">
-                                                        {item.quantity}x
-                                                    </span>
-                                                    <span className="font-semibold text-sm">{item.item_name}</span>
+                                    <div className="divide-y divide-gray-100 max-h-[250px] overflow-y-auto custom-scrollbar">
+                                        {selectedOrder.order_items?.map((item: any) => (
+                                            <div key={item.id} className="grid grid-cols-12 p-3 items-center hover:bg-gray-50/50 transition-colors">
+                                                <div className="col-span-6 pl-2">
+                                                    <p className="text-sm font-semibold text-gray-800">{item.item_name}</p>
+                                                    <p className="text-[10px] text-gray-400 font-medium">₹{(item.total / item.quantity).toFixed(0)} each</p>
                                                 </div>
-                                                <span className="font-bold text-sm">₹{item.total.toFixed(2)}</span>
+                                                <div className="col-span-2 flex justify-center">
+                                                    <div className="h-6 w-6 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-bold">
+                                                        {item.quantity}
+                                                    </div>
+                                                </div>
+                                                <div className="col-span-4 text-right pr-2">
+                                                    <p className="text-sm font-bold text-gray-900">₹{item.total.toFixed(2)}</p>
+                                                </div>
                                             </div>
-                                        )) || <p className="p-4 text-center text-muted-foreground text-sm">No items found</p>}
+                                        ))}
+                                    </div>
+                                    {/* Summary */}
+                                    <div className="bg-gray-50 p-4 border-t border-gray-200">
+                                        <div className="flex justify-between items-center text-sm mb-1">
+                                            <span className="text-gray-500 font-medium">Subtotal</span>
+                                            <span className="font-semibold text-gray-900">₹{selectedOrder.total.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center pt-3 border-t border-gray-200 mt-2">
+                                            <span className="text-base font-bold text-gray-900">Grand Total</span>
+                                            <span className="text-2xl font-black text-gray-900">₹{selectedOrder.total.toFixed(2)}</span>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Payment Section */}
-                                <div className="bg-primary/5 rounded-2xl p-5 border border-primary/10 relative overflow-hidden">
-                                    <div className="flex justify-between items-center mb-1">
-                                        <span className="font-medium text-foreground">Total Amount</span>
-                                        <span className="text-3xl font-black text-primary">₹{selectedOrder.total.toFixed(2)}</span>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground text-right mb-6">Including all taxes & charges</p>
-
-                                    {selectedOrder.status !== 'completed' ? (
+                                {/* Actions Footer */}
+                                <div className="pt-2">
+                                    {selectedOrder.status !== 'completed' && selectedOrder.payment_status !== 'paid' ? (
                                         <div className="grid grid-cols-2 gap-3">
                                             <Button
-                                                className="bg-green-600 hover:bg-green-700 text-white font-bold h-12 rounded-xl shadow-lg shadow-green-900/20 active:scale-95 transition-all"
+                                                className="h-11 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm"
                                                 onClick={() => handlePayment('cash')}
                                                 disabled={processingPayment}
                                             >
-                                                <DollarSign className="mr-2 h-4 w-4" /> Cash Paid
+                                                <DollarSign className="mr-2 h-4 w-4" /> Collect Cash
                                             </Button>
                                             <Button
-                                                className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-12 rounded-xl shadow-lg shadow-blue-900/20 active:scale-95 transition-all"
+                                                className="h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm"
                                                 onClick={() => handlePayment('upi')}
                                                 disabled={processingPayment}
                                             >
-                                                <DollarSign className="mr-2 h-4 w-4" /> UPI Paid
+                                                <Smartphone className="mr-2 h-4 w-4" /> Collect UPI
                                             </Button>
                                         </div>
                                     ) : (
-                                        <div className="bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-300 p-3 rounded-xl text-center font-bold text-sm border border-green-200 dark:border-green-500/30 flex items-center justify-center gap-2">
-                                            <DollarSign className="h-4 w-4" />
+                                        <div className="w-full h-11 bg-green-50 border border-green-200 text-green-700 rounded-xl flex items-center justify-center font-bold text-sm gap-2">
+                                            <CheckCircle2 className="h-5 w-5 text-green-600" />
                                             Payment Completed via {selectedOrder.payment_method?.toUpperCase()}
                                         </div>
                                     )}
