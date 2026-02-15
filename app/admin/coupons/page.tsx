@@ -40,7 +40,7 @@ export default function CouponsPage() {
         // Realtime subscription
         const channel = supabase
             .channel('coupons-realtime')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'coupons', filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => {
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'coupons' }, () => {
                 console.log('🔴 Coupons updated - refreshing...')
                 fetchCoupons()
             })

@@ -31,6 +31,12 @@ export default function TablesPage() {
 
     useEffect(() => {
         fetchTables()
+
+        const ch = supabase.channel('tables-rt')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'restaurant_tables' }, () => fetchTables())
+            .subscribe()
+
+        return () => { supabase.removeChannel(ch) }
     }, [])
 
     useEffect(() => {

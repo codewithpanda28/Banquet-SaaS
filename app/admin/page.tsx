@@ -62,6 +62,7 @@ export default function AdminDashboard() {
         fetchDashboardData()
 
         // Real-time subscription for orders
+        // Real-time subscription for orders and items
         const channel = supabase
             .channel('admin-dashboard')
             .on(
@@ -70,7 +71,17 @@ export default function AdminDashboard() {
                     event: '*',
                     schema: 'public',
                     table: 'orders',
-                    filter: `restaurant_id=eq.${RESTAURANT_ID}`
+                },
+                () => {
+                    fetchDashboardData()
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'order_items',
                 },
                 () => {
                     fetchDashboardData()

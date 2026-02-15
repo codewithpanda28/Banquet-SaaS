@@ -96,7 +96,6 @@ export default function CustomersPage() {
                     event: '*',
                     schema: 'public',
                     table: 'customers',
-                    filter: `restaurant_id=eq.${RESTAURANT_ID}`
                 },
                 () => {
                     fetchCustomers(true)
@@ -112,7 +111,6 @@ export default function CustomersPage() {
                     event: '*',
                     schema: 'public',
                     table: 'orders',
-                    filter: `restaurant_id=eq.${RESTAURANT_ID}`
                 },
                 () => {
                     console.log('🔴 Orders updated - refreshing customer stats...')

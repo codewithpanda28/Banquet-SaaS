@@ -47,6 +47,13 @@ export default function MenuPage() {
 
     useEffect(() => {
         fetchData()
+
+        const ch = supabase.channel('menu-rt')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_categories' }, () => fetchData())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_items' }, () => fetchData())
+            .subscribe()
+
+        return () => { supabase.removeChannel(ch) }
     }, [])
 
     useEffect(() => {

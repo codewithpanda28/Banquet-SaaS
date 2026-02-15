@@ -27,6 +27,12 @@ export default function ReportsPage() {
 
     useEffect(() => {
         fetchReports()
+
+        const ch = supabase.channel('reports-rt')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchReports())
+            .subscribe()
+
+        return () => { supabase.removeChannel(ch) }
     }, [dateRange])
 
     async function fetchReports() {

@@ -37,7 +37,11 @@ export default function OrdersPage() {
         fetchOrders()
 
         // Realtime
-        const ch = supabase.channel('ord-rt').on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `restaurant_id=eq.${RESTAURANT_ID}` }, () => fetchOrders()).subscribe()
+        // Realtime
+        const ch = supabase.channel('ord-rt')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchOrders())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, () => fetchOrders())
+            .subscribe()
         return () => { supabase.removeChannel(ch) }
     }, [])
 

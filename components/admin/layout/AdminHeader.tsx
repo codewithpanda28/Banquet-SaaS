@@ -135,10 +135,11 @@ export function AdminHeader() {
                     event: 'INSERT',
                     schema: 'public',
                     table: 'orders',
-                    filter: `restaurant_id=eq.${RESTAURANT_ID}`
                 },
                 (payload) => {
                     const newOrder = payload.new as any
+                    if (newOrder.restaurant_id !== RESTAURANT_ID) return
+
                     toast.success(`New Order Received! #${newOrder.bill_id}`, {
                         description: `Total: ₹${newOrder.total.toFixed(2)}`,
                         duration: 5000,
