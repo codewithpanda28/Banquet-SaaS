@@ -8,7 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Search, Plus, Phone, Mail, MapPin, ShoppingBag, TrendingUp, RefreshCw, Clock } from 'lucide-react'
+import { Search, Plus, Phone, Mail, MapPin, ShoppingBag, TrendingUp, RefreshCw, Clock, Wallet, User } from 'lucide-react'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 import { Customer } from '@/types'
 import { toast } from 'sonner'
@@ -104,7 +104,6 @@ export default function CustomersPage() {
             )
             .subscribe()
 
-        // ALSO subscribe to orders - customer stats depend on orders!
         const ordersChannel = supabase
             .channel('orders-for-customers')
             .on(
@@ -184,13 +183,13 @@ export default function CustomersPage() {
     }
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <PageHeader
-                title="Customers"
-                description="Manage customer database and insights"
+                title="Customer Insights"
+                description="Manage your loyal customer base and view history"
             >
                 <div className="flex gap-2">
-                    <Button variant="outline" size="icon" onClick={() => fetchCustomers(true)} disabled={refreshing}>
+                    <Button variant="outline" size="icon" onClick={() => fetchCustomers(true)} disabled={refreshing} className="glass-panel border-primary/20">
                         <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
                     </Button>
                     <Button onClick={() => setDialogOpen(true)} className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20">
@@ -203,20 +202,20 @@ export default function CustomersPage() {
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {[
-                    { label: 'Total Customers', value: stats.total, icon: Plus, color: 'text-blue-600', bg: 'bg-blue-50' },
-                    { label: 'Active Customers', value: stats.active, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-                    { label: 'Total Orders', value: stats.totalOrders, icon: ShoppingBag, color: 'text-violet-600', bg: 'bg-violet-50' }
+                    { label: 'Total Customers', value: stats.total, icon: User, color: 'text-blue-600', gradient: 'from-blue-500/10 to-transparent', border: 'border-blue-200/20' },
+                    { label: 'Active Customers', value: stats.active, icon: TrendingUp, color: 'text-emerald-600', gradient: 'from-emerald-500/10 to-transparent', border: 'border-emerald-200/20' },
+                    { label: 'Total Orders', value: stats.totalOrders, icon: ShoppingBag, color: 'text-purple-600', gradient: 'from-purple-500/10 to-transparent', border: 'border-purple-200/20' }
                 ].map((stat, i) => (
-                    <Card key={i} className="border-0 shadow-sm overflow-hidden group hover:shadow-md transition-all duration-300">
-                        <CardContent className="p-0">
-                            <div className={`h-1 w-full ${stat.color.replace('text', 'bg')}`} />
+                    <Card key={i} className={`glass-card border ${stat.border} relative overflow-hidden group`}>
+                        <div className={`absolute inset-0 bg-gradient-to-br ${stat.gradient} opacity-50`} />
+                        <CardContent className="p-0 relative z-10">
                             <div className="p-6 flex items-center justify-between">
                                 <div>
-                                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">{stat.label}</p>
-                                    <p className="text-4xl font-black mt-1">{stat.value}</p>
+                                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{stat.label}</p>
+                                    <p className="text-4xl font-black mt-2 tracking-tight">{stat.value}</p>
                                 </div>
-                                <div className={`${stat.bg} p-4 rounded-2xl group-hover:scale-110 transition-transform`}>
-                                    <stat.icon className={`h-8 w-8 ${stat.color}`} />
+                                <div className={`h-12 w-12 rounded-2xl bg-background/50 backdrop-blur-md flex items-center justify-center shadow-inner border border-white/10 group-hover:scale-110 transition-transform duration-500`}>
+                                    <stat.icon className={`h-6 w-6 ${stat.color}`} />
                                 </div>
                             </div>
                         </CardContent>
@@ -225,13 +224,14 @@ export default function CustomersPage() {
             </div>
 
             {/* Search */}
-            <Card className="border-0 shadow-sm">
+            <Card className="glass-panel border-0 relative">
                 <CardContent className="pt-6">
+                    <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Find Customers</Label>
                     <div className="relative">
                         <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
                         <Input
                             placeholder="Search by name, phone or email..."
-                            className="pl-12 h-14 text-lg rounded-xl border-muted bg-muted/50 focus:bg-white transition-all shadow-inner"
+                            className="pl-12 h-12 rounded-xl bg-background/50 border-input/50 focus:bg-background transition-all shadow-inner text-lg"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
@@ -240,136 +240,138 @@ export default function CustomersPage() {
             </Card>
 
             {/* Customers List */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {filteredCustomers.length === 0 ? (
-                    <Card className="border-2 border-dashed md:col-span-2 lg:col-span-3">
-                        <CardContent className="h-48 flex flex-col items-center justify-center text-muted-foreground gap-2">
-                            <div className="bg-muted p-4 rounded-full">
-                                <Search className="h-8 w-8 opacity-20" />
-                            </div>
-                            <p className="font-medium">No customers found matching your search</p>
-                        </CardContent>
-                    </Card>
+                    <div className="col-span-full glass-panel p-12 flex flex-col items-center justify-center text-muted-foreground gap-2 border-dashed rounded-3xl">
+                        <User className="h-12 w-12 opacity-20 mb-2" />
+                        <p className="text-lg font-medium">No customers found</p>
+                        <p className="text-sm opacity-50">Try adjusting your search criteria</p>
+                    </div>
                 ) : (
                     filteredCustomers.map((customer) => (
-                        <Card key={customer.id} className="border-0 shadow-sm hover:shadow-xl transition-all duration-300 group rounded-2xl overflow-hidden relative">
-                            <div className="absolute top-0 right-0 p-4">
-                                <Badge variant="secondary" className="bg-white/80 backdrop-blur-sm font-bold border-0 shadow-sm">
-                                    {customer.total_orders || 0} Orders
-                                </Badge>
-                            </div>
-                            <CardContent className="p-6">
-                                <div className="space-y-4">
-                                    <div>
-                                        <h3 className="font-black text-xl text-foreground group-hover:text-primary transition-colors">
-                                            {customer.name || 'Unnamed Customer'}
-                                        </h3>
-                                        <p className="text-xs font-mono text-muted-foreground mt-1">
-                                            ID: {customer.id.slice(0, 8).toUpperCase()}
-                                        </p>
-                                    </div>
+                        <div key={customer.id} className="glass-card p-0 rounded-3xl border border-white/5 overflow-hidden group hover:border-primary/30 transition-all duration-300 relative flex flex-col h-full bg-gradient-to-b from-card/50 to-card/10">
 
-                                    <div className="grid gap-3 pt-2">
-                                        <div className="flex items-center text-sm font-medium bg-secondary/30 p-2 rounded-lg">
-                                            <div className="bg-white p-1.5 rounded-md shadow-sm mr-3">
-                                                <Phone className="h-4 w-4 text-blue-600" />
-                                            </div>
-                                            {customer.phone}
-                                        </div>
-                                        {customer.email && (
-                                            <div className="flex items-center text-sm font-medium bg-secondary/30 p-2 rounded-lg">
-                                                <div className="bg-white p-1.5 rounded-md shadow-sm mr-3">
-                                                    <Mail className="h-4 w-4 text-emerald-600" />
-                                                </div>
-                                                {customer.email}
-                                            </div>
-                                        )}
-                                        {customer.address && (
-                                            <div className="flex items-center text-sm font-medium bg-secondary/30 p-2 rounded-lg">
-                                                <div className="bg-white p-1.5 rounded-md shadow-sm mr-3">
-                                                    <MapPin className="h-4 w-4 text-orange-600" />
-                                                </div>
-                                                <span className="line-clamp-1">{customer.address}</span>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="pt-4 mt-4 border-t border-dashed flex justify-between items-center bg-gradient-to-r from-muted/50 to-transparent -mx-6 px-6 pb-2">
-                                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Total Value</span>
-                                        <span className="font-black text-xl text-primary">₹{(customer.total_spent || 0).toFixed(2)}</span>
-                                    </div>
-                                    <div className="text-[10px] text-muted-foreground flex justify-between pt-2">
-                                        <span className="flex items-center gap-1 opacity-70">
-                                            <Clock className="h-3 w-3" />
-                                            Last: {customer.last_order_at ? format(new Date(customer.last_order_at), 'dd MMM yy') : 'N/A'}
-                                        </span>
-                                        <span className="font-medium">Member since {format(new Date(customer.created_at), 'MMM yyyy')}</span>
+                            {/* Card Header with Avatar */}
+                            <div className="p-6 pb-0 flex items-start gap-4">
+                                <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-primary/20 to-purple-600/20 border border-white/10 flex items-center justify-center shrink-0 shadow-lg text-xl font-black text-primary group-hover:scale-110 transition-transform duration-500">
+                                    {customer.name?.substring(0, 2).toUpperCase()}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <h3 className="font-bold text-lg leading-tight truncate group-hover:text-primary transition-colors">
+                                        {customer.name}
+                                    </h3>
+                                    <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mt-1">
+                                        <div className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                                        <span>Member Since {format(new Date(customer.created_at), 'MMM yy')}</span>
                                     </div>
                                 </div>
-                            </CardContent>
-                        </Card>
+                            </div>
+
+                            {/* Card Content */}
+                            <div className="p-6 space-y-4 flex-1">
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-3 text-sm bg-secondary/30 p-2.5 rounded-xl border border-white/5">
+                                        <Phone className="h-4 w-4 text-blue-500 opacity-80" />
+                                        <span className="font-medium tracking-wide">{customer.phone}</span>
+                                    </div>
+
+                                    {(customer.email || customer.address) && (
+                                        <div className="space-y-2">
+                                            {customer.email && (
+                                                <div className="flex items-center gap-3 text-xs text-muted-foreground px-2">
+                                                    <Mail className="h-3.5 w-3.5" />
+                                                    <span className="truncate">{customer.email}</span>
+                                                </div>
+                                            )}
+                                            {customer.address && (
+                                                <div className="flex items-center gap-3 text-xs text-muted-foreground px-2">
+                                                    <MapPin className="h-3.5 w-3.5" />
+                                                    <span className="truncate">{customer.address}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Card Footer Statistics */}
+                            <div className="p-4 bg-muted/40 border-t border-white/5 grid grid-cols-2 gap-px">
+                                <div className="text-center border-r border-white/5">
+                                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-0.5">Orders</p>
+                                    <p className="text-lg font-black">{customer.total_orders || 0}</p>
+                                </div>
+                                <div className="text-center">
+                                    <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-0.5">Spent</p>
+                                    <p className="text-lg font-black text-primary">₹{(customer.total_spent || 0).toFixed(0)}</p>
+                                </div>
+                            </div>
+                        </div>
                     ))
                 )}
             </div>
 
             {/* Add Customer Dialog */}
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent className="max-w-md rounded-2xl">
+                <DialogContent className="glass-panel border border-white/10 bg-background/95 backdrop-blur-xl sm:rounded-3xl max-w-md">
                     <DialogHeader>
-                        <DialogTitle className="text-2xl font-black">Add New Customer</DialogTitle>
+                        <DialogTitle className="text-xl font-bold">New Customer Profile</DialogTitle>
                         <DialogDescription>
-                            Create a new customer profile in your database
+                            Add details to create a new customer record
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4 py-4">
                         <div className="space-y-2">
-                            <Label htmlFor="name" className="text-xs font-bold uppercase tracking-wider ml-1">Full Name *</Label>
+                            <Label htmlFor="name" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Full Name *</Label>
                             <Input
                                 id="name"
                                 value={customerForm.name}
                                 onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })}
                                 placeholder="e.g. Rahul Sharma"
-                                className="h-12 rounded-xl"
+                                className="bg-secondary/20 border-border/50 h-11"
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="phone" className="text-xs font-bold uppercase tracking-wider ml-1">Phone Number *</Label>
-                            <Input
-                                id="phone"
-                                value={customerForm.phone}
-                                onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })}
-                                placeholder="10-digit mobile number"
-                                className="h-12 rounded-xl"
-                            />
+                            <Label htmlFor="phone" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Phone Number *</Label>
+                            <div className="relative">
+                                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    id="phone"
+                                    value={customerForm.phone}
+                                    onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })}
+                                    placeholder="7282871506"
+                                    className="pl-10 bg-secondary/20 border-border/50 h-11"
+                                />
+                            </div>
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="email" className="text-xs font-bold uppercase tracking-wider ml-1">Email Address</Label>
+                            <Label htmlFor="email" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Email (Optional)</Label>
                             <Input
                                 id="email"
                                 type="email"
                                 value={customerForm.email}
                                 onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })}
-                                placeholder="name@example.com"
-                                className="h-12 rounded-xl"
+                                placeholder="customer@example.com"
+                                className="bg-secondary/20 border-border/50 h-11"
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="address" className="text-xs font-bold uppercase tracking-wider ml-1">Full Address</Label>
-                            <Input
-                                id="address"
-                                value={customerForm.address}
-                                onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })}
-                                placeholder="Street, City, Pincode"
-                                className="h-12 rounded-xl"
-                            />
+                            <Label htmlFor="address" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Address (Optional)</Label>
+                            <div className="relative">
+                                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    id="address"
+                                    value={customerForm.address}
+                                    onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })}
+                                    placeholder="Full street address"
+                                    className="pl-10 bg-secondary/20 border-border/50 h-11"
+                                />
+                            </div>
                         </div>
                     </div>
-                    <DialogFooter className="gap-2 sm:gap-0">
-                        <Button variant="ghost" onClick={() => setDialogOpen(false)} className="rounded-xl h-12 font-bold">
-                            Cancel
-                        </Button>
-                        <Button onClick={handleAddCustomer} className="rounded-xl h-12 px-8 font-bold bg-primary hover:bg-primary shadow-lg shadow-primary/20">
-                            Create Customer
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                        <Button onClick={handleAddCustomer} className="bg-primary hover:bg-primary/90 text-white font-bold shadow-lg shadow-primary/20 w-full sm:w-auto">
+                            Create Profile
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -377,4 +379,3 @@ export default function CustomersPage() {
         </div>
     )
 }
-

@@ -7,10 +7,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Save, Store, Clock, DollarSign, Phone, Mail, MapPin } from 'lucide-react'
+import { Save, Store, Clock, DollarSign, Phone, Mail, MapPin, Smartphone } from 'lucide-react'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 import { Restaurant } from '@/types'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 
 export default function SettingsPage() {
     const [loading, setLoading] = useState(true)
@@ -116,109 +117,134 @@ export default function SettingsPage() {
     if (loading) {
         return (
             <div className="flex min-h-[400px] items-center justify-center">
-                <div className="text-muted-foreground">Loading settings...</div>
+                <div className="flex flex-col items-center gap-4">
+                    <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                    <p className="text-muted-foreground animate-pulse font-medium">Loading Preferences...</p>
+                </div>
             </div>
         )
     }
 
     return (
-        <div className="space-y-6 pb-12">
-            <PageHeader
-                title="Settings"
-                description="Configure restaurant settings"
-            >
-                <Button onClick={handleSave} disabled={saving}>
-                    <Save className="mr-2 h-4 w-4" />
-                    {saving ? 'Saving...' : 'Save Changes'}
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+            <div className="flex items-center justify-between">
+                <PageHeader
+                    title="System Settings"
+                    description="Configure your restaurant's profile and operations"
+                />
+                <Button onClick={handleSave} disabled={saving} className="bg-primary hover:bg-primary/90 text-white font-bold shadow-lg shadow-primary/20 transition-all px-8 h-12 rounded-xl hidden md:flex">
+                    <Save className="mr-2 h-5 w-5" />
+                    {saving ? 'Saving...' : 'Save All Changes'}
                 </Button>
-            </PageHeader>
+            </div>
 
-            <div className="grid gap-6">
+            <div className="grid gap-8 max-w-5xl mx-auto">
                 {/* General Information */}
-                <Card className="bg-card border-2 shadow-sm">
+                <Card className="glass-panel border-0 overflow-hidden relative group">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-primary" />
                     <CardHeader>
-                        <div className="flex items-center gap-2">
-                            <Store className="h-5 w-5 text-primary" />
-                            <CardTitle>General Information</CardTitle>
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                                <Store className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-lg">Restaurant Profile</CardTitle>
+                                <CardDescription>Basic information displayed to customers</CardDescription>
+                            </div>
                         </div>
-                        <CardDescription>Basic details about your restaurant</CardDescription>
                     </CardHeader>
-                    <CardContent className="grid gap-4 md:grid-cols-2">
+                    <CardContent className="grid gap-6 md:grid-cols-2">
                         <div className="space-y-2">
-                            <Label htmlFor="name">Restaurant Name</Label>
+                            <Label htmlFor="name" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Restaurant Name</Label>
                             <Input
                                 id="name"
                                 value={form.name}
                                 onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                className="bg-secondary/20 border-border/50 h-11"
                             />
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="tagline">Tagline</Label>
+                            <Label htmlFor="tagline" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tagline / Slogan</Label>
                             <Input
                                 id="tagline"
                                 value={form.tagline}
                                 onChange={(e) => setForm({ ...form, tagline: e.target.value })}
+                                className="bg-secondary/20 border-border/50 h-11"
                             />
                         </div>
                     </CardContent>
                 </Card>
 
                 {/* Contact & Location */}
-                <Card className="bg-card border-2 shadow-sm">
+                <Card className="glass-panel border-0 overflow-hidden relative group">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
                     <CardHeader>
-                        <div className="flex items-center gap-2">
-                            <MapPin className="h-5 w-5 text-primary" />
-                            <CardTitle>Contact & Location</CardTitle>
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
+                                <MapPin className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-lg">Location & Contact</CardTitle>
+                                <CardDescription>Address and communication details</CardDescription>
+                            </div>
                         </div>
-                        <CardDescription>How customers can reach you</CardDescription>
                     </CardHeader>
-                    <CardContent className="grid gap-4 md:grid-cols-2">
+                    <CardContent className="grid gap-6 md:grid-cols-2">
                         <div className="space-y-2">
-                            <Label htmlFor="phone">Phone Number</Label>
+                            <Label htmlFor="phone" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Phone Number</Label>
                             <div className="relative">
                                 <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                                 <Input
                                     id="phone"
-                                    className="pl-10"
+                                    className="pl-10 bg-secondary/20 border-border/50 h-11"
                                     value={form.phone}
                                     onChange={(e) => setForm({ ...form, phone: e.target.value })}
                                 />
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="whatsapp">WhatsApp Number</Label>
-                            <Input
-                                id="whatsapp"
-                                value={form.whatsapp_number}
-                                onChange={(e) => setForm({ ...form, whatsapp_number: e.target.value })}
-                            />
+                            <Label htmlFor="whatsapp" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">WhatsApp Business</Label>
+                            <div className="relative">
+                                <Smartphone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                    id="whatsapp"
+                                    value={form.whatsapp_number}
+                                    onChange={(e) => setForm({ ...form, whatsapp_number: e.target.value })}
+                                    className="pl-10 bg-secondary/20 border-border/50 h-11"
+                                />
+                            </div>
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="email">Email Address</Label>
+                            <Label htmlFor="email" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Email Address</Label>
                             <div className="relative">
                                 <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                                 <Input
                                     id="email"
-                                    className="pl-10"
+                                    className="pl-10 bg-secondary/20 border-border/50 h-11"
                                     value={form.email}
                                     onChange={(e) => setForm({ ...form, email: e.target.value })}
                                 />
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="city">City</Label>
-                            <Input
-                                id="city"
-                                value={form.city}
-                                onChange={(e) => setForm({ ...form, city: e.target.value })}
-                            />
+                            <Label htmlFor="city" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">City</Label>
+                            <div className="relative">
+                                <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                    id="city"
+                                    value={form.city}
+                                    onChange={(e) => setForm({ ...form, city: e.target.value })}
+                                    className="pl-10 bg-secondary/20 border-border/50 h-11"
+                                />
+                            </div>
                         </div>
                         <div className="space-y-2 md:col-span-2">
-                            <Label htmlFor="address">Full Address</Label>
+                            <Label htmlFor="address" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Full Address</Label>
                             <Textarea
                                 id="address"
                                 value={form.address}
                                 onChange={(e) => setForm({ ...form, address: e.target.value })}
+                                className="bg-secondary/20 border-border/50 resize-none min-h-[80px]"
                             />
                         </div>
                     </CardContent>
@@ -226,82 +252,100 @@ export default function SettingsPage() {
 
                 <div className="grid gap-6 md:grid-cols-2">
                     {/* Operating Hours */}
-                    <Card className="bg-card border-2 shadow-sm">
+                    <Card className="glass-panel border-0 overflow-hidden relative group">
+                        <div className="absolute top-0 left-0 w-1 h-full bg-orange-500" />
                         <CardHeader>
-                            <div className="flex items-center gap-2">
-                                <Clock className="h-5 w-5 text-primary" />
-                                <CardTitle>Operating Hours</CardTitle>
+                            <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500 group-hover:scale-110 transition-transform">
+                                    <Clock className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <CardTitle className="text-lg">Operations</CardTitle>
+                                    <CardDescription>Timings and preparation</CardDescription>
+                                </div>
                             </div>
                         </CardHeader>
                         <CardContent className="grid gap-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="opening">Opening Time</Label>
+                                    <Label htmlFor="opening" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Opening</Label>
                                     <Input
                                         id="opening"
                                         type="time"
                                         value={form.opening_time}
                                         onChange={(e) => setForm({ ...form, opening_time: e.target.value })}
+                                        className="bg-secondary/20 border-border/50 h-11"
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="closing">Closing Time</Label>
+                                    <Label htmlFor="closing" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Closing</Label>
                                     <Input
                                         id="closing"
                                         type="time"
                                         value={form.closing_time}
                                         onChange={(e) => setForm({ ...form, closing_time: e.target.value })}
+                                        className="bg-secondary/20 border-border/50 h-11"
                                     />
                                 </div>
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="prep-time">Avg Preparation Time (mins)</Label>
+                                <Label htmlFor="prep-time" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Avg. Prep Time (mins)</Label>
                                 <Input
                                     id="prep-time"
                                     type="number"
                                     value={form.avg_preparation_time}
                                     onChange={(e) => setForm({ ...form, avg_preparation_time: e.target.value })}
+                                    className="bg-secondary/20 border-border/50 h-11"
                                 />
                             </div>
                         </CardContent>
                     </Card>
 
                     {/* Pricing & Tax */}
-                    <Card className="bg-card border-2 shadow-sm">
+                    <Card className="glass-panel border-0 overflow-hidden relative group">
+                        <div className="absolute top-0 left-0 w-1 h-full bg-green-500" />
                         <CardHeader>
-                            <div className="flex items-center gap-2">
-                                <DollarSign className="h-5 w-5 text-primary" />
-                                <CardTitle>Pricing & Tax</CardTitle>
+                            <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-xl bg-green-500/10 flex items-center justify-center text-green-500 group-hover:scale-110 transition-transform">
+                                    <DollarSign className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <CardTitle className="text-lg">Finance</CardTitle>
+                                    <CardDescription>Pricing, taxes and fees</CardDescription>
+                                </div>
                             </div>
                         </CardHeader>
                         <CardContent className="grid gap-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="tax">Tax (%)</Label>
+                                    <Label htmlFor="tax" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tax (%)</Label>
                                     <Input
                                         id="tax"
                                         type="number"
                                         value={form.tax_percentage}
                                         onChange={(e) => setForm({ ...form, tax_percentage: e.target.value })}
+                                        className="bg-secondary/20 border-border/50 h-11"
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="delivery">Delivery Charge (₹)</Label>
+                                    <Label htmlFor="delivery" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Delivery Charge (₹)</Label>
                                     <Input
                                         id="delivery"
                                         type="number"
                                         value={form.delivery_charge}
                                         onChange={(e) => setForm({ ...form, delivery_charge: e.target.value })}
+                                        className="bg-secondary/20 border-border/50 h-11"
                                     />
                                 </div>
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="min-order">Min Order Amount (₹)</Label>
+                                <Label htmlFor="min-order" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Min Order Value (₹)</Label>
                                 <Input
                                     id="min-order"
                                     type="number"
                                     value={form.min_order_amount}
                                     onChange={(e) => setForm({ ...form, min_order_amount: e.target.value })}
+                                    className="bg-secondary/20 border-border/50 h-11"
                                 />
                             </div>
                         </CardContent>
@@ -309,30 +353,38 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Payment Information */}
-                <Card className="bg-card border-2 shadow-sm">
+                <Card className="glass-panel border-0 overflow-hidden relative group">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-purple-500" />
                     <CardHeader>
-                        <div className="flex items-center gap-2">
-                            <DollarSign className="h-5 w-5 text-primary" />
-                            <CardTitle>Payment Information</CardTitle>
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-500 group-hover:scale-110 transition-transform">
+                                <Smartphone className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-lg">Digital Payments</CardTitle>
+                                <CardDescription>UPI configurations</CardDescription>
+                            </div>
                         </div>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-2 max-w-md">
-                            <Label htmlFor="upi">UPI ID for Payments</Label>
+                            <Label htmlFor="upi" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">UPI ID (Merchant VPA)</Label>
                             <Input
                                 id="upi"
                                 placeholder="merchant@upi"
                                 value={form.upi_id}
                                 onChange={(e) => setForm({ ...form, upi_id: e.target.value })}
+                                className="bg-secondary/20 border-border/50 h-11 font-mono"
                             />
-                            <p className="text-xs text-muted-foreground mt-1">Used for generating payment links and QR codes.</p>
+                            <p className="text-xs text-muted-foreground mt-1">This VPA will be encoded in QR codes for direct payments.</p>
                         </div>
                     </CardContent>
                 </Card>
             </div>
 
-            <div className="flex justify-end pt-6">
-                <Button size="lg" onClick={handleSave} disabled={saving} className="px-8">
+            {/* Mobile Save Button */}
+            <div className="fixed bottom-0 left-0 w-full p-4 bg-background/80 backdrop-blur-lg border-t border-border mt-8 md:hidden z-50">
+                <Button size="lg" onClick={handleSave} disabled={saving} className="w-full h-12 rounded-xl font-bold shadow-lg">
                     <Save className="mr-2 h-5 w-5" />
                     {saving ? 'Saving...' : 'Save All Settings'}
                 </Button>

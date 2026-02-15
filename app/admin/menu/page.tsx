@@ -10,10 +10,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, Search, Edit, Trash2, Image as ImageIcon, Star, Flame } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, Image as ImageIcon, Star, Flame, UtensilsCrossed, ArrowRight } from 'lucide-react'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 import { MenuCategory, MenuItem } from '@/types'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 
 export default function MenuPage() {
     const [categories, setCategories] = useState<MenuCategory[]>([])
@@ -266,202 +267,201 @@ export default function MenuPage() {
     if (loading) {
         return (
             <div className="flex min-h-[400px] items-center justify-center">
-                <div className="text-muted-foreground">Loading menu...</div>
+                <div className="flex flex-col items-center gap-4">
+                    <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                    <p className="text-muted-foreground animate-pulse font-medium">Loading Menu...</p>
+                </div>
             </div>
         )
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <PageHeader
                 title="Menu Management"
-                description="Manage categories and menu items"
+                description="Organize your food catalogue with style"
             >
-                <Button onClick={() => {
-                    setEditingCategory(null)
-                    setCategoryForm({ name: '', description: '' })
-                    setCategoryDialogOpen(true)
-                }}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Category
-                </Button>
-                <Button onClick={() => {
-                    setEditingItem(null)
-                    setItemForm({
-                        category_id: categories[0]?.id || '',
-                        name: '',
-                        description: '',
-                        price: '',
-                        image_url: '',
-                        is_veg: true,
-                        is_bestseller: false,
-                        is_available: true,
-                        is_spicy: false,
-                        spicy_level: 0,
-                    })
-                    setItemDialogOpen(true)
-                }}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Add Item
-                </Button>
+                <div className="flex gap-2">
+                    <Button onClick={() => {
+                        setEditingCategory(null)
+                        setCategoryForm({ name: '', description: '' })
+                        setCategoryDialogOpen(true)
+                    }} variant="outline" className="glass-panel hover:bg-white/20 border-primary/20 bg-primary/5">
+                        <Plus className="mr-2 h-4 w-4 text-primary" />
+                        Add Category
+                    </Button>
+                    <Button onClick={() => {
+                        setEditingItem(null)
+                        setItemForm({
+                            category_id: categories[0]?.id || '',
+                            name: '',
+                            description: '',
+                            price: '',
+                            image_url: '',
+                            is_veg: true,
+                            is_bestseller: false,
+                            is_available: true,
+                            is_spicy: false,
+                            spicy_level: 0,
+                        })
+                        setItemDialogOpen(true)
+                    }} className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20">
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add New Item
+                    </Button>
+                </div>
             </PageHeader>
 
             {/* Categories Section */}
-            <Card>
-                <CardContent className="pt-6">
-                    <h3 className="mb-4 text-lg font-semibold">Categories ({categories.length})</h3>
-                    {categories.length === 0 ? (
-                        <div className="flex h-32 items-center justify-center text-muted-foreground">
-                            No categories yet. Add your first category!
-                        </div>
-                    ) : (
-                        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                            {categories.map((category) => (
-                                <Card key={category.id} className="bg-card border-2 border-muted hover:border-primary/50 transition-all shadow-sm">
-                                    <CardContent className="p-4">
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex-1">
-                                                <h4 className="font-semibold">{category.name}</h4>
-                                                <p className="text-sm text-muted-foreground line-clamp-2">
-                                                    {category.description || 'No description'}
-                                                </p>
-                                                <Badge variant="outline" className="mt-2">
-                                                    {items.filter(i => i.category_id === category.id).length} items
-                                                </Badge>
-                                            </div>
-                                            <div className="flex gap-1 ml-2">
-                                                <Button
-                                                    size="icon"
-                                                    variant="ghost"
-                                                    onClick={() => openEditCategory(category)}
-                                                >
-                                                    <Edit className="h-4 w-4" />
-                                                </Button>
-                                                <Button
-                                                    size="icon"
-                                                    variant="ghost"
-                                                    onClick={() => handleDeleteCategory(category.id)}
-                                                >
-                                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+            <div>
+                <div className="flex items-center justify-between mb-4 px-1">
+                    <h3 className="text-lg font-bold flex items-center gap-2">
+                        <UtensilsCrossed className="h-4 w-4 text-primary" /> Categories
+                    </h3>
+                    <Badge variant="secondary">{categories.length}</Badge>
+                </div>
+                {categories.length === 0 ? (
+                    <div className="glass-panel p-8 text-center rounded-2xl border-dashed">
+                        <p className="text-muted-foreground mb-2">No categories yet</p>
+                        <Button variant="link" onClick={() => setCategoryDialogOpen(true)}>Create your first category</Button>
+                    </div>
+                ) : (
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                        {categories.map((category) => (
+                            <div key={category.id} className="glass-card p-5 rounded-xl border border-white/5 relative group cursor-pointer hover:border-primary/40 transition-all">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <h4 className="font-bold text-lg leading-tight group-hover:text-primary transition-colors">{category.name}</h4>
+                                        <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{category.description || 'No description'}</p>
+                                    </div>
+                                    <div className="bg-secondary/50 rounded-lg px-2 py-1 text-[10px] font-bold">
+                                        {items.filter(i => i.category_id === category.id).length} ITEMS
+                                    </div>
+                                </div>
+                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                                    <Button size="icon" variant="secondary" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); openEditCategory(category); }}>
+                                        <Edit className="h-3 w-3" />
+                                    </Button>
+                                    <Button size="icon" variant="destructive" className="h-6 w-6" onClick={(e) => { e.stopPropagation(); handleDeleteCategory(category.id); }}>
+                                        <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
 
             {/* Menu Items Section */}
             <div className="space-y-4">
-                <Card className="bg-card border-2">
+                <Card className="glass-panel border-0 mb-6">
                     <CardContent className="pt-6">
-                        <div className="flex flex-col gap-4 md:flex-row">
-                            <div className="relative flex-1">
-                                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                <Input
-                                    placeholder="Search menu items..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="pl-10"
-                                />
+                        <div className="flex flex-col gap-4 md:flex-row items-end">
+                            <div className="relative flex-1 w-full">
+                                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Search Menu</Label>
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Find burgers, pizzas..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="pl-10 bg-background/50 border-input/50 focus:bg-background transition-all"
+                                    />
+                                </div>
                             </div>
-                            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                                <SelectTrigger className="w-full md:w-48">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Categories</SelectItem>
-                                    {categories.map((cat) => (
-                                        <SelectItem key={cat.id} value={cat.id}>
-                                            {cat.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <div className="w-full md:w-56">
+                                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 block">Filter Category</Label>
+                                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                                    <SelectTrigger className="bg-background/50 border-input/50">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Categories</SelectItem>
+                                        {categories.map((cat) => (
+                                            <SelectItem key={cat.id} value={cat.id}>
+                                                {cat.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
 
                 <div className="space-y-3">
-                    <h3 className="text-lg font-semibold">
-                        Menu Items ({filteredItems.length})
-                    </h3>
+                    <h3 className="text-lg font-bold px-1">Menu Items ({filteredItems.length})</h3>
 
                     {filteredItems.length === 0 ? (
-                        <Card className="bg-card border-2">
-                            <CardContent className="flex h-32 items-center justify-center">
-                                <p className="text-muted-foreground">No menu items found</p>
-                            </CardContent>
-                        </Card>
+                        <div className="flex flex-col items-center justify-center p-12 glass-panel rounded-3xl border-dashed">
+                            <UtensilsCrossed className="h-12 w-12 text-muted-foreground/20 mb-3" />
+                            <p className="text-muted-foreground">No menu items found matching criteria</p>
+                        </div>
                     ) : (
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                             {filteredItems.map((item) => (
-                                <Card key={item.id} className="bg-card border-2 border-muted hover:border-primary/50 transition-all shadow-sm">
-                                    <CardContent className="p-4">
-                                        <div className="flex gap-4">
-                                            <div className="h-20 w-20 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden border">
-                                                {item.image_url ? (
-                                                    <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" />
-                                                ) : (
-                                                    <ImageIcon className="h-8 w-8 text-muted-foreground" />
-                                                )}
+                                <div key={item.id} className="group relative bg-card/40 hover:bg-card/80 backdrop-blur-sm border border-border/50 rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
+                                    {/* Image Area */}
+                                    <div className="aspect-[4/3] bg-muted relative overflow-hidden">
+                                        {item.image_url ? (
+                                            <img src={item.image_url} alt={item.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                                        ) : (
+                                            <div className="h-full w-full flex items-center justify-center bg-secondary/30">
+                                                <ImageIcon className="h-10 w-10 text-muted-foreground/30" />
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-start gap-2 mb-2">
-                                                    <h4 className="font-semibold flex-1 line-clamp-1">{item.name}</h4>
-                                                    {item.is_veg ? (
-                                                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                                            Veg
-                                                        </Badge>
-                                                    ) : (
-                                                        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">
-                                                            Non-Veg
-                                                        </Badge>
-                                                    )}
-                                                </div>
-                                                <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
-                                                    {item.description || 'No description'}
-                                                </p>
-                                                <div className="flex items-center justify-between">
-                                                    <p className="text-lg font-bold text-primary">
-                                                        ₹{item.price}
-                                                    </p>
-                                                    <div className="flex gap-1">
-                                                        {item.is_bestseller && (
-                                                            <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200">
-                                                                <Star className="h-3 w-3 mr-1" />
-                                                                Best
-                                                            </Badge>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 mt-3">
-                                                    <Badge variant={item.is_available ? 'default' : 'destructive'}>
-                                                        {item.is_available ? 'Available' : 'Unavailable'}
-                                                    </Badge>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        onClick={() => openEditItem(item)}
-                                                    >
-                                                        <Edit className="h-3 w-3 mr-1" />
-                                                        Edit
-                                                    </Button>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        onClick={() => handleDeleteItem(item.id)}
-                                                    >
-                                                        <Trash2 className="h-3 w-3 text-destructive" />
-                                                    </Button>
-                                                </div>
-                                            </div>
+                                        )}
+                                        <div className="absolute top-3 left-3 flex flex-col gap-2">
+                                            <Badge className={cn("backdrop-blur-md border shadow-sm", item.is_veg ? "bg-green-500/90 text-white border-green-400" : "bg-red-500/90 text-white border-red-400")}>
+                                                <div className={cn("mr-1.5 h-1.5 w-1.5 rounded-full ring-1 ring-white", item.is_veg ? "bg-green-200" : "bg-red-200")} />
+                                                {item.is_veg ? 'VEG' : 'NON-VEG'}
+                                            </Badge>
+                                            {item.is_bestseller && (
+                                                <Badge className="bg-amber-500/90 text-white border-amber-400 backdrop-blur-md shadow-sm">
+                                                    <Star className="h-3 w-3 mr-1 fill-white" /> BESTSELLER
+                                                </Badge>
+                                            )}
                                         </div>
-                                    </CardContent>
-                                </Card>
+
+                                        {!item.is_available && (
+                                            <div className="absolute inset-0 bg-background/80 backdrop-blur-[2px] flex items-center justify-center pointer-events-none z-10">
+                                                <span className="bg-red-500 text-white px-3 py-1 font-bold rounded-lg shadow-lg transform -rotate-12 border-2 border-white">SOLD OUT</span>
+                                            </div>
+                                        )}
+
+                                        {/* Hover Actions */}
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[1px]">
+                                            <Button size="icon" variant="secondary" className="rounded-full h-10 w-10 shadow-lg hover:scale-110 transition-transform" onClick={() => openEditItem(item)}>
+                                                <Edit className="h-4 w-4" />
+                                            </Button>
+                                            <Button size="icon" variant="destructive" className="rounded-full h-10 w-10 shadow-lg hover:scale-110 transition-transform" onClick={() => handleDeleteItem(item.id)}>
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    {/* Content Area */}
+                                    <div className="p-5">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <h4 className="font-bold text-lg leading-tight line-clamp-1 pr-2">{item.name}</h4>
+                                            <span className="font-black text-lg text-primary">₹{item.price}</span>
+                                        </div>
+                                        <p className="text-sm text-muted-foreground line-clamp-2 h-10 mb-4 leading-relaxed">
+                                            {item.description || 'A delicious preparation with authentic spices.'}
+                                        </p>
+
+                                        <div className="flex items-center justify-between text-xs font-medium text-muted-foreground pt-3 border-t border-border/50">
+                                            <span className="flex items-center gap-1.5">
+                                                <div className={cn("h-2 w-2 rounded-full animate-pulse", item.is_available ? "bg-green-500" : "bg-red-500")} />
+                                                {item.is_available ? 'Available' : 'Sold Out'}
+                                            </span>
+                                            {item.is_spicy && (
+                                                <span className="flex items-center text-orange-500 font-bold" title="Spicy">
+                                                    <Flame className="h-3.5 w-3.5 mr-0.5 fill-orange-500" /> Spicy
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
                             ))}
                         </div>
                     )}
@@ -470,41 +470,43 @@ export default function MenuPage() {
 
             {/* Category Dialog */}
             <Dialog open={categoryDialogOpen} onOpenChange={setCategoryDialogOpen}>
-                <DialogContent>
+                <DialogContent className="glass-panel border border-white/10 bg-background/95 backdrop-blur-xl sm:rounded-3xl">
                     <DialogHeader>
-                        <DialogTitle>
-                            {editingCategory ? 'Edit Category' : 'Add Category'}
+                        <DialogTitle className="text-xl font-bold">
+                            {editingCategory ? 'Edit Category' : 'New Category'}
                         </DialogTitle>
                         <DialogDescription>
-                            {editingCategory ? 'Update category details' : 'Create a new menu category'}
+                            Organize your menu items efficiently
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-4">
-                        <div>
-                            <Label htmlFor="cat-name">Category Name *</Label>
+                    <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="cat-name" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Category Name</Label>
                             <Input
                                 id="cat-name"
                                 value={categoryForm.name}
                                 onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
-                                placeholder="e.g., Starters, Main Course"
+                                placeholder="e.g. Starters, Main Course"
+                                className="bg-secondary/20 border-border/50 h-11"
                             />
                         </div>
-                        <div>
-                            <Label htmlFor="cat-desc">Description</Label>
+                        <div className="space-y-2">
+                            <Label htmlFor="cat-desc" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Description</Label>
                             <Textarea
                                 id="cat-desc"
                                 value={categoryForm.description}
                                 onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
-                                placeholder="Brief description of this category"
+                                placeholder="Helping customers understand what's in this section..."
+                                className="bg-secondary/20 border-border/50 min-h-[100px] resize-none"
                             />
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setCategoryDialogOpen(false)}>
+                        <Button variant="ghost" onClick={() => setCategoryDialogOpen(false)}>
                             Cancel
                         </Button>
-                        <Button onClick={handleSaveCategory}>
-                            {editingCategory ? 'Update' : 'Add'} Category
+                        <Button onClick={handleSaveCategory} className="bg-primary font-bold shadow-lg shadow-primary/20">
+                            {editingCategory ? 'Save Changes' : 'Create Category'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -512,33 +514,36 @@ export default function MenuPage() {
 
             {/* Menu Item Dialog */}
             <Dialog open={itemDialogOpen} onOpenChange={setItemDialogOpen}>
-                <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                        <DialogTitle>
-                            {editingItem ? 'Edit Menu Item' : 'Add Menu Item'}
+                <DialogContent className="max-w-2xl glass-panel border border-white/10 bg-background/95 backdrop-blur-xl sm:rounded-3xl overflow-hidden p-0 gap-0">
+                    <div className="bg-muted/30 px-6 py-4 border-b border-border/50">
+                        <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                            {editingItem ? <Edit className="h-5 w-5 text-primary" /> : <Plus className="h-5 w-5 text-primary" />}
+                            {editingItem ? 'Edit Menu Item' : 'Add New Dish'}
                         </DialogTitle>
                         <DialogDescription>
-                            {editingItem ? 'Update menu item details' : 'Create a new menu item'}
+                            Detailed information about this menu item
                         </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4">
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <Label htmlFor="item-name">Item Name *</Label>
+                    </div>
+
+                    <div className="p-6 grid gap-6 max-h-[70vh] overflow-y-auto">
+                        <div className="grid grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <Label htmlFor="item-name" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Item Name *</Label>
                                 <Input
                                     id="item-name"
                                     value={itemForm.name}
                                     onChange={(e) => setItemForm({ ...itemForm, name: e.target.value })}
-                                    placeholder="e.g., Paneer Tikka"
+                                    placeholder="e.g. Butter Chicken"
+                                    className="bg-secondary/20 border-border/50 h-10"
                                 />
                             </div>
-                            <div>
-                                <Label htmlFor="item-category">Category *</Label>
+                            <div className="space-y-2">
+                                <Label htmlFor="item-category" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Category *</Label>
                                 <Select
                                     value={itemForm.category_id}
                                     onValueChange={(value) => setItemForm({ ...itemForm, category_id: value })}
                                 >
-                                    <SelectTrigger id="item-category">
+                                    <SelectTrigger id="item-category" className="bg-secondary/20 border-border/50 h-10">
                                         <SelectValue placeholder="Select category" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -551,93 +556,119 @@ export default function MenuPage() {
                                 </Select>
                             </div>
                         </div>
-                        <div>
-                            <Label htmlFor="item-desc">Description</Label>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="item-desc" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Description</Label>
                             <Textarea
                                 id="item-desc"
                                 value={itemForm.description}
                                 onChange={(e) => setItemForm({ ...itemForm, description: e.target.value })}
-                                placeholder="Brief description of the item"
+                                placeholder="Describe the dish - ingredients, preparation style..."
+                                className="bg-secondary/20 border-border/50 min-h-[80px] resize-none"
                             />
                         </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <Label htmlFor="item-price">Price (₹) *</Label>
-                                <Input
-                                    id="item-price"
-                                    type="number"
-                                    step="0.01"
-                                    value={itemForm.price}
-                                    onChange={(e) => setItemForm({ ...itemForm, price: e.target.value })}
-                                    placeholder="0.00"
-                                />
+
+                        <div className="grid grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <Label htmlFor="item-price" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Price (₹) *</Label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">₹</span>
+                                    <Input
+                                        id="item-price"
+                                        type="number"
+                                        step="0.01"
+                                        value={itemForm.price}
+                                        onChange={(e) => setItemForm({ ...itemForm, price: e.target.value })}
+                                        placeholder="0.00"
+                                        className="bg-secondary/20 border-border/50 h-10 pl-8 font-mono"
+                                    />
+                                </div>
                             </div>
-                            <div>
-                                <Label htmlFor="item-type">Food Type</Label>
+                            <div className="space-y-2">
+                                <Label htmlFor="item-type" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Dietary Type</Label>
                                 <Select
                                     value={itemForm.is_veg ? 'veg' : 'non-veg'}
                                     onValueChange={(value) => setItemForm({ ...itemForm, is_veg: value === 'veg' })}
                                 >
-                                    <SelectTrigger id="item-type">
+                                    <SelectTrigger id="item-type" className="bg-secondary/20 border-border/50 h-10">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="veg">Vegetarian</SelectItem>
-                                        <SelectItem value="non-veg">Non-Vegetarian</SelectItem>
+                                        <SelectItem value="veg">
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-3 w-3 rounded-full bg-green-500 ring-1 ring-green-200" /> Vegetarian
+                                            </div>
+                                        </SelectItem>
+                                        <SelectItem value="non-veg">
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-3 w-3 rounded-full bg-red-500 ring-1 ring-red-200" /> Non-Vegetarian
+                                            </div>
+                                        </SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
                         </div>
-                        <div>
-                            <Label htmlFor="item-image">Image URL</Label>
-                            <Input
-                                id="item-image"
-                                value={itemForm.image_url}
-                                onChange={(e) => setItemForm({ ...itemForm, image_url: e.target.value })}
-                                placeholder="https://example.com/image.jpg"
-                            />
+
+                        <div className="space-y-2">
+                            <Label htmlFor="item-image" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Image URL (Optional)</Label>
+                            <div className="flex gap-2">
+                                <Input
+                                    id="item-image"
+                                    value={itemForm.image_url}
+                                    onChange={(e) => setItemForm({ ...itemForm, image_url: e.target.value })}
+                                    placeholder="https://example.com/image.jpg"
+                                    className="bg-secondary/20 border-border/50 h-10 flex-1"
+                                />
+                                {itemForm.image_url && (
+                                    <div className="h-10 w-10 rounded-lg overflow-hidden bg-muted border border-border shrink-0">
+                                        <img src={itemForm.image_url} className="h-full w-full object-cover" alt="Preview" />
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        <div className="flex gap-4">
-                            <div className="flex items-center space-x-2">
-                                <input
-                                    type="checkbox"
-                                    id="bestseller"
-                                    checked={itemForm.is_bestseller}
-                                    onChange={(e) => setItemForm({ ...itemForm, is_bestseller: e.target.checked })}
-                                    className="h-4 w-4 rounded border-gray-300"
-                                />
-                                <Label htmlFor="bestseller">Bestseller</Label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                                <input
-                                    type="checkbox"
-                                    id="spicy"
-                                    checked={itemForm.is_spicy}
-                                    onChange={(e) => setItemForm({ ...itemForm, is_spicy: e.target.checked })}
-                                    className="h-4 w-4 rounded border-gray-300"
-                                />
-                                <Label htmlFor="spicy">Spicy</Label>
-                            </div>
-                            <div className="flex items-center space-x-2">
-                                <input
-                                    type="checkbox"
-                                    id="available"
-                                    checked={itemForm.is_available}
-                                    onChange={(e) => setItemForm({ ...itemForm, is_available: e.target.checked })}
-                                    className="h-4 w-4 rounded border-gray-300"
-                                />
-                                <Label htmlFor="available">Available</Label>
+
+                        <div className="space-y-3 pt-2 border-t border-border/50">
+                            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Settings & Flags</Label>
+                            <div className="flex flex-wrap gap-4">
+                                <label className="flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-secondary/10 cursor-pointer hover:bg-secondary/20 transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={itemForm.is_bestseller}
+                                        onChange={(e) => setItemForm({ ...itemForm, is_bestseller: e.target.checked })}
+                                        className="h-4 w-4 rounded border-gray-300 accent-primary"
+                                    />
+                                    <span className="text-sm font-medium">✨ Bestseller</span>
+                                </label>
+                                <label className="flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-secondary/10 cursor-pointer hover:bg-secondary/20 transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={itemForm.is_spicy}
+                                        onChange={(e) => setItemForm({ ...itemForm, is_spicy: e.target.checked })}
+                                        className="h-4 w-4 rounded border-gray-300 accent-orange-500"
+                                    />
+                                    <span className="text-sm font-medium">🔥 Spicy</span>
+                                </label>
+                                <label className="flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-secondary/10 cursor-pointer hover:bg-secondary/20 transition-colors">
+                                    <input
+                                        type="checkbox"
+                                        checked={itemForm.is_available}
+                                        onChange={(e) => setItemForm({ ...itemForm, is_available: e.target.checked })}
+                                        className="h-4 w-4 rounded border-gray-300 accent-green-500"
+                                    />
+                                    <span className="text-sm font-medium">✅ Available</span>
+                                </label>
                             </div>
                         </div>
                     </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setItemDialogOpen(false)}>
+
+                    <div className="p-6 bg-muted/30 border-t border-border/50 flex justify-end gap-3">
+                        <Button variant="ghost" onClick={() => setItemDialogOpen(false)}>
                             Cancel
                         </Button>
-                        <Button onClick={handleSaveItem}>
-                            {editingItem ? 'Update' : 'Add'} Item
+                        <Button onClick={handleSaveItem} className="bg-primary hover:bg-primary/90 text-white font-bold shadow-lg shadow-primary/20 px-8">
+                            {editingItem ? 'Update Item' : 'Add to Menu'}
                         </Button>
-                    </DialogFooter>
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

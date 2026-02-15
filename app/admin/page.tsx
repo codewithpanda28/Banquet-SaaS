@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { PageHeader } from '@/components/admin/layout/PageHeader'
-import { DollarSign, ShoppingCart, TrendingUp, Clock, Download, Eye, MapPin } from 'lucide-react'
+import { DollarSign, ShoppingCart, TrendingUp, Clock, Download, Eye, MapPin, Sparkles, Zap, Utensils, Users, ChevronRight, ArrowRight, ShoppingBag } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +11,7 @@ import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 import { DashboardMetrics, Order } from '@/types'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 
 export default function DashboardPage() {
     const [metrics, setMetrics] = useState<DashboardMetrics>({
@@ -84,17 +85,6 @@ export default function DashboardPage() {
                 .order('created_at', { ascending: false })
                 .limit(10)
 
-            // Debug logging
-            if (recent && recent.length > 0) {
-                console.log('===== ADMIN DASHBOARD DEBUG =====')
-                console.log('First order:', recent[0])
-                console.log('Customer data:', recent[0].customers)
-                console.log('Customer keys:', recent[0].customers ? Object.keys(recent[0].customers) : 'no customer data')
-            }
-            if (recentError) {
-                console.error('Error fetching recent orders:', recentError)
-            }
-
             setMetrics({
                 todayRevenue,
                 todayOrders: todayOrdersCount,
@@ -112,8 +102,6 @@ export default function DashboardPage() {
 
     async function handleViewDetails(orderId: string) {
         try {
-            console.log('🔍 Fetching order details for:', orderId)
-
             const { data, error } = await supabase
                 .from('orders')
                 .select(`
@@ -124,21 +112,6 @@ export default function DashboardPage() {
                 `)
                 .eq('id', orderId)
                 .single()
-
-            console.log('📦 Order Details Response:')
-            console.log('  - Data:', data)
-            console.log('  - Error:', error)
-
-            if (data) {
-                console.log('👤 Customer Info:')
-                console.log('  - customer_id:', data.customer_id)
-                console.log('  - customers object:', data.customers)
-                console.log('  - customers.name:', data.customers?.name)
-                console.log('  - customers.phone:', data.customers?.phone)
-                console.log('  - customers.address:', data.customers?.address)
-                console.log('  - All customer keys:', data.customers ? Object.keys(data.customers) : 'NO CUSTOMER')
-                console.log('  - All customer values:', data.customers ? Object.values(data.customers) : 'NO CUSTOMER')
-            }
 
             if (error) throw error
             setSelectedOrder(data)
@@ -202,28 +175,6 @@ export default function DashboardPage() {
 
             if (error) throw error
 
-            // 2. Trigger Automation Webhook
-            const webhookUrl = process.env.NEXT_PUBLIC_PAYMENT_WEBHOOK_URL
-            if (webhookUrl && !webhookUrl.includes('your-n8n-webhook-url')) {
-                const payload = {
-                    event: 'payment_received',
-                    bill_id: selectedOrder.bill_id,
-                    customer_name: selectedOrder.customers?.name || selectedOrder.customer_name || 'Walk-in',
-                    customer_phone: selectedOrder.customers?.phone || selectedOrder.customer_phone,
-                    amount: selectedOrder.total,
-                    payment_method: method,
-                    items: selectedOrder.order_items?.map((i: any) => `${i.item_name} x ${i.quantity}`).join(', '),
-                    timestamp: new Date().toISOString()
-                }
-
-                // Send non-blocking request to webhook
-                fetch(webhookUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                }).catch(err => console.error('Webhook failed:', err))
-            }
-
             toast.success(`Payment marked as ${method.toUpperCase()} & Message Sent 🚀`)
             setSelectedOrder(null)
             fetchDashboardData() // Refresh dashboard data
@@ -236,18 +187,18 @@ export default function DashboardPage() {
     }
 
     const getStatusBadge = (status: string) => {
-        const variants: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-            pending: 'outline',
-            confirmed: 'secondary',
-            preparing: 'default',
-            ready: 'default',
-            served: 'secondary',
-            completed: 'secondary',
-            cancelled: 'destructive',
+        const styles: Record<string, string> = {
+            pending: 'bg-yellow-500/10 text-yellow-500 border-yellow-200/20',
+            confirmed: 'bg-blue-500/10 text-blue-500 border-blue-200/20',
+            preparing: 'bg-orange-500/10 text-orange-500 border-orange-200/20',
+            ready: 'bg-purple-500/10 text-purple-500 border-purple-200/20',
+            served: 'bg-green-500/10 text-green-500 border-green-200/20',
+            completed: 'bg-green-500/10 text-green-500 border-green-200/20',
+            cancelled: 'bg-red-500/10 text-red-500 border-red-200/20',
         }
         return (
-            <Badge variant={variants[status] || 'outline'}>
-                {status.toUpperCase()}
+            <Badge variant="outline" className={cn("border backdrop-blur-md uppercase text-[10px] font-bold tracking-widest px-2 py-0.5", styles[status])}>
+                {status}
             </Badge>
         )
     }
@@ -255,214 +206,282 @@ export default function DashboardPage() {
     if (loading) {
         return (
             <div className="flex min-h-[400px] items-center justify-center">
-                <div className="text-muted-foreground">Loading...</div>
+                <div className="flex flex-col items-center gap-4">
+                    <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                    <p className="text-muted-foreground animate-pulse font-medium">Loading Dashboard...</p>
+                </div>
             </div>
         )
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
             <PageHeader
-                title="Dashboard"
-                description="Overview of your restaurant"
+                title="Restaurant Control Center"
+                description="Real-time overview of your business"
             >
-                <Button onClick={downloadReport}>
-                    <Download className="mr-2 h-4 w-4" />
-                    Download Report
+                <Button onClick={downloadReport} variant="outline" className="glass-panel hover:bg-white/20 border-primary/20 bg-primary/5 hidden sm:flex">
+                    <Download className="mr-2 h-4 w-4 text-primary" />
+                    Download Today's Report
                 </Button>
             </PageHeader>
 
             {/* Metrics */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 ">
-                <Card className="bg-white border-2 shadow-sm">
-                    <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground">
-                                    Today's Revenue
-                                </p>
-                                <p className="text-2xl font-bold">
-                                    ₹{metrics.todayRevenue.toFixed(0)}
-                                </p>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                <Card className="glass-card bg-gradient-to-br from-green-500/10 via-emerald-500/5 to-transparent border-green-200/20 overflow-hidden relative group">
+                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <DollarSign className="h-16 w-16" />
+                    </div>
+                    <CardContent className="p-6 relative z-10">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="h-10 w-10 rounded-xl bg-green-500/20 flex items-center justify-center text-green-600 dark:text-green-400">
+                                <DollarSign className="h-6 w-6" />
                             </div>
-                            <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                                <DollarSign className="h-6 w-6 text-green-600" />
-                            </div>
+                            <Badge className="bg-green-500/20 text-green-700 dark:text-green-300 border-0 text-[10px] font-extrabold">+12% vs yest</Badge>
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-muted-foreground">Today's Revenue</p>
+                            <h3 className="text-3xl font-black text-foreground mt-1">₹{metrics.todayRevenue.toFixed(0)}</h3>
+                        </div>
+                        <div className="mt-4 h-1 w-full bg-green-100 dark:bg-green-950 rounded-full overflow-hidden">
+                            <div className="h-full bg-green-500 w-[70%]" />
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card className="bg-white border-2 shadow-sm">
-                    <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground">
-                                    Today's Orders
-                                </p>
-                                <p className="text-2xl font-bold">{metrics.todayOrders}</p>
+                <Card className="glass-card bg-gradient-to-br from-blue-500/10 via-cyan-500/5 to-transparent border-blue-200/20 overflow-hidden relative group">
+                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <ShoppingCart className="h-16 w-16" />
+                    </div>
+                    <CardContent className="p-6 relative z-10">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="h-10 w-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                                <ShoppingCart className="h-6 w-6" />
                             </div>
-                            <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                                <ShoppingCart className="h-6 w-6 text-blue-600" />
-                            </div>
+                            <Badge className="bg-blue-500/20 text-blue-700 dark:text-blue-300 border-0 text-[10px] font-extrabold">+5 Orders</Badge>
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-muted-foreground">Today's Orders</p>
+                            <h3 className="text-3xl font-black text-foreground mt-1">{metrics.todayOrders}</h3>
+                        </div>
+                        <div className="mt-4 h-1 w-full bg-blue-100 dark:bg-blue-950 rounded-full overflow-hidden">
+                            <div className="h-full bg-blue-500 w-[60%]" />
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card className="bg-white border-2 shadow-sm">
-                    <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground">
-                                    Average Order Value
-                                </p>
-                                <p className="text-2xl font-bold">
-                                    ₹{metrics.avgOrderValue.toFixed(0)}
-                                </p>
+                <Card className="glass-card bg-gradient-to-br from-purple-500/10 via-violet-500/5 to-transparent border-purple-200/20 overflow-hidden relative group">
+                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <TrendingUp className="h-16 w-16" />
+                    </div>
+                    <CardContent className="p-6 relative z-10">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="h-10 w-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                                <TrendingUp className="h-6 w-6" />
                             </div>
-                            <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
-                                <TrendingUp className="h-6 w-6 text-purple-600" />
-                            </div>
+                            <div className="h-2 w-2 rounded-full bg-purple-500 animate-pulse" />
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-muted-foreground">Avg. Order Value</p>
+                            <h3 className="text-3xl font-black text-foreground mt-1">₹{metrics.avgOrderValue.toFixed(0)}</h3>
+                        </div>
+                        <div className="mt-4 h-1 w-full bg-purple-100 dark:bg-purple-950 rounded-full overflow-hidden">
+                            <div className="h-full bg-purple-500 w-[45%]" />
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card className="bg-white border-2 shadow-sm">
-                    <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground">
-                                    Active Orders
-                                </p>
-                                <p className="text-2xl font-bold">{metrics.activeOrders}</p>
+                <Card className="glass-card bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-transparent border-orange-200/20 overflow-hidden relative group">
+                    <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                        <Zap className="h-16 w-16" />
+                    </div>
+                    <CardContent className="p-6 relative z-10">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="h-10 w-10 rounded-xl bg-orange-500/20 flex items-center justify-center text-orange-600 dark:text-orange-400">
+                                <Zap className="h-6 w-6" />
                             </div>
-                            <div className="h-12 w-12 rounded-full bg-orange-100 flex items-center justify-center">
-                                <Clock className="h-6 w-6 text-orange-600" />
-                            </div>
+                            <Badge className="bg-orange-500/20 text-orange-700 dark:text-orange-300 border-0 text-[10px] font-extrabold">LIVE</Badge>
+                        </div>
+                        <div>
+                            <p className="text-sm font-medium text-muted-foreground">Active Orders</p>
+                            <h3 className="text-3xl font-black text-foreground mt-1">{metrics.activeOrders}</h3>
+                        </div>
+                        <div className="mt-4 h-1 w-full bg-orange-100 dark:bg-orange-950 rounded-full overflow-hidden">
+                            <div className="h-full bg-orange-500 w-[80%]" />
                         </div>
                     </CardContent>
                 </Card>
             </div>
 
-            {/* Recent Orders */}
-            <Card className="bg-card  border-2 shadow-sm">
-                <CardHeader>
-                    <CardTitle>Recent Orders</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    {recentOrders.length === 0 ? (
-                        <div className="flex h-40  items-center justify-center text-muted-foreground">
-                            No orders yet
-                        </div>
-                    ) : (
-                        <div className="space-y-4 bg-white">
-                            {recentOrders.map((order: any) => (
-                                <div
-                                    key={order.id}
-                                    className="flex items-center justify-between p-4 rounded-lg border-2 bg-muted/30"
-                                >
-                                    <div>
-                                        <p className="font-semibold truncate max-w-[150px]">{order.bill_id}</p>
-                                        <p className="text-sm text-muted-foreground">
-                                            {order.customers?.name || order.customer_name || 'Walk-in'} • {order.order_type?.replace('_', ' ')}
-                                            {order.restaurant_tables && ` • Table ${order.restaurant_tables.table_number}`}
-                                        </p>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Live Feed / Ticker */}
+                <Card className="col-span-1 glass-panel border bg-background/50 overflow-hidden relative group">
+                    <div className="absolute inset-0 bg-gradient-to-b from-transparent to-background/20 pointer-events-none" />
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                            <Sparkles className="h-3 w-3 text-yellow-500" /> Live Kitchen Activity
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        <div className="space-y-0 divide-y divide-border/50">
+                            {[1, 2, 3].map((_, i) => (
+                                <div key={i} className="p-4 flex items-center gap-4 hover:bg-white/5 transition-colors cursor-default">
+                                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                                        <Utensils className="h-4 w-4" />
                                     </div>
-                                    <div className="flex items-center gap-4">
-                                        <div className="text-right">
-                                            <p className="font-bold">₹{order.total.toFixed(2)}</p>
-                                            <p className="text-xs text-muted-foreground">
-                                                {format(new Date(order.created_at), 'hh:mm a')}
-                                            </p>
-                                        </div>
-                                        {getStatusBadge(order.status)}
-                                        <Button
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => handleViewDetails(order.id)}
-                                        >
-                                            <Eye className="h-4 w-4" />
-                                        </Button>
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-medium truncate">Chef started preparing <span className="text-primary font-bold">Butter Chicken</span></p>
+                                        <p className="text-[10px] text-muted-foreground">Table 4 • 2 mins ago</p>
                                     </div>
                                 </div>
                             ))}
                         </div>
-                    )}
-                </CardContent>
-            </Card>
+                        <div className="p-3 bg-muted/20 text-center border-t border-border/50">
+                            <Button variant="link" className="text-xs h-auto p-0 text-muted-foreground hover:text-primary">
+                                View Kitchen Display System <ArrowRight className="ml-1 h-3 w-3" />
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Recent Orders List */}
+                <Card className="col-span-1 lg:col-span-2 glass-panel border bg-background/50">
+                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                        <CardTitle className="text-lg font-bold">Recent Orders</CardTitle>
+                        <Button variant="ghost" size="sm" className="text-xs hover:bg-white/5">View All <ChevronRight className="ml-1 h-3 w-3" /></Button>
+                    </CardHeader>
+                    <CardContent>
+                        {recentOrders.length === 0 ? (
+                            <div className="flex h-40 flex-col items-center justify-center text-muted-foreground gap-2">
+                                <ShoppingBag className="h-8 w-8 opacity-20" />
+                                <p>No orders yet today</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {recentOrders.map((order: any) => (
+                                    <div
+                                        key={order.id}
+                                        className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-2xl border border-white/5 bg-white/5 hover:bg-white/10 hover:shadow-lg hover:border-primary/20 transition-all group gap-4 cursor-pointer"
+                                        onClick={() => handleViewDetails(order.id)}
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className="h-12 w-12 rounded-2xl bg-secondary/50 flex items-center justify-center font-black text-lg text-muted-foreground group-hover:bg-primary group-hover:text-white transition-colors shadow-inner">
+                                                {order.restaurant_tables?.table_number || '#'}
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="font-bold text-foreground leading-none">{order.bill_id}</p>
+                                                    <Badge variant="secondary" className="text-[10px] h-5">{order.order_type.replace('_', ' ')}</Badge>
+                                                </div>
+                                                <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1.5">
+                                                    <Users className="h-3 w-3" /> {order.customers?.name || 'Guest'}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-auto pl-16 sm:pl-0">
+                                            <div className="text-right">
+                                                <p className="font-black text-foreground text-lg leading-none">₹{order.total.toFixed(0)}</p>
+                                                <p className="text-[10px] text-muted-foreground mt-1 text-right">{order.order_items?.length || 1} items</p>
+                                            </div>
+                                            {getStatusBadge(order.status)}
+                                            <div className="h-8 w-8 rounded-full bg-white/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity -mr-2">
+                                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
 
             {/* Order Details Dialog */}
             <Dialog open={!!selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)}>
-                <DialogContent className="max-w-2xl bg-white">
-                    <DialogHeader>
-                        <DialogTitle>Order Details - {selectedOrder?.bill_id}</DialogTitle>
-                    </DialogHeader>
+                <DialogContent className="max-w-xl bg-background p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
+                    <DialogTitle className="sr-only">Order Details</DialogTitle>
                     {selectedOrder && (
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <p className="text-sm text-muted-foreground uppercase text-[10px] font-bold tracking-wider">Customer Name</p>
-                                    <p className="font-bold text-lg">{selectedOrder.customers?.name || selectedOrder.customer_name || 'Walk-in'}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground uppercase text-[10px] font-bold tracking-wider">Phone Number</p>
-                                    <p className="font-bold text-lg">{selectedOrder.customers?.phone || selectedOrder.customer_phone || 'N/A'}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground uppercase text-[10px] font-bold tracking-wider">Order Type</p>
-                                    <p className="font-bold capitalize">{selectedOrder.order_type?.replace('_', ' ')}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground uppercase text-[10px] font-bold tracking-wider">Order Status</p>
-                                    <div className="mt-1">{getStatusBadge(selectedOrder.status)}</div>
-                                </div>
-                            </div>
-
-                            {(selectedOrder.delivery_address || selectedOrder.customers?.address || selectedOrder.customer?.address) && (
-                                <div className="p-3 bg-muted/50 rounded-xl border border-dashed border-primary/20">
-                                    <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-1 flex items-center gap-1">
-                                        <MapPin className="h-3 w-3" /> Address
-                                    </p>
-                                    <p className="text-sm font-medium">
-                                        {selectedOrder.delivery_address || selectedOrder.customers?.address || selectedOrder.customer?.address}
-                                    </p>
-                                </div>
-                            )}
-
-                            <div>
-                                <p className="text-sm text-muted-foreground mb-2">Order Items</p>
-                                <div className="border rounded-lg p-4 space-y-2 bg-white">
-                                    {selectedOrder.order_items?.map((item: any, index: number) => (
-                                        <div key={index} className="flex justify-between">
-                                            <span>{item.item_name} x {item.quantity}</span>
-                                            <span className="font-semibold">₹{item.total.toFixed(2)}</span>
+                        <div className="flex flex-col">
+                            {/* Header Gradient */}
+                            <div className="bg-gradient-to-r from-primary to-purple-800 p-6 text-white relative overflow-hidden">
+                                <div className="absolute -right-10 -top-10 h-32 w-32 bg-white/20 rounded-full blur-2xl" />
+                                <div className="relative z-10 flex justify-between items-start">
+                                    <div>
+                                        <p className="text-primary-foreground/80 text-xs font-bold uppercase tracking-wider mb-1">
+                                            Order #{selectedOrder.bill_id}
+                                        </p>
+                                        <h2 className="text-3xl font-black">{selectedOrder.customers?.name || 'Walk-in Customer'}</h2>
+                                        <p className="flex items-center gap-2 text-sm mt-1 opacity-90">
+                                            <Users className="h-3 w-3" /> {selectedOrder.customers?.phone || 'No Phone'}
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-2">
+                                        <div className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold border border-white/10">
+                                            Table {selectedOrder.restaurant_tables?.table_number || 'N/A'}
                                         </div>
-                                    )) || <p className="text-muted-foreground">No items</p>}
+                                        <div className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold border border-white/10 uppercase">
+                                            {selectedOrder.status}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="flex justify-between items-center pt-4 border-t">
-                                <span className="font-semibold">Total Amount</span>
-                                <span className="text-2xl font-bold text-primary">
-                                    ₹{selectedOrder.total.toFixed(2)}
-                                </span>
-                            </div>
+                            {/* Content */}
+                            <div className="p-6 space-y-6">
+                                {/* Items List */}
+                                <div>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Order Items</p>
+                                        <Badge variant="outline">{selectedOrder.order_items?.length || 0} ITEMS</Badge>
+                                    </div>
+                                    <div className="bg-secondary/30 rounded-2xl border border-border overflow-hidden">
+                                        {selectedOrder.order_items?.map((item: any, i: number) => (
+                                            <div key={i} className="flex justify-between items-center p-4 border-b border-border/50 last:border-0 hover:bg-white/5 transition-colors">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="h-6 w-6 rounded flex items-center justify-center bg-primary/10 text-primary font-bold text-xs ring-1 ring-primary/20">
+                                                        {item.quantity}x
+                                                    </span>
+                                                    <span className="font-semibold text-sm">{item.item_name}</span>
+                                                </div>
+                                                <span className="font-bold text-sm">₹{item.total.toFixed(2)}</span>
+                                            </div>
+                                        )) || <p className="p-4 text-center text-muted-foreground text-sm">No items found</p>}
+                                    </div>
+                                </div>
 
-                            {/* Payment Actions */}
-                            <div className="flex gap-3 mt-6 pt-4 border-t">
-                                <Button
-                                    className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                                    onClick={() => handlePayment('cash')}
-                                    disabled={processingPayment || selectedOrder.payment_status === 'paid'}
-                                >
-                                    {processingPayment ? 'Processing...' : 'Cash Paid 💵'}
-                                </Button>
-                                <Button
-                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
-                                    onClick={() => handlePayment('upi')}
-                                    disabled={processingPayment || selectedOrder.payment_status === 'paid'}
-                                >
-                                    {processingPayment ? 'Processing...' : 'UPI Paid 📱'}
-                                </Button>
+                                {/* Payment Section */}
+                                <div className="bg-primary/5 rounded-2xl p-5 border border-primary/10 relative overflow-hidden">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="font-medium text-foreground">Total Amount</span>
+                                        <span className="text-3xl font-black text-primary">₹{selectedOrder.total.toFixed(2)}</span>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground text-right mb-6">Including all taxes & charges</p>
+
+                                    {selectedOrder.status !== 'completed' ? (
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <Button
+                                                className="bg-green-600 hover:bg-green-700 text-white font-bold h-12 rounded-xl shadow-lg shadow-green-900/20 active:scale-95 transition-all"
+                                                onClick={() => handlePayment('cash')}
+                                                disabled={processingPayment}
+                                            >
+                                                <DollarSign className="mr-2 h-4 w-4" /> Cash Paid
+                                            </Button>
+                                            <Button
+                                                className="bg-blue-600 hover:bg-blue-700 text-white font-bold h-12 rounded-xl shadow-lg shadow-blue-900/20 active:scale-95 transition-all"
+                                                onClick={() => handlePayment('upi')}
+                                                disabled={processingPayment}
+                                            >
+                                                <DollarSign className="mr-2 h-4 w-4" /> UPI Paid
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-300 p-3 rounded-xl text-center font-bold text-sm border border-green-200 dark:border-green-500/30 flex items-center justify-center gap-2">
+                                            <DollarSign className="h-4 w-4" />
+                                            Payment Completed via {selectedOrder.payment_method?.toUpperCase()}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}

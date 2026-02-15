@@ -1,0 +1,103 @@
+{
+    "name": "Restaurant QR Scan Auto-Reply",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "webhook-test/payment-confirmation",
+                "options": {}
+            },
+            "id": "webhook-node",
+            "name": "Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                460,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Extract Table Number from message body (e.g. \"I am at Table 5\")\nconst body = $input.item.json.message.body || '';\nconst match = body.match(/Table\\s+(\\d+)/i);\nconst tableNumber = match ? match[1] : null;\n\n// Prepare phone number (remove + or spaces if any)\nlet phone = $input.item.json.contact.phone_number || '';\nphone = phone.toString().replace(/[^0-9]/g, '');\n\nreturn {\n  tableNumber,\n  phone,\n  senderName: $input.item.json.contact.first_name\n};"
+            },
+            "id": "extract-data",
+            "name": "Extract Data",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 1,
+            "position": [
+                680,
+                240
+            ]
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://thinkaiq.in/api/bd54faee-23fd-4dfb-8f1c-fda0e6c8af53/contact/send-message",
+                "sendQuery": true,
+                "queryParameters": {
+                    "parameters": [
+                        {
+                            "name": "token",
+                            "value": "aRnT5HsP1cLGMqKe1Hn1bZqMNppl7OZual4RC1erKycizFMmkrDdllB4hsMYTKrC"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "contentType": "json",
+                "bodyParameters": {
+                    "parameters": [
+                        {
+                            "name": "phone_number",
+                            "value": "={{ $json.phone }}"
+                        },
+                        {
+                            "name": "template_name",
+                            "value": "restaurant_welcome_menu"
+                        },
+                        {
+                            "name": "template_language",
+                            "value": "en"
+                        },
+                        {
+                            "name": "body_text",
+                            "value": "=👋 Welcome {{ $json.senderName }}!\n\nTap a link below to order:\n\n🍽️ *Dine-in (Table {{ $json.tableNumber }})*\nhttps://resturant-customer-dashboard.vercel.app/menu?table={{ $json.tableNumber }}\n\n🛍️ *Takeaway*\nhttps://resturant-customer-dashboard.vercel.app/menu?type=takeaway\n\n🛵 *Home Delivery*\nhttps://resturant-customer-dashboard.vercel.app/menu?type=delivery"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "send-whatsapp",
+            "name": "Send WhatsApp Reply",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 3,
+            "position": [
+                900,
+                240
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Extract Data",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Extract Data": {
+            "main": [
+                [
+                    {
+                        "node": "Send WhatsApp Reply",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}

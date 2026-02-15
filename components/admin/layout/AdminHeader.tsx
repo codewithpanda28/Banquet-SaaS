@@ -281,7 +281,7 @@ export function AdminHeader() {
     }
 
     return (
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b-2 bg-white px-6 shadow-sm">
+        <header className="glass-header h-16 flex items-center justify-between px-6 transition-all">
             {/* Search */}
             <div className="flex flex-1 items-center gap-4 relative">
                 <div className="relative w-full max-w-md">
@@ -289,7 +289,7 @@ export function AdminHeader() {
                     <Input
                         type="search"
                         placeholder="Search orders, items, customers..."
-                        className="pl-10 bg-white ring-offset-background focus-visible:ring-primary h-10 border-2"
+                        className="pl-10 bg-white/50 border-border/50 focus-visible:ring-primary focus-visible:bg-white h-10 transition-all rounded-xl"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         onFocus={() => searchQuery.length >= 2 && setShowResults(true)}
@@ -309,7 +309,7 @@ export function AdminHeader() {
 
                     {/* Search Results Dropdown */}
                     {showResults && (
-                        <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border-2 shadow-xl overflow-hidden z-50">
+                        <div className="absolute top-full left-0 right-0 mt-2 bg-background/95 backdrop-blur-md rounded-xl border border-border/50 shadow-xl overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
                             <div className="p-2 border-b bg-muted/20 flex justify-between items-center px-4">
                                 <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                                     Search Results
@@ -332,10 +332,10 @@ export function AdminHeader() {
                                             onClick={() => fetchFullDetails(result)}
                                         >
                                             <div className={cn(
-                                                "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
-                                                result.type === 'order' ? "bg-blue-100 text-blue-600" :
-                                                    result.type === 'menu' ? "bg-orange-100 text-orange-600" :
-                                                        "bg-purple-100 text-purple-600"
+                                                "h-10 w-10 rounded-lg flex items-center justify-center shrink-0 shadow-sm",
+                                                result.type === 'order' ? "bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300" :
+                                                    result.type === 'menu' ? "bg-orange-100 text-orange-600 dark:bg-orange-900 dark:text-orange-300" :
+                                                        "bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-300"
                                             )}>
                                                 {result.type === 'order' ? <ShoppingBag className="h-5 w-5" /> :
                                                     result.type === 'menu' ? <UtensilsCrossed className="h-5 w-5" /> :
@@ -343,7 +343,7 @@ export function AdminHeader() {
                                                 }
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <p className="font-semibold text-sm truncate">{result.title}</p>
+                                                <p className="font-semibold text-sm truncate text-foreground">{result.title}</p>
                                                 <p className="text-xs text-muted-foreground truncate">{result.subtitle}</p>
                                             </div>
                                         </button>
@@ -367,17 +367,17 @@ export function AdminHeader() {
                 {/* Notifications */}
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="relative hover:bg-muted/50 rounded-full">
+                        <Button variant="ghost" size="icon" className="relative hover:bg-muted/50 rounded-full text-muted-foreground hover:text-foreground transition-colors">
                             <Bell className="h-5 w-5" />
                             <Badge
                                 variant="destructive"
-                                className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 text-[10px] flex items-center justify-center ring-2 ring-white"
+                                className="absolute -right-1 -top-1 h-5 w-5 rounded-full p-0 text-[10px] flex items-center justify-center ring-2 ring-background"
                             >
                                 {notifications.filter(n => !n.isRead).length}
                             </Badge>
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-80 p-0 bg-white border-2 shadow-lg" align="end">
+                    <DropdownMenuContent className="w-80 p-0 bg-background/95 backdrop-blur-md border border-border/50 shadow-xl rounded-xl" align="end">
                         <div className="p-4 border-b bg-muted/20">
                             <h4 className="font-semibold text-sm">Notifications</h4>
                         </div>
@@ -418,9 +418,9 @@ export function AdminHeader() {
                 {/* Profile Dropdown */}
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="flex items-center gap-2 hover:bg-muted/50 h-10 px-2 transition-colors">
-                            <Avatar className="h-8 w-8 ring-2 ring-primary/20">
-                                <AvatarFallback className="bg-primary text-primary-foreground">
+                        <Button variant="ghost" className="flex items-center gap-2 hover:bg-muted/50 h-10 px-2 transition-colors rounded-xl">
+                            <Avatar className="h-8 w-8 ring-2 ring-primary/20 transition-all hover:ring-primary/50">
+                                <AvatarFallback className="bg-gradient-to-br from-primary to-purple-600 text-white font-bold">
                                     AD
                                 </AvatarFallback>
                             </Avatar>
@@ -429,7 +429,7 @@ export function AdminHeader() {
                             </span>
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56 bg-white border-2 shadow-lg">
+                    <DropdownMenuContent align="end" className="w-56 bg-background/95 backdrop-blur-md border border-border/50 shadow-xl rounded-xl">
                         <DropdownMenuLabel>
                             <div className="flex flex-col space-y-1">
                                 <p className="text-sm font-medium leading-none">Restaurant Admin</p>
@@ -448,7 +448,7 @@ export function AdminHeader() {
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                             onClick={handleLogout}
-                            className="text-destructive focus:text-destructive cursor-pointer"
+                            className="text-destructive focus:text-destructive cursor-pointer hover:bg-destructive/10"
                         >
                             <LogOut className="mr-2 h-4 w-4" />
                             <span>Logout</span>
@@ -458,7 +458,7 @@ export function AdminHeader() {
             </div>
             {/* Detail Modal */}
             <Dialog open={!!selectedDetail} onOpenChange={(open) => !open && setSelectedDetail(null)}>
-                <DialogContent className="max-w-xl bg-white p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
+                <DialogContent className="max-w-xl bg-background p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
                     <DialogTitle className="sr-only">
                         {selectedDetail?.type === 'order' ? 'Order Details' :
                             selectedDetail?.type === 'menu' ? 'Menu Item Details' :
@@ -479,42 +479,42 @@ export function AdminHeader() {
                                 </p>
                             </div>
 
-                            <div className="p-8 space-y-8">
+                            <div className="p-8 space-y-8 bg-background">
                                 <div className="grid grid-cols-2 gap-8">
                                     <div className="space-y-1">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Customer Name</p>
-                                        <p className="text-lg font-bold text-slate-800">{selectedDetail.data.customers?.name || 'Walk-in'}</p>
-                                        <div className="flex items-center gap-2 text-slate-500">
-                                            <div className="p-1.5 bg-slate-100 rounded-full">
+                                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Customer Name</p>
+                                        <p className="text-lg font-bold text-foreground">{selectedDetail.data.customers?.name || 'Walk-in'}</p>
+                                        <div className="flex items-center gap-2 text-muted-foreground">
+                                            <div className="p-1.5 bg-secondary rounded-full">
                                                 <UsersIcon className="h-3 w-3" />
                                             </div>
                                             <span className="text-xs font-semibold">{selectedDetail.data.customers?.phone || 'No phone'}</span>
                                         </div>
                                     </div>
                                     <div className="space-y-1">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Order Value</p>
-                                        <p className="text-2xl font-black text-blue-600">₹{selectedDetail.data.total.toFixed(2)}</p>
-                                        <p className="text-[10px] font-bold text-slate-400">Incl. all taxes & charges</p>
+                                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Order Value</p>
+                                        <p className="text-2xl font-black text-primary">₹{selectedDetail.data.total.toFixed(2)}</p>
+                                        <p className="text-[10px] font-bold text-muted-foreground">Incl. all taxes & charges</p>
                                     </div>
                                 </div>
 
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Items Summary</p>
-                                        <Badge variant="outline" className="text-[10px] font-bold border-slate-200">
+                                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Items Summary</p>
+                                        <Badge variant="outline" className="text-[10px] font-bold border-border">
                                             {selectedDetail.data.order_items?.length || 0} ITEMS
                                         </Badge>
                                     </div>
-                                    <div className="bg-slate-50 rounded-2xl border-2 border-slate-100 p-6 space-y-4 shadow-inner">
+                                    <div className="bg-secondary/30 rounded-2xl border border-border p-6 space-y-4 shadow-inner">
                                         {selectedDetail.data.order_items?.map((item: any) => (
-                                            <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                                            <div key={item.id} className="flex justify-between items-center bg-background p-3 rounded-xl border border-border shadow-sm">
                                                 <div className="flex items-center gap-3">
-                                                    <span className="flex items-center justify-center h-6 w-6 bg-blue-100 text-blue-600 rounded-lg text-[10px] font-black">
+                                                    <span className="flex items-center justify-center h-6 w-6 bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-300 rounded-lg text-[10px] font-black">
                                                         {item.quantity}
                                                     </span>
-                                                    <span className="font-bold text-slate-700">{item.item_name}</span>
+                                                    <span className="font-bold text-foreground">{item.item_name}</span>
                                                 </div>
-                                                <span className="font-extrabold text-slate-900">₹{item.total.toFixed(2)}</span>
+                                                <span className="font-extrabold text-foreground">₹{item.total.toFixed(2)}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -522,20 +522,20 @@ export function AdminHeader() {
 
                                 <div className="pt-4 flex gap-4">
                                     <Button
-                                        className="flex-1 h-12 rounded-2xl bg-green-600 hover:bg-green-700 shadow-lg shadow-green-100 text-white font-bold transition-all active:scale-95 flex items-center gap-2"
+                                        className="flex-1 h-12 rounded-2xl bg-green-600 hover:bg-green-700 shadow-lg shadow-green-100 dark:shadow-none text-white font-bold transition-all active:scale-95 flex items-center gap-2"
                                         onClick={() => handlePaymentClose('cash')}
                                     >
                                         <DollarSign className="h-4 w-4" />
                                         Cash Paid
                                     </Button>
                                     <Button
-                                        className="flex-1 h-12 rounded-2xl bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-100 text-white font-bold transition-all active:scale-95 flex items-center gap-2"
+                                        className="flex-1 h-12 rounded-2xl bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-100 dark:shadow-none text-white font-bold transition-all active:scale-95 flex items-center gap-2"
                                         onClick={() => handlePaymentClose('upi')}
                                     >
                                         <Smartphone className="h-4 w-4" />
                                         Online Paid
                                     </Button>
-                                    <Button variant="outline" className="px-8 h-12 rounded-2xl border-2 font-bold hover:bg-slate-50 transition-all active:scale-95" onClick={() => setSelectedDetail(null)}>Close</Button>
+                                    <Button variant="outline" className="px-8 h-12 rounded-2xl border-2 font-bold hover:bg-secondary transition-all active:scale-95" onClick={() => setSelectedDetail(null)}>Close</Button>
                                 </div>
                             </div>
                         </div>
@@ -561,54 +561,54 @@ export function AdminHeader() {
                                 </p>
                             </div>
 
-                            <div className="p-8 space-y-8">
+                            <div className="p-8 space-y-8 bg-background">
                                 <div className="flex gap-8">
-                                    <div className="h-32 w-32 bg-orange-50 rounded-3xl flex items-center justify-center shrink-0 border-4 border-orange-100 shadow-xl shadow-orange-100 overflow-hidden group">
-                                        <UtensilsCrossed className="h-14 w-14 text-orange-200 transition-transform group-hover:scale-110" />
+                                    <div className="h-32 w-32 bg-orange-50 dark:bg-orange-950/30 rounded-3xl flex items-center justify-center shrink-0 border-4 border-orange-100 dark:border-orange-900 shadow-xl shadow-orange-100 dark:shadow-none overflow-hidden group">
+                                        <UtensilsCrossed className="h-14 w-14 text-orange-200/50 transition-transform group-hover:scale-110" />
                                     </div>
                                     <div className="flex-1 justify-center flex flex-col space-y-4">
                                         <div>
-                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Description</p>
-                                            <p className="text-sm text-slate-600 font-medium italic mt-1 leading-relaxed line-clamp-3">
+                                            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Description</p>
+                                            <p className="text-sm text-foreground/80 font-medium italic mt-1 leading-relaxed line-clamp-3">
                                                 "{selectedDetail.data.description || 'A delicious dish prepared with the finest ingredients and authentic spices.'}"
                                             </p>
                                         </div>
                                         <div className="flex items-center gap-8">
                                             <div>
-                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Final Price</p>
-                                                <p className="text-3xl font-black text-orange-600">₹{selectedDetail.data.price}</p>
+                                                <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Final Price</p>
+                                                <p className="text-3xl font-black text-orange-600 dark:text-orange-400">₹{selectedDetail.data.price}</p>
                                             </div>
                                             {selectedDetail.data.is_bestseller && (
-                                                <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-2 border-amber-200 rounded-full px-4 py-1 font-black text-[10px]">
-                                                    <Star className="h-3 w-3 mr-1 fill-amber-700" /> BESTSELLER
+                                                <Badge className="bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border-2 border-amber-200 dark:border-amber-800 rounded-full px-4 py-1 font-black text-[10px]">
+                                                    <Star className="h-3 w-3 mr-1 fill-amber-700 dark:fill-amber-300" /> BESTSELLER
                                                 </Badge>
                                             )}
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="bg-slate-50 rounded-3xl p-6 flex items-center justify-between border-2 border-slate-100">
+                                <div className="bg-secondary/30 rounded-3xl p-6 flex items-center justify-between border border-border">
                                     <div className="flex items-center gap-3">
-                                        <div className={cn("h-4 w-4 rounded-full ring-4 shadow-sm", selectedDetail.data.is_available ? "bg-green-500 ring-green-100" : "bg-red-500 ring-red-100")} />
-                                        <span className="font-black text-slate-700 uppercase tracking-widest text-[10px]">
+                                        <div className={cn("h-4 w-4 rounded-full ring-4 shadow-sm", selectedDetail.data.is_available ? "bg-green-500 ring-green-100 dark:ring-green-900/30" : "bg-red-500 ring-red-100 dark:ring-red-900/30")} />
+                                        <span className="font-black text-foreground uppercase tracking-widest text-[10px]">
                                             {selectedDetail.data.is_available ? 'In Stock & Ready' : 'Out of Stock'}
                                         </span>
                                     </div>
-                                    <div className="h-px bg-slate-200 flex-1 mx-6" />
-                                    <div className="flex items-center gap-2 font-bold text-slate-500 text-xs">
+                                    <div className="h-px bg-border flex-1 mx-6" />
+                                    <div className="flex items-center gap-2 font-bold text-muted-foreground text-xs">
                                         <Clock className="h-3.5 w-3.5" />
                                         <span>~15 Mins Prep</span>
                                     </div>
                                 </div>
 
                                 <div className="pt-4 flex gap-4">
-                                    <Button className="flex-1 h-12 rounded-2xl bg-orange-500 hover:bg-orange-600 shadow-lg shadow-orange-200 text-white font-bold transition-all active:scale-95" onClick={() => {
+                                    <Button className="flex-1 h-12 rounded-2xl bg-orange-500 hover:bg-orange-600 shadow-lg shadow-orange-200 dark:shadow-none text-white font-bold transition-all active:scale-95" onClick={() => {
                                         router.push(`/admin/menu`)
                                         setSelectedDetail(null)
                                     }}>
                                         Manage Menu
                                     </Button>
-                                    <Button variant="outline" className="px-8 h-12 rounded-2xl border-2 font-bold hover:bg-slate-50 transition-all active:scale-95" onClick={() => setSelectedDetail(null)}>Close</Button>
+                                    <Button variant="outline" className="px-8 h-12 rounded-2xl border-2 font-bold hover:bg-secondary transition-all active:scale-95" onClick={() => setSelectedDetail(null)}>Close</Button>
                                 </div>
                             </div>
                         </div>
@@ -637,30 +637,30 @@ export function AdminHeader() {
                                 </div>
                             </div>
 
-                            <div className="p-8 space-y-8">
+                            <div className="p-8 space-y-8 bg-background">
                                 <div className="grid grid-cols-2 gap-6">
-                                    <div className="p-6 bg-slate-50 rounded-[2.5rem] border-2 border-slate-100 flex flex-col items-center text-center shadow-sm">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Total Orders</p>
-                                        <div className="h-10 w-10 bg-purple-100 rounded-full flex items-center justify-center mb-2">
-                                            <ShoppingBag className="h-5 w-5 text-purple-600" />
+                                    <div className="p-6 bg-secondary/30 rounded-[2.5rem] border border-border flex flex-col items-center text-center shadow-sm">
+                                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-3">Total Orders</p>
+                                        <div className="h-10 w-10 bg-purple-100 dark:bg-purple-900/50 rounded-full flex items-center justify-center mb-2">
+                                            <ShoppingBag className="h-5 w-5 text-purple-600 dark:text-purple-300" />
                                         </div>
-                                        <p className="text-3xl font-black text-slate-800">{selectedDetail.data.total_orders || 0}</p>
+                                        <p className="text-3xl font-black text-foreground">{selectedDetail.data.total_orders || 0}</p>
                                     </div>
-                                    <div className="p-6 bg-slate-50 rounded-[2.5rem] border-2 border-slate-100 flex flex-col items-center text-center shadow-sm">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Total Spent</p>
-                                        <div className="h-10 w-10 bg-green-100 rounded-full flex items-center justify-center mb-2">
-                                            <DollarSign className="h-5 w-5 text-green-600" />
+                                    <div className="p-6 bg-secondary/30 rounded-[2.5rem] border border-border flex flex-col items-center text-center shadow-sm">
+                                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-3">Total Spent</p>
+                                        <div className="h-10 w-10 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center mb-2">
+                                            <DollarSign className="h-5 w-5 text-green-600 dark:text-green-300" />
                                         </div>
-                                        <p className="text-3xl font-black text-green-600">₹{selectedDetail.data.total_spent?.toFixed(0) || '0'}</p>
+                                        <p className="text-3xl font-black text-green-600 dark:text-green-400">₹{selectedDetail.data.total_spent?.toFixed(0) || '0'}</p>
                                     </div>
                                 </div>
 
                                 {selectedDetail.data.address && (
                                     <div className="space-y-3">
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Shipping Address</p>
-                                        <div className="p-6 bg-white rounded-3xl border-2 border-slate-100 shadow-sm relative group">
-                                            <MapPin className="absolute right-6 top-6 h-5 w-5 text-slate-200 group-hover:text-purple-200 transition-colors" />
-                                            <p className="text-sm font-bold text-slate-700 leading-relaxed max-w-[90%]">
+                                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em]">Shipping Address</p>
+                                        <div className="p-6 bg-background rounded-3xl border border-border shadow-sm relative group">
+                                            <MapPin className="absolute right-6 top-6 h-5 w-5 text-muted-foreground group-hover:text-purple-400 transition-colors" />
+                                            <p className="text-sm font-bold text-foreground leading-relaxed max-w-[90%]">
                                                 {selectedDetail.data.address}
                                             </p>
                                         </div>
@@ -668,13 +668,13 @@ export function AdminHeader() {
                                 )}
 
                                 <div className="pt-4 flex gap-4">
-                                    <Button className="flex-1 h-13 rounded-2xl bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-200 text-white font-bold transition-all active:scale-95" onClick={() => {
+                                    <Button className="flex-1 h-13 rounded-2xl bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-200 dark:shadow-none text-white font-bold transition-all active:scale-95" onClick={() => {
                                         router.push(`/admin/customers`)
                                         setSelectedDetail(null)
                                     }}>
                                         Manage Customer
                                     </Button>
-                                    <Button variant="outline" className="px-8 h-13 rounded-2xl border-2 font-bold hover:bg-slate-50 transition-all active:scale-95" onClick={() => setSelectedDetail(null)}>Close</Button>
+                                    <Button variant="outline" className="px-8 h-13 rounded-2xl border-2 font-bold hover:bg-secondary transition-all active:scale-95" onClick={() => setSelectedDetail(null)}>Close</Button>
                                 </div>
                             </div>
                         </div>

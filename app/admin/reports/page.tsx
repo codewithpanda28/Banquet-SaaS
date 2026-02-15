@@ -5,10 +5,11 @@ import { PageHeader } from '@/components/admin/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Download, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Users, Package } from 'lucide-react'
+import { Download, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Users, Package, ArrowUpRight } from 'lucide-react'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { format, subDays } from 'date-fns'
+import { cn } from '@/lib/utils'
 
 export default function ReportsPage() {
     const [loading, setLoading] = useState(true)
@@ -147,20 +148,23 @@ export default function ReportsPage() {
     if (loading) {
         return (
             <div className="flex min-h-[400px] items-center justify-center">
-                <div className="text-muted-foreground">Loading reports...</div>
+                <div className="flex flex-col items-center gap-4">
+                    <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                    <p className="text-muted-foreground animate-pulse font-medium">Loading Analytics...</p>
+                </div>
             </div>
         )
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <PageHeader
-                title="Reports & Analytics"
-                description="Monitor your restaurant's performance"
+                title="Business Analytics"
+                description="Deep dive into your restaurant's performance"
             >
                 <div className="flex items-center gap-3">
                     <Select value={dateRange} onValueChange={setDateRange}>
-                        <SelectTrigger className="w-[180px]">
+                        <SelectTrigger className="w-[180px] glass-panel border-primary/20">
                             <SelectValue placeholder="Select range" />
                         </SelectTrigger>
                         <SelectContent>
@@ -170,7 +174,7 @@ export default function ReportsPage() {
                             <SelectItem value="90">Last 90 Days</SelectItem>
                         </SelectContent>
                     </Select>
-                    <Button variant="outline" onClick={downloadCSV}>
+                    <Button variant="outline" onClick={downloadCSV} className="glass-panel border-primary/20 hover:bg-primary/10">
                         <Download className="mr-2 h-4 w-4" />
                         Export
                     </Button>
@@ -179,66 +183,74 @@ export default function ReportsPage() {
 
             {/* Summary Stats */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Card className="bg-card border-2 shadow-sm">
-                    <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-1">
-                                <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
-                                <p className="text-2xl font-bold">₹{stats.totalRevenue.toLocaleString()}</p>
-                                <p className={`text-xs flex items-center gap-1 ${stats.revenueChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {stats.revenueChange >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                                    {Math.abs(stats.revenueChange).toFixed(1)}% vs prev period
-                                </p>
+                <Card className="glass-panel border-0 relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-primary/5 group-hover:bg-primary/10 transition-colors" />
+                    <div className="absolute -right-4 -top-4 bg-primary/10 rounded-full h-24 w-24 blur-2xl" />
+                    <CardContent className="p-6 relative z-10">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="h-10 w-10 rounded-xl bg-primary/20 flex items-center justify-center text-primary">
+                                <DollarSign className="h-5 w-5" />
                             </div>
-                            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                                <DollarSign className="h-6 w-6 text-primary" />
-                            </div>
+                            <span className={cn("text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1", stats.revenueChange >= 0 ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500")}>
+                                {stats.revenueChange >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                                {Math.abs(stats.revenueChange).toFixed(1)}%
+                            </span>
+                        </div>
+                        <div className="space-y-1">
+                            <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
+                            <p className="text-3xl font-black tracking-tight">₹{stats.totalRevenue.toLocaleString()}</p>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card className="bg-card border-2 shadow-sm">
-                    <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-1">
-                                <p className="text-sm font-medium text-muted-foreground">Total Orders</p>
-                                <p className="text-2xl font-bold">{stats.totalOrders}</p>
-                                <p className={`text-xs flex items-center gap-1 ${stats.ordersChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                    {stats.ordersChange >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                                    {Math.abs(stats.ordersChange).toFixed(1)}% vs prev period
-                                </p>
+                <Card className="glass-panel border-0 relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-blue-500/5 group-hover:bg-blue-500/10 transition-colors" />
+                    <div className="absolute -right-4 -top-4 bg-blue-500/10 rounded-full h-24 w-24 blur-2xl" />
+                    <CardContent className="p-6 relative z-10">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="h-10 w-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-500">
+                                <ShoppingCart className="h-5 w-5" />
                             </div>
-                            <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
-                                <ShoppingCart className="h-6 w-6 text-blue-600" />
-                            </div>
+                            <span className={cn("text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1", stats.ordersChange >= 0 ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500")}>
+                                {stats.ordersChange >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                                {Math.abs(stats.ordersChange).toFixed(1)}%
+                            </span>
+                        </div>
+                        <div className="space-y-1">
+                            <p className="text-sm font-medium text-muted-foreground">Total Orders</p>
+                            <p className="text-3xl font-black tracking-tight">{stats.totalOrders}</p>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card className="bg-card border-2 shadow-sm">
-                    <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-1">
-                                <p className="text-sm font-medium text-muted-foreground">Avg Order Value</p>
-                                <p className="text-2xl font-bold">₹{stats.avgOrderValue.toFixed(0)}</p>
+                <Card className="glass-panel border-0 relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-orange-500/5 group-hover:bg-orange-500/10 transition-colors" />
+                    <div className="absolute -right-4 -top-4 bg-orange-500/10 rounded-full h-24 w-24 blur-2xl" />
+                    <CardContent className="p-6 relative z-10">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="h-10 w-10 rounded-xl bg-orange-500/20 flex items-center justify-center text-orange-500">
+                                <Package className="h-5 w-5" />
                             </div>
-                            <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
-                                <Package className="h-6 w-6 text-green-600" />
-                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <p className="text-sm font-medium text-muted-foreground">Avg. Order Value</p>
+                            <p className="text-3xl font-black tracking-tight">₹{stats.avgOrderValue.toFixed(0)}</p>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card className="bg-card border-2 shadow-sm">
-                    <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                            <div className="space-y-1">
-                                <p className="text-sm font-medium text-muted-foreground">Total Customers</p>
-                                <p className="text-2xl font-bold">{stats.totalCustomers}</p>
+                <Card className="glass-panel border-0 relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-purple-500/5 group-hover:bg-purple-500/10 transition-colors" />
+                    <div className="absolute -right-4 -top-4 bg-purple-500/10 rounded-full h-24 w-24 blur-2xl" />
+                    <CardContent className="p-6 relative z-10">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="h-10 w-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-500">
+                                <Users className="h-5 w-5" />
                             </div>
-                            <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
-                                <Users className="h-6 w-6 text-purple-600" />
-                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <p className="text-sm font-medium text-muted-foreground">Total Customers</p>
+                            <p className="text-3xl font-black tracking-tight">{stats.totalCustomers}</p>
                         </div>
                     </CardContent>
                 </Card>
@@ -246,9 +258,11 @@ export default function ReportsPage() {
 
             <div className="grid gap-6 md:grid-cols-2">
                 {/* Top Selling Items */}
-                <Card className="bg-card border-2 shadow-sm">
+                <Card className="glass-panel border-0">
                     <CardHeader>
-                        <CardTitle>Top Selling Items</CardTitle>
+                        <CardTitle className="flex items-center gap-2">
+                            <ArrowUpRight className="h-5 w-5 text-green-500" /> Top Selling Items
+                        </CardTitle>
                     </CardHeader>
                     <CardContent>
                         {topItems.length === 0 ? (
@@ -256,23 +270,22 @@ export default function ReportsPage() {
                                 No data available for this period
                             </div>
                         ) : (
-                            <div className="space-y-4">
+                            <div className="space-y-5">
                                 {topItems.map((item, index) => (
-                                    <div key={index} className="flex items-center justify-between">
-                                        <div className="flex-1">
-                                            <div className="flex justify-between mb-1">
-                                                <span className="font-medium text-sm">{item.name}</span>
-                                                <span className="text-sm text-muted-foreground">{item.quantity} sold</span>
+                                    <div key={index} className="group">
+                                        <div className="flex justify-between mb-2">
+                                            <div>
+                                                <span className="font-bold text-sm block group-hover:text-primary transition-colors">{item.name}</span>
+                                                <span className="text-xs text-muted-foreground">{item.quantity} orders</span>
                                             </div>
-                                            <div className="h-2 bg-muted rounded-full overflow-hidden">
-                                                <div
-                                                    className="h-full bg-primary"
-                                                    style={{ width: `${(item.quantity / topItems[0].quantity) * 100}%` }}
-                                                />
-                                            </div>
+                                            <span className="font-bold text-primary">₹{item.revenue.toLocaleString()}</span>
                                         </div>
-                                        <div className="ml-4 text-right min-w-[80px]">
-                                            <p className="font-bold">₹{item.revenue.toLocaleString()}</p>
+                                        {/* Creative Progress Bar */}
+                                        <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                                            <div
+                                                className="h-full bg-gradient-to-r from-primary to-purple-600 rounded-full transition-all duration-1000 ease-out"
+                                                style={{ width: `${(item.quantity / topItems[0].quantity) * 100}%` }}
+                                            />
                                         </div>
                                     </div>
                                 ))}
@@ -282,9 +295,11 @@ export default function ReportsPage() {
                 </Card>
 
                 {/* Revenue by Order Type */}
-                <Card className="bg-card border-2 shadow-sm">
+                <Card className="glass-panel border-0">
                     <CardHeader>
-                        <CardTitle>Revenue by Order Type</CardTitle>
+                        <CardTitle className="flex items-center gap-2">
+                            <DollarSign className="h-5 w-5 text-blue-500" /> Revenue Source
+                        </CardTitle>
                     </CardHeader>
                     <CardContent>
                         {revenueByType.length === 0 ? (
@@ -292,26 +307,32 @@ export default function ReportsPage() {
                                 No data available for this period
                             </div>
                         ) : (
-                            <div className="space-y-6 pt-4">
+                            <div className="space-y-6">
                                 {revenueByType.map((type, index) => (
-                                    <div key={index} className="flex items-center gap-4">
-                                        <div className={`h-4 w-4 rounded-full ${index === 0 ? 'bg-primary' : index === 1 ? 'bg-blue-500' : 'bg-orange-500'
-                                            }`} />
+                                    <div key={index} className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-colors border border-white/5">
+                                        <div className={cn("h-10 w-10 rounded-full flex items-center justify-center text-white font-bold",
+                                            index === 0 ? "bg-gradient-to-br from-primary to-purple-600" :
+                                                index === 1 ? "bg-gradient-to-br from-blue-500 to-cyan-500" :
+                                                    "bg-gradient-to-br from-orange-500 to-red-500"
+                                        )}>
+                                            {type.type.charAt(0).toUpperCase()}
+                                        </div>
                                         <div className="flex-1">
-                                            <div className="flex justify-between items-center">
-                                                <span className="font-medium capitalize text-sm">{type.type.replace('_', ' ')}</span>
-                                                <span className="font-bold">₹{type.revenue.toLocaleString()}</span>
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="font-bold capitalize">{type.type.replace('_', ' ')}</span>
+                                                <span className="font-black text-lg">₹{type.revenue.toLocaleString()}</span>
                                             </div>
-                                            <p className="text-xs text-muted-foreground">{type.count} orders</p>
+                                            <div className="flex justify-between items-center text-xs text-muted-foreground">
+                                                <span>{type.count} Orders</span>
+                                                <span>{((type.revenue / stats.totalRevenue) * 100).toFixed(1)}% of total</span>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
                                 {/* Total indicators */}
-                                <div className="pt-6 border-t mt-auto">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-muted-foreground font-medium">Grand Total</span>
-                                        <span className="text-xl font-bold text-primary">₹{stats.totalRevenue.toLocaleString()}</span>
-                                    </div>
+                                <div className="p-4 rounded-2xl bg-primary/10 border border-primary/20 flex justify-between items-center mt-4">
+                                    <span className="font-bold text-primary">Total Generated Revenue</span>
+                                    <span className="text-2xl font-black text-primary">₹{stats.totalRevenue.toLocaleString()}</span>
                                 </div>
                             </div>
                         )}

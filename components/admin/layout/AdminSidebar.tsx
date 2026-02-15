@@ -40,23 +40,27 @@ export function AdminSidebar() {
     return (
         <aside
             className={cn(
-                'fixed left-0 top-0 z-40 h-screen bg-sidebar text-sidebar-foreground border-r border-sidebar-border transition-all duration-300',
+                'fixed left-0 top-0 z-40 h-screen glass-sidebar bg-background/80 transition-all duration-300',
                 sidebarOpen ? 'w-64' : 'w-20'
             )}
         >
             {/* Logo & Toggle */}
-            <div className="flex h-16 items-center justify-between px-4 border-b border-sidebar-border">
+            <div className="flex h-16 items-center justify-between px-4 border-b border-border/50">
                 {sidebarOpen && (
-                    <div className="flex items-center gap-2">
-                        <Store className="h-6 w-6 text-primary" />
-                        <span className="text-lg font-bold">Restaurant</span>
+                    <div className="flex items-center gap-2 animate-in fade-in duration-300">
+                        <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg">
+                            <Store className="h-5 w-5 text-white" />
+                        </div>
+                        <span className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-indigo-600 dark:from-purple-400 dark:to-indigo-400">
+                            Restaurant
+                        </span>
                     </div>
                 )}
                 <Button
                     variant="ghost"
                     size="icon"
                     onClick={toggleSidebar}
-                    className="ml-auto hover:bg-sidebar-accent"
+                    className="ml-auto hover:bg-primary/10 hover:text-primary rounded-full"
                 >
                     {sidebarOpen ? (
                         <ChevronLeft className="h-5 w-5" />
@@ -67,7 +71,7 @@ export function AdminSidebar() {
             </div>
 
             {/* Navigation */}
-            <nav className="space-y-1 p-3">
+            <nav className="space-y-2 p-3 mt-2">
                 {menuItems.map((item) => {
                     const Icon = item.icon
                     const isActive = pathname === item.href
@@ -77,16 +81,23 @@ export function AdminSidebar() {
                             key={item.href}
                             href={item.href}
                             className={cn(
-                                'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
+                                'flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-200 group relative overflow-hidden',
                                 isActive
-                                    ? 'bg-primary text-primary-foreground'
-                                    : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                                    ? 'bg-primary text-white shadow-md shadow-primary/30'
+                                    : 'text-muted-foreground hover:bg-secondary hover:text-foreground',
                                 !sidebarOpen && 'justify-center'
                             )}
                             title={!sidebarOpen ? item.label : undefined}
                         >
-                            <Icon className="h-5 w-5 flex-shrink-0" />
-                            {sidebarOpen && <span>{item.label}</span>}
+                            <Icon className={cn("h-5 w-5 flex-shrink-0 transition-transform duration-200", isActive ? "scale-110" : "group-hover:scale-110")} />
+                            {sidebarOpen && (
+                                <span className={cn("animate-in fade-in slide-in-from-left-2 duration-200")}>
+                                    {item.label}
+                                </span>
+                            )}
+                            {isActive && sidebarOpen && (
+                                <div className="absolute right-0 top-0 h-full w-1 bg-white/20 blur-sm" />
+                            )}
                         </Link>
                     )
                 })}
