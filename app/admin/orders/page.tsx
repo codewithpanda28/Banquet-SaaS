@@ -232,6 +232,37 @@ export default function OrdersPage() {
 
             if (error) throw error
 
+            // Trigger n8n Webhook for Payment Confirmation
+            try {
+                fetch('https://n8n.srv1114630.hstgr.cloud/webhook-test/payment-confirmation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        bill_id: selectedOrder.bill_id,
+                        amount: selectedOrder.total,
+                        customer: {
+                            name: selectedOrder.customers?.name || selectedOrder.customer_name || 'Walk-in',
+                            phone: selectedOrder.customers?.phone || 'N/A',
+                            address: selectedOrder.delivery_address || selectedOrder.customers?.address
+                        },
+                        order_type: selectedOrder.order_type,
+                        table_number: selectedOrder.restaurant_tables?.table_number,
+                        items: selectedOrder.order_items?.map((i: any) => ({
+                            name: i.item_name,
+                            quantity: i.quantity,
+                            price: i.price,
+                            total: i.total
+                        })),
+                        payment_method: method,
+                        payment_status: 'paid',
+                        restaurant_id: RESTAURANT_ID,
+                        updated_at: new Date().toISOString()
+                    })
+                }).catch(err => console.error('Webhook fetch error:', err))
+            } catch (webhookError) {
+                console.error('Failed to trigger webhook:', webhookError)
+            }
+
             toast.success(`Payment marked as ${method.toUpperCase()} & Message Sent 🚀`)
             setSelectedOrder(null)
             fetchOrders()
