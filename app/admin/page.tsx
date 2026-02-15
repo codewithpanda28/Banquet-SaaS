@@ -57,9 +57,10 @@ export default function AdminDashboard() {
     const [selectedOrder, setSelectedOrder] = useState<any>(null)
     const [isDetailsOpen, setIsDetailsOpen] = useState(false)
     const [processingPayment, setProcessingPayment] = useState(false)
+    const [range, setRange] = useState<'today' | 'week' | 'month'>('today')
 
     useEffect(() => {
-        fetchDashboardData()
+        fetchDashboardData(range)
 
         // Real-time subscription for orders
         // Real-time subscription for orders and items
@@ -84,7 +85,7 @@ export default function AdminDashboard() {
                     table: 'order_items',
                 },
                 () => {
-                    fetchDashboardData()
+                    fetchDashboardData(range)
                 }
             )
             .subscribe()
@@ -92,21 +93,31 @@ export default function AdminDashboard() {
         return () => {
             supabase.removeChannel(channel)
         }
-    }, [])
+    }, [range])
 
-    const fetchDashboardData = async () => {
+    const fetchDashboardData = async (currentRange: 'today' | 'week' | 'month' = 'today') => {
         try {
-            const todayStart = startOfDay(new Date()).toISOString()
-            const todayEnd = endOfDay(new Date()).toISOString()
+            const now = new Date()
+            let startDate = startOfDay(now)
+            const todayEnd = endOfDay(now)
 
-            // Fetch Today's Revenue
+            if (currentRange === 'week') {
+                startDate = startOfDay(subDays(now, 7))
+            } else if (currentRange === 'month') {
+                startDate = startOfDay(subDays(now, 30))
+            }
+
+            const todayStart = startDate.toISOString()
+            const rangeEnd = todayEnd.toISOString()
+
+            // Fetch Revenue
             const { data: revenueData } = await supabase
                 .from('orders')
                 .select('total')
                 .eq('restaurant_id', RESTAURANT_ID)
                 .eq('payment_status', 'paid')
                 .gte('created_at', todayStart)
-                .lte('created_at', todayEnd)
+                .lte('created_at', rangeEnd)
 
             const totalRevenue = revenueData?.reduce((acc, curr) => acc + (curr.total || 0), 0) || 0
 
@@ -118,13 +129,13 @@ export default function AdminDashboard() {
                 .neq('status', 'completed')
                 .neq('status', 'cancelled')
 
-            // Fetch Total Orders Today
+            // Fetch Total Orders in Range
             const { count: totalOrders } = await supabase
                 .from('orders')
                 .select('*', { count: 'exact', head: true })
                 .eq('restaurant_id', RESTAURANT_ID)
                 .gte('created_at', todayStart)
-                .lte('created_at', todayEnd)
+                .lte('created_at', rangeEnd)
 
             // Fetch Total Customers (All time)
             const { count: totalCustomers } = await supabase
@@ -212,7 +223,7 @@ export default function AdminDashboard() {
                 toast.info('Order marked as paid (No phone number found for receipt)')
             }
             setIsDetailsOpen(false)
-            fetchDashboardData() // Refresh data
+            fetchDashboardData(range) // Refresh data
         } catch (error) {
             console.error('Payment error:', error)
             toast.error('Failed to update payment status')
@@ -243,13 +254,37 @@ export default function AdminDashboard() {
                     <p className="text-gray-500 font-medium">Real-time insights and performance metrics.</p>
                 </div>
                 <div className="flex items-center gap-2 bg-white/50 p-1 rounded-xl border border-gray-200">
-                    <Button variant="ghost" size="sm" className="rounded-lg text-xs font-semibold h-8 bg-white border border-gray-200 text-black shadow-sm">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setRange('today')}
+                        className={cn(
+                            "rounded-lg text-xs font-semibold h-8 transition-all",
+                            range === 'today' ? "bg-white border border-gray-200 text-black shadow-sm" : "hover:bg-gray-100 text-gray-500"
+                        )}
+                    >
                         Today
                     </Button>
-                    <Button variant="ghost" size="sm" className="rounded-lg text-xs font-medium h-8 hover:bg-gray-100 text-gray-500">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setRange('week')}
+                        className={cn(
+                            "rounded-lg text-xs font-semibold h-8 transition-all",
+                            range === 'week' ? "bg-white border border-gray-200 text-black shadow-sm" : "hover:bg-gray-100 text-gray-500"
+                        )}
+                    >
                         Week
                     </Button>
-                    <Button variant="ghost" size="sm" className="rounded-lg text-xs font-medium h-8 hover:bg-gray-100 text-gray-500">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setRange('month')}
+                        className={cn(
+                            "rounded-lg text-xs font-semibold h-8 transition-all",
+                            range === 'month' ? "bg-white border border-gray-100 text-black shadow-sm" : "hover:bg-gray-100 text-gray-500"
+                        )}
+                    >
                         Month
                     </Button>
                 </div>
