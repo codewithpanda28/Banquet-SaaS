@@ -256,7 +256,9 @@ export default function OrdersPage() {
                         payment_method: method,
                         payment_status: 'paid',
                         restaurant_id: RESTAURANT_ID,
-                        updated_at: new Date().toISOString()
+                        updated_at: new Date().toISOString(),
+                        source: 'admin_dashboard',
+                        trigger_type: 'payment_marked_manually'
                     })
                 }).catch(err => console.error('Webhook fetch error:', err))
             } catch (webhookError) {
