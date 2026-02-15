@@ -175,6 +175,53 @@ export default function DashboardPage() {
 
             if (error) throw error
 
+            // Trigger n8n Webhook for Payment Confirmation
+            try {
+                console.log('🚀 Sending Webhook to n8n (Dashboard)...', { method, bill_id: selectedOrder.bill_id })
+
+                const webhookResponse = await fetch('https://n8n.srv1114630.hstgr.cloud/webhook-test/payment-confirmation', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        bill_id: selectedOrder.bill_id,
+                        amount: selectedOrder.total,
+                        customer: {
+                            name: selectedOrder.customers?.name || selectedOrder.customer_name || 'Walk-in',
+                            phone: selectedOrder.customers?.phone || 'N/A',
+                            address: selectedOrder.delivery_address || selectedOrder.customers?.address
+                        },
+                        order_type: selectedOrder.order_type,
+                        table_number: Array.isArray(selectedOrder.restaurant_tables) ? selectedOrder.restaurant_tables[0]?.table_number : selectedOrder.restaurant_tables?.table_number,
+                        items: selectedOrder.order_items?.map((i: any) => ({
+                            name: i.item_name,
+                            quantity: i.quantity,
+                            price: i.price,
+                            total: i.total
+                        })),
+                        payment_method: method,
+                        payment_status: 'paid',
+                        restaurant_id: RESTAURANT_ID,
+                        updated_at: new Date().toISOString(),
+                        source: 'admin_dashboard',
+                        trigger_type: 'payment_marked_manually'
+                    })
+                })
+
+                if (!webhookResponse.ok) {
+                    const errorText = await webhookResponse.text()
+                    console.error('❌ Webhook Failed:', webhookResponse.status, errorText)
+                    toast.error(`Webhook Failed: ${webhookResponse.status}`)
+                } else {
+                    console.log('✅ Webhook Delivered Successfully')
+                }
+            } catch (webhookError) {
+                console.error('❌ Failed to trigger webhook:', webhookError)
+                toast.error('Webhook Error (Check Console)')
+            }
+
             toast.success(`Payment marked as ${method.toUpperCase()} & Message Sent 🚀`)
             setSelectedOrder(null)
             fetchDashboardData() // Refresh dashboard data
