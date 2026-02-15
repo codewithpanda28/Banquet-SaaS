@@ -246,7 +246,7 @@ export default function OrdersPage() {
                             address: selectedOrder.delivery_address || selectedOrder.customers?.address
                         },
                         order_type: selectedOrder.order_type,
-                        table_number: selectedOrder.restaurant_tables?.table_number,
+                        table_number: Array.isArray(selectedOrder.restaurant_tables) ? selectedOrder.restaurant_tables[0]?.table_number : selectedOrder.restaurant_tables?.table_number,
                         items: selectedOrder.order_items?.map((i: any) => ({
                             name: i.item_name,
                             quantity: i.quantity,
