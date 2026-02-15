@@ -159,6 +159,38 @@ export function AdminHeader() {
                     ])
                 }
             )
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'menu_items',
+                },
+                (payload) => {
+                    const newItem = payload.new as any
+                    if (newItem.restaurant_id !== RESTAURANT_ID) return
+
+                    // Only notify if it just dropped into "low stock" range and isn't infinite
+                    if (!newItem.is_infinite_stock && newItem.stock <= 10 && (payload.old as any).stock > 10) {
+                        toast.warning(`Low Stock Alert: ${newItem.name}`, {
+                            description: `Only ${newItem.stock} remaining!`,
+                            duration: 8000,
+                        })
+
+                        setNotifications(prev => [
+                            {
+                                id: `low-stock-${newItem.id}-${Date.now()}`,
+                                title: 'Low Stock Alert',
+                                message: `${newItem.name} has only ${newItem.stock} left`,
+                                time: 'Just now',
+                                isRead: false,
+                                type: 'alert'
+                            },
+                            ...prev
+                        ])
+                    }
+                }
+            )
             .subscribe()
 
         return () => {
@@ -279,6 +311,13 @@ export function AdminHeader() {
         toast.success('✅ Logged out successfully')
         router.push('/login')
     }
+
+    const [mounted, setMounted] = useState(false)
+    useEffect(() => {
+        setMounted(true)
+    }, [])
+
+    if (!mounted) return <header className="h-16 border-b border-gray-100 bg-white/95" />
 
     return (
         <header className="glass-header h-16 flex items-center justify-between px-6 transition-all border-b border-gray-100 bg-white/95 text-black">

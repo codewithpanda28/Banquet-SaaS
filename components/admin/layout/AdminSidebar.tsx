@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -36,6 +37,13 @@ const menuItems = [
 export function AdminSidebar() {
     const pathname = usePathname()
     const { sidebarOpen, toggleSidebar } = useAdminStore()
+
+    const [mounted, setMounted] = useState(false)
+    useEffect(() => {
+        setMounted(true)
+    }, [])
+
+    if (!mounted) return null
 
     return (
         <aside

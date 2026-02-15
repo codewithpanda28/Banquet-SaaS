@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import {
     Activity,
@@ -51,6 +51,7 @@ export default function AdminDashboard() {
         activeOrders: 0,
         totalOrders: 0,
         totalCustomers: 0,
+        peakHours: [] as number[],
     })
     const [recentOrders, setRecentOrders] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
@@ -59,43 +60,18 @@ export default function AdminDashboard() {
     const [processingPayment, setProcessingPayment] = useState(false)
     const [range, setRange] = useState<'today' | 'week' | 'month'>('today')
 
-    useEffect(() => {
-        fetchDashboardData(range)
-
-        // Real-time subscription for orders
-        // Real-time subscription for orders and items
-        const channel = supabase
-            .channel('admin-dashboard')
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'orders',
-                },
-                () => {
-                    fetchDashboardData()
-                }
-            )
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'order_items',
-                },
-                () => {
-                    fetchDashboardData(range)
-                }
-            )
-            .subscribe()
-
-        return () => {
-            supabase.removeChannel(channel)
+    // Helper to robustly parse dates primarily from UTC
+    const parseDate = (dateString: string) => {
+        if (!dateString) return new Date()
+        // If string comprises T but no Z or +, append Z to force UTC parsing
+        // This fixes the issue where UTC strings are interpreted as local time
+        if (dateString.includes('T') && !dateString.endsWith('Z') && !dateString.includes('+')) {
+            return new Date(dateString + 'Z')
         }
-    }, [range])
+        return new Date(dateString)
+    }
 
-    const fetchDashboardData = async (currentRange: 'today' | 'week' | 'month' = 'today') => {
+    const fetchDashboardData = useCallback(async (currentRange: 'today' | 'week' | 'month' = 'today') => {
         try {
             const now = new Date()
             let startDate = startOfDay(now)
@@ -143,12 +119,13 @@ export default function AdminDashboard() {
                 .select('*', { count: 'exact', head: true })
                 .eq('restaurant_id', RESTAURANT_ID)
 
-            setStats({
+            setStats(prev => ({
+                ...prev,
                 totalRevenue,
                 activeOrders: activeOrders || 0,
                 totalOrders: totalOrders || 0,
                 totalCustomers: totalCustomers || 0,
-            })
+            }))
 
             // Fetch Recent Orders
             const { data: recent } = await supabase
@@ -159,12 +136,86 @@ export default function AdminDashboard() {
                 .limit(5)
 
             setRecentOrders(recent || [])
+
+            // Calculate Peak Hours (from recent 100 orders or today's orders)
+            // Ideally we want more historical data for "Peak Hours", e.g. last 7 days
+            const peakStart = subDays(new Date(), 7).toISOString()
+            const { data: peakData } = await supabase
+                .from('orders')
+                .select('created_at')
+                .eq('restaurant_id', RESTAURANT_ID)
+                .gte('created_at', peakStart)
+
+            const hours = new Array(24).fill(0)
+            peakData?.forEach(o => {
+                const date = parseDate(o.created_at)
+                const h = date.getHours() // Local hours
+                hours[h]++
+            })
+            setStats(prev => ({ ...prev, peakHours: hours }))
+            // Check Low Stock
+            const { data: lowStockItems } = await supabase
+                .from('menu_items')
+                .select('name, stock')
+                .eq('restaurant_id', RESTAURANT_ID)
+                .eq('is_infinite_stock', false)
+                .lte('stock', 10)
+                .order('stock', { ascending: true })
+                .limit(3) // LIMIT to avoid spamming
+
+            if (lowStockItems && lowStockItems.length > 0) {
+                // Show toast only if we haven't shown it recently (simple debounce could be added here but for now just show)
+                const itemNames = lowStockItems.map(i => `${i.name} (${i.stock})`).join(', ')
+                toast.warning(`Low Stock: ${itemNames}`, {
+                    duration: 5000,
+                    action: {
+                        label: 'Check',
+                        onClick: () => window.location.href = '/admin/menu'
+                    }
+                })
+            }
         } catch (error) {
             console.error('Error fetching dashboard data:', error)
         } finally {
             setLoading(false)
         }
-    }
+    }, [])
+
+    useEffect(() => {
+        fetchDashboardData(range)
+
+        // Real-time subscription for orders
+        // Real-time subscription for orders and items
+        const channel = supabase
+            .channel('admin-dashboard')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'orders',
+                },
+                () => {
+                    fetchDashboardData(range)
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'order_items',
+                },
+                () => {
+                    fetchDashboardData(range)
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [range, fetchDashboardData])
 
     const handleOrderClick = (order: any) => {
         setSelectedOrder(order)
@@ -180,7 +231,8 @@ export default function AdminDashboard() {
         const billId = selectedOrder.bill_id
         const total = selectedOrder.total
 
-        // Open WhatsApp Message
+        /* 
+        // WhatsApp Message - Commented out as per request to prioritize webhook
         if (phone) {
             let formattedPhone = phone.replace(/[^0-9]/g, '')
             if (formattedPhone.length === 10) {
@@ -205,6 +257,7 @@ export default function AdminDashboard() {
                 })
             }
         }
+        */
 
         try {
             const { error } = await supabase
@@ -218,10 +271,41 @@ export default function AdminDashboard() {
 
             if (error) throw error
 
-            toast.success(`Order marked as paid via ${method.toUpperCase()}`)
-            if (!phone) {
-                toast.info('Order marked as paid (No phone number found for receipt)')
+            // Trigger n8n Webhook
+            try {
+                const webhookPayload = {
+                    bill_id: billId,
+                    amount: total,
+                    customer: {
+                        name: customerName,
+                        phone: phone || 'N/A',
+                        address: selectedOrder.delivery_address || selectedOrder.customers?.address
+                    },
+                    order_type: selectedOrder.order_type,
+                    table_number: selectedOrder.restaurant_tables?.table_number,
+                    items: selectedOrder.order_items?.map((i: any) => ({
+                        name: i.item_name,
+                        quantity: i.quantity,
+                        price: i.price || (i.total / i.quantity),
+                        total: i.total
+                    })),
+                    payment_method: method,
+                    restaurant_id: RESTAURANT_ID,
+                    timestamp: new Date().toISOString(),
+                    source: 'admin_dashboard_home'
+                }
+
+                fetch('https://n8n.srv1114630.hstgr.cloud/webhook/payment-confirmation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(webhookPayload)
+                }).catch(err => console.error('Webhook trigger failed', err))
+
+            } catch (err) {
+                console.error('Webhook error', err)
             }
+
+            toast.success(`Order marked as paid via ${method.toUpperCase()}`)
             setIsDetailsOpen(false)
             fetchDashboardData(range) // Refresh data
         } catch (error) {
@@ -234,7 +318,7 @@ export default function AdminDashboard() {
 
     // Function to calculate time ago roughly
     const getTimeAgo = (dateString: string) => {
-        const date = new Date(dateString)
+        const date = parseDate(dateString)
         const now = new Date()
         const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / 60000)
 
@@ -357,6 +441,42 @@ export default function AdminDashboard() {
 
             {/* Main Content Area */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
+                {/* Peak Hours Chart */}
+                <Card className="col-span-7 lg:col-span-7 glass-card border-gray-100 bg-white shadow-sm p-6 relative overflow-hidden group hover:border-blue-500/20 hover:shadow-md transition-all duration-300">
+                    <CardHeader className="p-0 pb-4 border-b border-gray-50 flex flex-row justify-between items-center">
+                        <div className="space-y-1">
+                            <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                                <Clock className="h-4 w-4 text-blue-500" /> Peak Hours Analysis
+                            </CardTitle>
+                            <CardDescription className="text-xs text-gray-500">Order traffic trends (Last 7 Days)</CardDescription>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-0 pt-6">
+                        <div className="h-32 flex items-end gap-1 w-full justify-between">
+                            {Array.isArray(stats.peakHours) && stats.peakHours.length > 0 ? stats.peakHours.map((count, hour) => {
+                                const max = Math.max(...(stats.peakHours || [1])) || 1
+                                const height = (count / max) * 100
+                                return (
+                                    <div key={hour} className="flex-1 flex flex-col items-center gap-1 group/bar h-full justify-end">
+                                        <div
+                                            className="w-full bg-blue-100 rounded-t-sm hover:bg-blue-500 transition-all duration-500 relative min-w-[4px]"
+                                            style={{ height: `${Math.max(height, 5)}%` }}
+                                        >
+                                            <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] px-1.5 py-0.5 rounded opacity-0 group-hover/bar:opacity-100 transition-opacity whitespace-nowrap z-10">
+                                                {count} Orders
+                                            </div>
+                                        </div>
+                                        <span className="text-[9px] text-gray-400 rotate-0 group-hover/bar:text-gray-900 font-medium h-4">
+                                            {hour % 2 === 0 ? (hour === 0 ? '12am' : hour === 12 ? '12pm' : hour > 12 ? `${hour - 12}pm` : `${hour}am`) : ''}
+                                        </span>
+                                    </div>
+                                )
+                            }) : (
+                                <div className="w-full text-center text-gray-400 text-sm flex items-center justify-center">Loading or No Data</div>
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
                 {/* Recent Orders */}
                 <Card className="col-span-4 glass-card border-gray-100 bg-white shadow-sm hover:border-green-500/20 hover:shadow-md transition-all duration-300">
                     <CardHeader className="flex flex-row items-center justify-between pb-2 border-b border-gray-100">
@@ -510,7 +630,7 @@ export default function AdminDashboard() {
                                         </h2>
                                         <p className="text-sm text-gray-500 font-medium mt-1 flex items-center gap-2">
                                             <Calendar className="h-3.5 w-3.5" />
-                                            {format(new Date(selectedOrder.created_at), 'PPP')} at {format(new Date(selectedOrder.created_at), 'p')}
+                                            {format(parseDate(selectedOrder.created_at), 'PPP')} at {format(parseDate(selectedOrder.created_at), 'p')}
                                         </p>
                                     </div>
                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-gray-900" onClick={() => setIsDetailsOpen(false)}>

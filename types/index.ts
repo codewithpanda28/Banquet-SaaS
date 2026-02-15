@@ -53,6 +53,8 @@ export interface MenuItem {
     is_available: boolean;
     preparation_time: number;
     serves: string | null;
+    stock?: number;
+    is_infinite_stock?: boolean;
     menu_categories?: {
         name: string;
     };

@@ -43,6 +43,8 @@ export default function MenuPage() {
         is_available: true,
         is_spicy: false,
         spicy_level: 0,
+        stock: 0,
+        is_infinite_stock: false,
     })
 
     useEffect(() => {
@@ -155,12 +157,18 @@ export default function MenuPage() {
                 return
             }
 
+            const priceValue = parseFloat(itemForm.price)
+            if (isNaN(priceValue) || priceValue < 0) {
+                toast.error('Please enter a valid price')
+                return
+            }
+
             const itemData = {
                 restaurant_id: RESTAURANT_ID,
                 category_id: itemForm.category_id,
                 name: itemForm.name,
                 description: itemForm.description,
-                price: parseFloat(itemForm.price),
+                price: priceValue,
                 image_url: itemForm.image_url || null,
                 is_veg: itemForm.is_veg,
                 is_bestseller: itemForm.is_bestseller,
@@ -169,24 +177,31 @@ export default function MenuPage() {
                 spicy_level: itemForm.spicy_level,
                 is_new: false,
                 preparation_time: 15,
+                stock: itemForm.is_infinite_stock ? 0 : (parseInt(itemForm.stock.toString()) || 0),
+                is_infinite_stock: itemForm.is_infinite_stock,
             }
 
+            let error = null
+
             if (editingItem) {
-                const { error } = await supabase
+                const res = await supabase
                     .from('menu_items')
                     .update(itemData)
                     .eq('id', editingItem.id)
-
-                if (error) throw error
-                toast.success('Menu item updated successfully')
+                error = res.error
             } else {
-                const { error } = await supabase
+                const res = await supabase
                     .from('menu_items')
                     .insert(itemData)
-
-                if (error) throw error
-                toast.success('Menu item added successfully')
+                error = res.error
             }
+
+            if (error) {
+                console.error('Supabase Error:', error)
+                throw error
+            }
+
+            toast.success(editingItem ? 'Menu item updated' : 'Menu item added')
 
             setItemDialogOpen(false)
             setItemForm({
@@ -200,11 +215,14 @@ export default function MenuPage() {
                 is_available: true,
                 is_spicy: false,
                 spicy_level: 0,
+                stock: 0,
+                is_infinite_stock: false,
             })
             setEditingItem(null)
             fetchData()
-        } catch (error) {
-            console.error('Error saving item:', error)
+        } catch (error: any) {
+            console.error('Error saving item FULL:', JSON.stringify(error, null, 2))
+            console.error('Error object:', error)
             toast.error('Failed to save menu item')
         }
     }
@@ -267,6 +285,8 @@ export default function MenuPage() {
             is_available: item.is_available,
             is_spicy: item.is_spicy || false,
             spicy_level: item.spicy_level || 0,
+            stock: item.stock || 0,
+            is_infinite_stock: item.is_infinite_stock || false,
         })
         setItemDialogOpen(true)
     }
@@ -310,6 +330,8 @@ export default function MenuPage() {
                             is_available: true,
                             is_spicy: false,
                             spicy_level: 0,
+                            stock: 0,
+                            is_infinite_stock: false,
                         })
                         setItemDialogOpen(true)
                     }} className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20">
@@ -467,6 +489,12 @@ export default function MenuPage() {
                                                 </span>
                                             )}
                                         </div>
+                                        <div className="mt-2 text-xs text-muted-foreground flex items-center justify-between">
+                                            <span>Stock: {item.is_infinite_stock ? '∞' : (item.stock ?? 0)}</span>
+                                            {(!item.is_infinite_stock && (item.stock ?? 0) < 10) && (
+                                                <span className="text-red-500 font-bold">Low Stock!</span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             ))}
@@ -614,6 +642,33 @@ export default function MenuPage() {
                                     </SelectContent>
                                 </Select>
                             </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center mb-1">
+                                <Label htmlFor="item-stock" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Stock Quantity</Label>
+                                <label className="flex items-center gap-2 cursor-pointer group">
+                                    <input
+                                        type="checkbox"
+                                        checked={itemForm.is_infinite_stock}
+                                        onChange={(e) => setItemForm({ ...itemForm, is_infinite_stock: e.target.checked })}
+                                        className="h-3.5 w-3.5 rounded border-gray-300 accent-primary"
+                                    />
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground group-hover:text-primary transition-colors">♾️ Infinite</span>
+                                </label>
+                            </div>
+                            <Input
+                                id="item-stock"
+                                type="number"
+                                placeholder={itemForm.is_infinite_stock ? "Infinite" : "e.g. 50"}
+                                disabled={itemForm.is_infinite_stock}
+                                value={itemForm.is_infinite_stock ? '' : itemForm.stock}
+                                onChange={(e) => setItemForm({ ...itemForm, stock: parseInt(e.target.value) || 0 })}
+                                className={cn(
+                                    "bg-secondary/20 border-border/50 h-10 font-mono transition-opacity",
+                                    itemForm.is_infinite_stock && "opacity-50"
+                                )}
+                            />
                         </div>
 
                         <div className="space-y-2">

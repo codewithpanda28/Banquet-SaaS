@@ -23,6 +23,16 @@ import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
+// Helper to robustly parse dates primarily from UTC
+const parseDate = (dateString: string) => {
+    if (!dateString) return new Date()
+    // If string comprises T but no Z or +, append Z to force UTC parsing
+    if (dateString.includes('T') && !dateString.endsWith('Z') && !dateString.includes('+')) {
+        return new Date(dateString + 'Z')
+    }
+    return new Date(dateString)
+}
+
 export default function OrdersPage() {
     const [orders, setOrders] = useState<Order[]>([])
     const [filteredOrders, setFilteredOrders] = useState<Order[]>([])
@@ -151,7 +161,7 @@ export default function OrdersPage() {
                         <p>Phone: +91 7282871506</p>
                     </div>
                     <p><strong>Order:</strong> ${order.bill_id}</p>
-                    <p><strong>Date:</strong> ${format(new Date(order.created_at), 'dd/MM/yy hh:mm a')}</p>
+                    <p><strong>Date:</strong> ${format(parseDate(order.created_at), 'dd/MM/yy hh:mm a')}</p>
                     <p><strong>Customer:</strong> ${order.customers?.name || 'Walk-in'}</p>
                    
                     <table>
@@ -199,7 +209,7 @@ export default function OrdersPage() {
                     `₹${order.total.toFixed(2)}`,
                     order.status,
                     order.payment_method,
-                    format(new Date(order.created_at), 'dd/MM/yyyy hh:mm a')
+                    format(parseDate(order.created_at), 'dd/MM/yyyy hh:mm a')
                 ])
             ]
 
@@ -240,7 +250,7 @@ export default function OrdersPage() {
             try {
                 console.log('🚀 Sending Webhook to n8n...', { method, bill_id: selectedOrder.bill_id })
 
-                const webhookResponse = await fetch('https://n8n.srv1114630.hstgr.cloud/webhook-test/payment-confirmation', {
+                const webhookResponse = await fetch('https://n8n.srv1114630.hstgr.cloud/webhook/payment-confirmation', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -420,7 +430,7 @@ export default function OrdersPage() {
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <Clock className="h-4 w-4 text-green-600" />
-                                                <span>{format(new Date(order.created_at), 'hh:mm a')}</span>
+                                                <span>{format(parseDate(order.created_at), 'hh:mm a')}</span>
                                             </div>
                                             {order.restaurant_tables && (
                                                 <div className="flex items-center gap-2">
@@ -498,7 +508,7 @@ export default function OrdersPage() {
                                         </h2>
                                         <p className="text-sm text-gray-500 font-medium mt-1 flex items-center gap-2">
                                             <Calendar className="h-3.5 w-3.5" />
-                                            {format(new Date(selectedOrder.created_at), 'PPP')} at {format(new Date(selectedOrder.created_at), 'p')}
+                                            {format(parseDate(selectedOrder.created_at), 'PPP')} at {format(parseDate(selectedOrder.created_at), 'p')}
                                         </p>
                                     </div>
                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-400 hover:text-gray-900" onClick={() => setSelectedOrder(null)}>

@@ -211,7 +211,7 @@ export default function TablesPage() {
             // But let's try standard fetch first as n8n webhooks usually allow it or user might have configured it.
             // Update: User specifically asked to "run" it.
 
-            const response = await fetch('https://n8n.srv1114630.hstgr.cloud/webhook-test/payment-confirmation', {
+            const response = await fetch('https://n8n.srv1114630.hstgr.cloud/webhook/payment-confirmation', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -382,16 +382,8 @@ export default function TablesPage() {
                                             <Download className="h-3.5 w-3.5 mr-2" />
                                             Download
                                         </Button>
-                                        <Button variant="default" size="sm" onClick={() => handleTestWebhook(table)} className="font-bold shadow-lg w-32 bg-blue-600 hover:bg-blue-700 text-white border-none">
-                                            <Zap className="h-3.5 w-3.5 mr-2" />
-                                            Test Scan
-                                        </Button>
                                     </div>
                                 </div>
-
-                                <p className="text-[10px] text-muted-foreground text-center mb-4 break-all font-mono bg-secondary/50 p-1 rounded">
-                                    WhatsApp Scan • Table {table.table_number}
-                                </p>
 
                                 <Button
                                     variant="outline"
