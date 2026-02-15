@@ -234,9 +234,14 @@ export default function OrdersPage() {
 
             // Trigger n8n Webhook for Payment Confirmation
             try {
-                fetch('https://n8n.srv1114630.hstgr.cloud/webhook-test/payment-confirmation', {
+                console.log('🚀 Sending Webhook to n8n...', { method, bill_id: selectedOrder.bill_id })
+
+                const webhookResponse = await fetch('https://n8n.srv1114630.hstgr.cloud/webhook-test/payment-confirmation', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
                     body: JSON.stringify({
                         bill_id: selectedOrder.bill_id,
                         amount: selectedOrder.total,
@@ -260,9 +265,18 @@ export default function OrdersPage() {
                         source: 'admin_dashboard',
                         trigger_type: 'payment_marked_manually'
                     })
-                }).catch(err => console.error('Webhook fetch error:', err))
+                })
+
+                if (!webhookResponse.ok) {
+                    const errorText = await webhookResponse.text()
+                    console.error('❌ Webhook Failed:', webhookResponse.status, errorText)
+                    toast.error(`Webhook Failed: ${webhookResponse.status}`)
+                } else {
+                    console.log('✅ Webhook Delivered Successfully')
+                }
             } catch (webhookError) {
-                console.error('Failed to trigger webhook:', webhookError)
+                console.error('❌ Failed to trigger webhook:', webhookError)
+                toast.error('Webhook Error (Check Console)')
             }
 
             toast.success(`Payment marked as ${method.toUpperCase()} & Message Sent 🚀`)
