@@ -253,7 +253,9 @@ export function AdminHeader() {
         const billId = selectedDetail.data.bill_id
         const total = selectedDetail.data.total
 
-        // Open WhatsApp Message
+
+        // WhatsApp functionality disabled - Using webhook only
+        /*
         if (phone) {
             let formattedPhone = phone.replace(/[^0-9]/g, '')
             if (formattedPhone.length === 10) {
@@ -261,9 +263,9 @@ export function AdminHeader() {
             }
 
             const message = encodeURIComponent(
-                `*Receipt from Restaurant*\n\n` +
-                `Hi ${customerName},\n` +
-                `Your payment of *₹${total.toFixed(2)}* for Order *${billId}* has been received via ${method.toUpperCase()}.\n\n` +
+                `*Receipt from Restaurant*\\n\\n` +
+                `Hi ${customerName},\\n` +
+                `Your payment of *₹${total.toFixed(2)}* for Order *${billId}* has been received via ${method.toUpperCase()}.\\n\\n` +
                 `Thank you for visiting us! 🙏`
             )
 
@@ -279,8 +281,10 @@ export function AdminHeader() {
                 })
             }
         }
+        */
 
         try {
+            // 1. Update Payment Status
             const { error } = await supabase
                 .from('orders')
                 .update({
@@ -292,14 +296,51 @@ export function AdminHeader() {
 
             if (error) throw error
 
-            toast.success(`Order marked as paid via ${method.toUpperCase()}`)
-            if (!phone) {
-                toast.info('Order marked as paid (No phone number found for receipt)')
+            // 2. Trigger Webhook
+            try {
+                console.log('🚀 [SEARCH MODAL] Sending Webhook...', { method, bill_id: billId })
+                const webhookResponse = await fetch('https://n8n.srv1114630.hstgr.cloud/webhook/payment-confirmation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({
+                        bill_id: billId,
+                        amount: total,
+                        customer: {
+                            name: customerName,
+                            phone: phone || 'N/A',
+                            address: selectedDetail.data.delivery_address || selectedDetail.data.customers?.address
+                        },
+                        order_type: selectedDetail.data.order_type,
+                        table_number: selectedDetail.data.restaurant_tables?.table_number,
+                        items: selectedDetail.data.order_items?.map((i: any) => ({
+                            name: i.item_name,
+                            quantity: i.quantity,
+                            price: i.price || (i.total / i.quantity),
+                            total: i.total
+                        })),
+                        payment_method: method,
+                        payment_status: 'paid',
+                        restaurant_id: RESTAURANT_ID,
+                        updated_at: new Date().toISOString(),
+                        source: 'admin_header_search',
+                        trigger_type: 'payment_marked_manually'
+                    })
+                })
+                if (!webhookResponse.ok) {
+                    console.error('❌ Webhook Failed:', webhookResponse.status)
+                    toast.error(`Webhook Failed: ${webhookResponse.status}`)
+                } else {
+                    console.log('✅ Webhook Delivered')
+                }
+            } catch (webhookError) {
+                console.error('❌ Webhook Error:', webhookError)
             }
+
+            toast.success(`Payment marked as ${method.toUpperCase()} & Message Sent 🚀`)
             setSelectedDetail(null)
         } catch (error) {
             console.error('Payment error:', error)
-            toast.error('Failed to close payment')
+            toast.error('Failed to update payment')
         }
     }
 
@@ -504,83 +545,142 @@ export function AdminHeader() {
 
             {/* Detail Modal */}
             <Dialog open={!!selectedDetail} onOpenChange={(open) => !open && setSelectedDetail(null)}>
-                <DialogContent className="max-w-xl bg-white p-0 overflow-hidden border border-gray-100 shadow-2xl rounded-3xl">
+                <DialogContent className="max-w-xl bg-background p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
                     <DialogTitle className="sr-only">
                         {selectedDetail?.type} Details
                     </DialogTitle>
                     {selectedDetail?.type === 'order' && (
-                        <div className="flex flex-col">
-                            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-8 text-white relative overflow-hidden">
-                                <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
-                                <div className="absolute top-4 right-4 bg-white/10 backdrop-blur-md rounded-full px-3 py-1 flex items-center gap-2 border border-white/20 z-10">
-                                    <div className="h-2 w-2 rounded-full bg-green-400 animate-pulse" />
-                                    <span className="text-[10px] font-bold uppercase tracking-widest">{selectedDetail.data.status}</span>
+                        <div className="flex flex-col bg-white">
+                            {/* Premium Header */}
+                            <div className="flex flex-col gap-1 p-6 pb-2">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                                            Order #{selectedDetail.data.bill_id}
+                                            <Badge className={cn(
+                                                "ml-2 text-[10px] px-2 py-0.5 uppercase tracking-wide border-0",
+                                                selectedDetail.data.status === 'completed' ? "bg-green-100 text-green-700 hover:bg-green-200" :
+                                                    selectedDetail.data.status === 'pending' ? "bg-yellow-100 text-yellow-700 hover:bg-yellow-200" :
+                                                        "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                                            )}>
+                                                {selectedDetail.data.status}
+                                            </Badge>
+                                        </h2>
+                                        <p className="text-sm text-gray-500 font-medium mt-1 flex items-center gap-2">
+                                            <Clock className="h-3.5 w-3.5" />
+                                            {new Date(selectedDetail.data.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                                        </p>
+                                    </div>
                                 </div>
-                                <ShoppingBag className="h-12 w-12 mb-4 opacity-70 relative z-10" />
-                                <h2 className="text-3xl font-black tracking-tight relative z-10">{selectedDetail.data.bill_id}</h2>
-                                <p className="text-blue-100/90 font-medium flex items-center gap-2 mt-1 relative z-10">
-                                    <Clock className="h-3 w-3" />
-                                    {new Date(selectedDetail.data.created_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
-                                </p>
                             </div>
 
-                            <div className="p-8 space-y-8 bg-white">
-                                <div className="grid grid-cols-2 gap-8">
+                            <div className="px-6 py-2">
+                                <div className="h-px bg-gray-100 w-full" />
+                            </div>
+
+                            {/* Info Grid */}
+                            <div className="grid grid-cols-2 gap-6 p-6 pt-2">
+                                <div className="space-y-3">
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                                        <UsersIcon className="h-3.5 w-3.5" /> Customer
+                                    </p>
+                                    <div>
+                                        <p className="font-semibold text-gray-900 text-base">{selectedDetail.data.customers?.name || 'Walk-in Customer'}</p>
+                                        <p className="text-sm text-gray-500 font-medium">{selectedDetail.data.customers?.phone || 'No Phone'}</p>
+                                    </div>
+                                    {(selectedDetail.data.delivery_address || selectedDetail.data.customers?.address) && (
+                                        <p className="text-xs text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-100 leading-relaxed">
+                                            {selectedDetail.data.delivery_address || selectedDetail.data.customers?.address}
+                                        </p>
+                                    )}
+                                </div>
+                                <div className="space-y-3">
+                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                                        <UtensilsCrossed className="h-3.5 w-3.5" /> Order Info
+                                    </p>
                                     <div className="space-y-1">
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Customer Name</p>
-                                        <p className="text-lg font-bold text-gray-900">{selectedDetail.data.customers?.name || 'Walk-in'}</p>
-                                        <div className="flex items-center gap-2 text-gray-500">
-                                            <div className="p-1.5 bg-gray-100 rounded-full">
-                                                <UsersIcon className="h-3 w-3" />
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-500 font-medium">Type:</span>
+                                            <span className="font-semibold text-gray-900 capitalize">{selectedDetail.data.order_type?.replace('_', ' ') || 'Dine In'}</span>
+                                        </div>
+                                        {selectedDetail.data.restaurant_tables && (
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-gray-500 font-medium">Table No:</span>
+                                                <span className="font-semibold text-gray-900">#{selectedDetail.data.restaurant_tables.table_number}</span>
                                             </div>
-                                            <span className="text-xs font-semibold">{selectedDetail.data.customers?.phone || 'No phone'}</span>
+                                        )}
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-500 font-medium">Payment:</span>
+                                            <span className={cn("font-semibold capitalize", selectedDetail.data.payment_status === 'paid' ? "text-green-600" : "text-orange-600")}>
+                                                {selectedDetail.data.payment_status || 'Pending'}
+                                            </span>
                                         </div>
                                     </div>
-                                    <div className="space-y-1">
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Order Value</p>
-                                        <p className="text-3xl font-black text-green-600">₹{selectedDetail.data.total.toFixed(2)}</p>
-                                        <p className="text-[10px] font-bold text-gray-400">Incl. all taxes & charges</p>
-                                    </div>
                                 </div>
+                            </div>
 
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">Items Summary</p>
-                                        <Badge variant="outline" className="text-[10px] font-bold border-gray-200 bg-gray-50 text-gray-600">
-                                            {selectedDetail.data.order_items?.length || 0} ITEMS
-                                        </Badge>
+                            {/* Items Table */}
+                            <div className="px-6 pb-6 space-y-4">
+                                <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                                    <div className="grid grid-cols-12 bg-gray-50 border-b border-gray-200 p-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                                        <div className="col-span-6 pl-2">Item</div>
+                                        <div className="col-span-2 text-center">Qty</div>
+                                        <div className="col-span-4 text-right pr-2">Total</div>
                                     </div>
-                                    <div className="bg-gray-50/50 rounded-2xl border border-gray-100 p-4 space-y-3 shadow-sm">
+                                    <div className="divide-y divide-gray-100 max-h-[250px] overflow-y-auto custom-scrollbar">
                                         {selectedDetail.data.order_items?.map((item: any) => (
-                                            <div key={item.id} className="flex justify-between items-center bg-white p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="flex items-center justify-center h-6 w-6 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black">
-                                                        {item.quantity}
-                                                    </span>
-                                                    <span className="font-bold text-gray-900 text-sm">{item.item_name}</span>
+                                            <div key={item.id} className="grid grid-cols-12 p-3 items-center hover:bg-gray-50/50 transition-colors">
+                                                <div className="col-span-6 pl-2">
+                                                    <p className="text-sm font-semibold text-gray-800">{item.item_name}</p>
+                                                    <p className="text-[10px] text-gray-400 font-medium">₹{(item.total / item.quantity).toFixed(0)} each</p>
                                                 </div>
-                                                <span className="font-extrabold text-gray-900 text-sm">₹{item.total.toFixed(2)}</span>
+                                                <div className="col-span-2 flex justify-center">
+                                                    <div className="h-6 w-6 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-bold">
+                                                        {item.quantity}
+                                                    </div>
+                                                </div>
+                                                <div className="col-span-4 text-right pr-2">
+                                                    <p className="text-sm font-bold text-gray-900">₹{item.total.toFixed(2)}</p>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
+                                    {/* Summary */}
+                                    <div className="bg-gray-50 p-4 border-t border-gray-200">
+                                        <div className="flex justify-between items-center text-sm mb-1">
+                                            <span className="text-gray-500 font-medium">Subtotal</span>
+                                            <span className="font-semibold text-gray-900">₹{selectedDetail.data.total.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center pt-3 border-t border-gray-200 mt-2">
+                                            <span className="text-base font-bold text-gray-900">Grand Total</span>
+                                            <span className="text-2xl font-black text-gray-900">₹{selectedDetail.data.total.toFixed(2)}</span>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <div className="pt-4 flex gap-4">
-                                    <Button
-                                        className="flex-1 h-12 rounded-2xl bg-green-600 hover:bg-green-700 shadow-lg shadow-green-500/20 text-white font-bold transition-all active:scale-95 flex items-center gap-2"
-                                        onClick={() => handlePaymentClose('cash')}
-                                    >
-                                        <DollarSign className="h-4 w-4" />
-                                        Cash Paid
-                                    </Button>
-                                    <Button
-                                        className="flex-1 h-12 rounded-2xl bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/20 text-white font-bold transition-all active:scale-95 flex items-center gap-2"
-                                        onClick={() => handlePaymentClose('upi')}
-                                    >
-                                        <Smartphone className="h-4 w-4" />
-                                        Online Paid
-                                    </Button>
-                                    <Button variant="outline" className="px-6 h-12 rounded-2xl border-gray-200 font-bold hover:bg-gray-50 transition-all active:scale-95 text-gray-600" onClick={() => setSelectedDetail(null)}>Close</Button>
+                                {/* Actions Footer */}
+                                <div className="pt-2">
+                                    {selectedDetail.data.status !== 'completed' && selectedDetail.data.payment_status !== 'paid' ? (
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <Button
+                                                className="h-11 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm"
+                                                onClick={() => handlePaymentClose('cash')}
+                                            >
+                                                <DollarSign className="mr-2 h-4 w-4" /> Collect Cash
+                                            </Button>
+                                            <Button
+                                                className="h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm"
+                                                onClick={() => handlePaymentClose('upi')}
+                                            >
+                                                <Smartphone className="mr-2 h-4 w-4" /> Collect UPI
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div className="w-full h-11 bg-green-50 border border-green-200 text-green-700 rounded-xl flex items-center justify-center font-bold text-sm gap-2">
+                                            <Star className="h-5 w-5 text-green-600" />
+                                            Payment Completed via {selectedDetail.data.payment_method?.toUpperCase()}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

@@ -271,41 +271,54 @@ export default function AdminDashboard() {
 
             if (error) throw error
 
-            // Trigger n8n Webhook
+            // Trigger n8n Webhook for Payment Confirmation
             try {
-                const webhookPayload = {
-                    bill_id: billId,
-                    amount: total,
-                    customer: {
-                        name: customerName,
-                        phone: phone || 'N/A',
-                        address: selectedOrder.delivery_address || selectedOrder.customers?.address
-                    },
-                    order_type: selectedOrder.order_type,
-                    table_number: selectedOrder.restaurant_tables?.table_number,
-                    items: selectedOrder.order_items?.map((i: any) => ({
-                        name: i.item_name,
-                        quantity: i.quantity,
-                        price: i.price || (i.total / i.quantity),
-                        total: i.total
-                    })),
-                    payment_method: method,
-                    restaurant_id: RESTAURANT_ID,
-                    timestamp: new Date().toISOString(),
-                    source: 'admin_dashboard_home'
-                }
+                console.log('🚀 [DASHBOARD HOME] Sending Webhook to n8n...', { method, bill_id: billId })
 
-                fetch('https://n8n.srv1114630.hstgr.cloud/webhook/payment-confirmation', {
+                const webhookResponse = await fetch('https://n8n.srv1114630.hstgr.cloud/webhook/payment-confirmation', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(webhookPayload)
-                }).catch(err => console.error('Webhook trigger failed', err))
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        bill_id: billId,
+                        amount: total,
+                        customer: {
+                            name: customerName,
+                            phone: phone || 'N/A',
+                            address: selectedOrder.delivery_address || selectedOrder.customers?.address
+                        },
+                        order_type: selectedOrder.order_type,
+                        table_number: selectedOrder.restaurant_tables?.table_number,
+                        items: selectedOrder.order_items?.map((i: any) => ({
+                            name: i.item_name,
+                            quantity: i.quantity,
+                            price: i.price || (i.total / i.quantity),
+                            total: i.total
+                        })),
+                        payment_method: method,
+                        payment_status: 'paid',
+                        restaurant_id: RESTAURANT_ID,
+                        updated_at: new Date().toISOString(),
+                        source: 'admin_dashboard_home',
+                        trigger_type: 'payment_marked_manually'
+                    })
+                })
 
-            } catch (err) {
-                console.error('Webhook error', err)
+                if (!webhookResponse.ok) {
+                    const errorText = await webhookResponse.text()
+                    console.error('❌ [DASHBOARD HOME] Webhook Failed:', webhookResponse.status, errorText)
+                    toast.error(`Webhook Failed: ${webhookResponse.status}`)
+                } else {
+                    console.log('✅ [DASHBOARD HOME] Webhook Delivered Successfully')
+                }
+            } catch (webhookError) {
+                console.error('❌ [DASHBOARD HOME] Failed to trigger webhook:', webhookError)
+                toast.error('Webhook Error (Check Console)')
             }
 
-            toast.success(`Order marked as paid via ${method.toUpperCase()}`)
+            toast.success(`Payment marked as ${method.toUpperCase()} & Message Sent 🚀`)
             setIsDetailsOpen(false)
             fetchDashboardData(range) // Refresh data
         } catch (error) {

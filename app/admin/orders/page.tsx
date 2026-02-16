@@ -87,7 +87,7 @@ export default function OrdersPage() {
 
         if (activeTab === 'active') {
             filtered = filtered.filter((o) =>
-                ['pending', 'confirmed', 'preparing', 'ready'].includes(o.status)
+                ['pending', 'confirmed', 'preparing', 'ready', 'served'].includes(o.status)
             )
         } else if (activeTab === 'completed') {
             filtered = filtered.filter((o) => o.status === 'completed')

@@ -211,33 +211,32 @@ export default function TablesPage() {
             // But let's try standard fetch first as n8n webhooks usually allow it or user might have configured it.
             // Update: User specifically asked to "run" it.
 
+            console.log('🔗 [WEBHOOK] Targeting URL:', 'https://n8n.srv1114630.hstgr.cloud/webhook/payment-confirmation')
+            console.log('📤 [WEBHOOK] Payload:', payload)
+
             const response = await fetch('https://n8n.srv1114630.hstgr.cloud/webhook/payment-confirmation', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(payload)
+            }).catch(fetchErr => {
+                console.error('❌ [WEBHOOK] Fetch failed directly (likely CORS or Network):', fetchErr)
+                throw new Error('Network error or CORS block. Check if n8n allows browser requests.')
             })
 
             if (!response.ok) {
-                // Even if it fails (e.g. 404), we notify.
-                // Note: CORS might block reading details, but let's assume it works or fails visible.
-                throw new Error(`Status: ${response.status}`)
+                console.error('❌ [WEBHOOK] Server returned error:', response.status, response.statusText)
+                throw new Error(`n8n Error: ${response.status}. Make sure the workflow is ACTIVE.`)
             }
 
             toast.dismiss(toastId)
-            toast.success(`Webhook fired for Table ${table.table_number}`)
-        } catch (error) {
-            console.error('Webhook trigger error:', error)
-            toast.dismiss()
-            // If it's a CORS error, the request might still have gone through (opaque), 
-            // but browsers block access to response. 
-            // We'll show a generic success/warning message if it looks like a network restriction 
-            // but for now let's show success because usually n8n webhooks accept the data.
-            // Actually, safe to say "Request Sent"
-            toast.message('Webhook Request Sent', {
-                description: 'Check your n8n execution log.'
-            })
+            toast.success(`Webhook fired! Check n8n Executions.`)
+        } catch (error: any) {
+            console.error('❌ [WEBHOOK] Final Error:', error)
+            toast.error(`Webhook Failed: ${error.message}`)
+        } finally {
+            setLoading(false)
         }
     }
 

@@ -181,6 +181,11 @@ export default function MenuPage() {
                 is_infinite_stock: itemForm.is_infinite_stock,
             }
 
+            // Auto-enable availability if stock is added or infinite stock is enabled
+            if (itemForm.is_infinite_stock || (parseInt(itemForm.stock.toString()) || 0) > 0) {
+                itemData.is_available = true
+            }
+
             let error = null
 
             if (editingItem) {
