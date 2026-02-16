@@ -3,12 +3,21 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
 // Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const supabase = createClient(supabaseUrl, supabaseServiceKey)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+
+// Only create client if keys are available (for build time safety)
+const supabase = supabaseUrl && supabaseServiceKey
+    ? createClient(supabaseUrl, supabaseServiceKey)
+    : null
 
 export async function POST(request: Request) {
     try {
+        // Check if Supabase client is initialized
+        if (!supabase) {
+            return NextResponse.json({ error: 'Supabase not configured' }, { status: 500 })
+        }
+
         const { orderId, items } = await request.json()
 
         if (!orderId || !items || !Array.isArray(items)) {
