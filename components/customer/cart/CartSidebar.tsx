@@ -64,15 +64,24 @@ export function CartSidebar() {
     const handleApplyCoupon = async () => {
         if (!couponCode.trim()) return
 
+        // Check if already used
+        if (useCartStore.getState().isCouponUsed(couponCode)) {
+            toast.error('This coupon has already been used', {
+                description: 'Each coupon can only be used once per customer.'
+            })
+            setCouponCode('')
+            return
+        }
+
         setVerifying(true)
-        const result = await validateCoupon(couponCode, subtotal)
+        const result = await validateCoupon(couponCode, useCartStore.getState().getSubtotal())
         setVerifying(false)
 
         if (result.error) {
             toast.error(result.error)
         } else if (result.coupon) {
-            applyCoupon(result.coupon)
-            toast.success('Coupon applied!')
+            useCartStore.getState().applyCoupon(result.coupon)
+            toast.success(`Coupon ${result.coupon.code} applied!`)
             setCouponCode('')
         }
     }
@@ -205,127 +214,8 @@ export function CartSidebar() {
                                         <span>₹{subtotal.toFixed(2)}</span>
                                     </div>
 
-                                    {/* Coupon Section */}
-                                    {coupon ? (
-                                        <div className="flex items-center justify-between p-2 bg-green-50 rounded-lg border border-green-100 text-sm">
-                                            <div className="flex items-center gap-2 text-green-700 font-bold">
-                                                <Ticket className="w-4 h-4" />
-                                                <span>{coupon.code}</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-green-600 font-bold">-₹{discount.toFixed(2)}</span>
-                                                <button onClick={removeCoupon} className="text-red-400 hover:text-red-500">
-                                                    <X className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-2">
-                                            <div className="flex items-center justify-between">
-                                                <span className="text-xs font-bold text-muted-foreground">Have a coupon?</span>
-                                                <Sheet>
-                                                    <SheetTrigger asChild>
-                                                        <Button
-                                                            variant="link"
-                                                            className="text-orange-600 font-bold h-auto p-0 text-xs"
-                                                            onClick={async () => {
-                                                                const rid = process.env.NEXT_PUBLIC_RESTAURANT_ID
-                                                                if (rid) {
-                                                                    const deals = await getAvailableCoupons(rid)
-                                                                    setAvailableCoupons(deals)
-                                                                }
-                                                            }}
-                                                        >
-                                                            View Offers
-                                                        </Button>
-                                                    </SheetTrigger>
-                                                    <SheetContent side="bottom" className="h-[80vh] rounded-t-3xl pt-6 px-0 overflow-hidden flex flex-col z-[100]">
-                                                        <SheetHeader className="px-6 pb-4 border-b">
-                                                            <SheetTitle className="text-left text-xl">Available Offers</SheetTitle>
-                                                            <SheetDescription className="text-left">
-                                                                Tap to apply an offer to your cart
-                                                            </SheetDescription>
-                                                        </SheetHeader>
-                                                        <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50">
-                                                            {availableCoupons.length === 0 ? (
-                                                                <div className="text-center py-10 text-muted-foreground flex flex-col items-center gap-4">
-                                                                    <div className="bg-white p-4 rounded-full shadow-sm">
-                                                                        <Ticket className="h-8 w-8 text-neutral-300" />
-                                                                    </div>
-                                                                    <p>No active offers available right now.</p>
-                                                                </div>
-                                                            ) : (
-                                                                availableCoupons.map((deal) => (
-                                                                    <div
-                                                                        key={deal.id}
-                                                                        className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group active:scale-[0.98] transition-all cursor-pointer"
-                                                                        onClick={() => {
-                                                                            useCartStore.getState().applyCoupon(deal)
-                                                                            toast.success('Coupon Applied!', {
-                                                                                description: `${deal.code} has been applied.`
-                                                                            })
-                                                                        }}
-                                                                    >
-                                                                        <div className="flex gap-4 relative z-0">
-                                                                            <div className="w-20 flex flex-col items-center justify-center border-r border-dashed border-slate-200 pr-4">
-                                                                                <div className="h-10 w-10 bg-orange-100 rounded-lg flex items-center justify-center mb-1">
-                                                                                    <Percent className="h-5 w-5 text-orange-600" />
-                                                                                </div>
-                                                                                <span className="text-[10px] font-bold text-slate-400 uppercase">
-                                                                                    {deal.discount_type === 'percentage' ? `${deal.discount_value}%` : `₹${deal.discount_value}`}
-                                                                                </span>
-                                                                            </div>
-                                                                            <div className="flex-1 py-1">
-                                                                                <div className="flex justify-between items-start mb-1">
-                                                                                    <span className="font-black text-lg text-slate-800 uppercase tracking-wide bg-slate-100 px-2 py-0.5 rounded border border-slate-200/50">
-                                                                                        {deal.code}
-                                                                                    </span>
-                                                                                    {deal.max_discount && (
-                                                                                        <span className="text-[10px] bg-green-50 text-green-700 px-2 py-0.5 rounded-full font-bold border border-green-100">
-                                                                                            Max ₹{deal.max_discount}
-                                                                                        </span>
-                                                                                    )}
-                                                                                </div>
-                                                                                <p className="text-xs text-slate-500 font-medium line-clamp-2 mb-2">
-                                                                                    {deal.description || 'Special discount for you!'}
-                                                                                </p>
-                                                                                <div className="flex items-center justify-between mt-2">
-                                                                                    <p className="text-[10px] text-slate-400 font-semibold bg-slate-50 inline-block px-1.5 py-0.5 rounded">
-                                                                                        Valid until {format(new Date(deal.valid_until), 'MMM dd')}
-                                                                                    </p>
-                                                                                    <Button size="sm" variant="ghost" className="h-7 text-xs font-bold text-orange-600 hover:text-orange-700 hover:bg-orange-50 px-0 gap-1">
-                                                                                        APPLY
-                                                                                    </Button>
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                ))
-                                                            )}
-                                                        </div>
-                                                    </SheetContent>
-                                                </Sheet>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <Input
-                                                    placeholder="Promo Code"
-                                                    value={couponCode}
-                                                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                                                    className="h-9 text-sm uppercase placeholder:normal-case font-medium"
-                                                    onKeyDown={(e) => e.key === 'Enter' && handleApplyCoupon()}
-                                                />
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={handleApplyCoupon}
-                                                    disabled={!couponCode || verifying}
-                                                    className="h-9 px-3 font-bold text-primary border-primary/20 hover:bg-primary/5"
-                                                >
-                                                    {verifying ? '...' : 'APPLY'}
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    )}
+
+                                    {/* Coupon section removed as per user request */}
 
                                     <div className="flex justify-between text-muted-foreground font-medium">
                                         <span>Tax (5%)</span>

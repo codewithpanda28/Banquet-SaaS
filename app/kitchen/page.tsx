@@ -11,19 +11,22 @@ export default function KitchenPage() {
     const selectedOrder = useKitchenStore((state) => state.selectedOrder)
     const setSelectedOrder = useKitchenStore((state) => state.setSelectedOrder)
 
-    // Computed data
+    // Computed data - Only show active orders (not served/completed/cancelled)
     const newOrders = orders.filter(o =>
         (o.status === 'pending' || o.status === 'confirmed') &&
+        !['served', 'completed', 'cancelled'].includes(o.status) &&
         (orderTypeFilter === 'all' || o.order_type === orderTypeFilter)
     )
 
     const preparingOrders = orders.filter(o =>
         o.status === 'preparing' &&
+        !['served', 'completed', 'cancelled'].includes(o.status) &&
         (orderTypeFilter === 'all' || o.order_type === orderTypeFilter)
     )
 
     const readyOrders = orders.filter(o =>
         o.status === 'ready' &&
+        !['served', 'completed', 'cancelled'].includes(o.status) &&
         (orderTypeFilter === 'all' || o.order_type === orderTypeFilter)
     )
 

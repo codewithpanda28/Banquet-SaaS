@@ -22,6 +22,7 @@ export interface OrderItem {
     total: number;
     special_instructions?: string;
     status: ItemStatus;
+    created_at?: string; // For NEW badge detection
     menu_item?: {
         is_veg: boolean;
     };

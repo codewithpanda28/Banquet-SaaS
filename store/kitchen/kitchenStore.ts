@@ -51,10 +51,10 @@ export const useKitchenStore = create<KitchenStore>((set, get) => ({
     isConnected: true,
     lastUpdated: null,
 
-    setOrders: (orders) => set({ orders: orders.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()), lastUpdated: new Date() }),
+    setOrders: (orders) => set({ orders: orders.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()), lastUpdated: new Date() }),
 
     addOrder: (order) => set((state) => ({
-        orders: [...state.orders, order].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+        orders: [...state.orders, order].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
         lastUpdated: new Date()
     })),
 

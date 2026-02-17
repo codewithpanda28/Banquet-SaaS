@@ -37,18 +37,10 @@ export function Header() {
 
     const [playNotification] = useSound('/sounds/notification.mp3')
 
-    // Performance optimized scroll handler
+    // Mount detection only - no scroll shrinking
     useEffect(() => {
         setMounted(true)
-        const handleScroll = () => {
-            const currentScroll = window.scrollY > 15
-            if (currentScroll !== scrolled) {
-                setScrolled(currentScroll)
-            }
-        }
-        window.addEventListener('scroll', handleScroll, { passive: true })
-        return () => window.removeEventListener('scroll', handleScroll)
-    }, [scrolled])
+    }, [])
 
     // Sound notification trigger
     useEffect(() => {
@@ -77,12 +69,7 @@ export function Header() {
 
     return (
         <header
-            className={cn(
-                "sticky top-0 left-0 right-0 z-50 transition-all duration-300 ease-out px-4 will-change-[padding,background-color]",
-                scrolled
-                    ? "py-2 bg-white/80 backdrop-blur-2xl border-b border-gray-100 shadow-sm"
-                    : "py-4 bg-white"
-            )}
+            className="sticky top-0 left-0 right-0 z-50 transition-all duration-300 ease-out px-4 py-1 bg-white border-b border-gray-100 shadow-sm will-change-transform"
         >
             <div className="max-w-6xl mx-auto flex items-center justify-between">
                 {/* Logo & Brand Group */}
@@ -91,10 +78,7 @@ export function Header() {
                     onClick={() => router.push('/customer/menu')}
                 >
                     <div className="relative">
-                        <Avatar className={cn(
-                            "ring-2 ring-white shadow-xl transition-all duration-300 ease-out",
-                            scrolled ? "h-9 w-9" : "h-11 w-11"
-                        )}>
+                        <Avatar className="h-8 w-8 ring-2 ring-white shadow-xl transition-all duration-300 ease-out">
                             <AvatarImage src={restaurant.logo_url || undefined} className="object-cover" />
                             <AvatarFallback className="bg-gradient-to-br from-orange-400 to-rose-600 text-white font-black text-lg">
                                 {restaurant.name.charAt(0)}
@@ -104,16 +88,10 @@ export function Header() {
                     </div>
 
                     <div className="flex flex-col">
-                        <h1 className={cn(
-                            "font-black tracking-tight text-slate-950 transition-all duration-300 ease-out leading-none",
-                            scrolled ? "text-sm" : "text-base sm:text-lg"
-                        )}>
+                        <h1 className="font-black tracking-tight text-slate-950 transition-all duration-300 ease-out leading-none text-sm sm:text-base">
                             {restaurant.name}
                         </h1>
-                        <div className={cn(
-                            "flex items-center gap-1 transition-all duration-300",
-                            scrolled ? "opacity-0 h-0 overflow-hidden" : "opacity-100 h-auto mt-1"
-                        )}>
+                        <div className="flex items-center gap-1 transition-all duration-300 opacity-100 h-auto mt-1">
                             <Flame className="w-3 h-3 text-orange-500 fill-orange-500" />
                             <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-orange-600/90 whitespace-nowrap">
                                 Tasty & Healthy
@@ -169,7 +147,7 @@ export function Header() {
                                     )}
                                 </Button>
                             </PopoverTrigger>
-                            <PopoverContent align="end" className="w-[340px] p-0 rounded-[28px] overflow-hidden shadow-2xl border-white/20 bg-white/95 backdrop-blur-2xl animate-in fade-in slide-in-from-top-4 duration-300">
+                            <PopoverContent align="center" style={{ width: '300px', maxWidth: '90vw' }} className="p-0 rounded-[28px] overflow-hidden shadow-2xl border-white/20 bg-white/95 backdrop-blur-2xl animate-in fade-in slide-in-from-top-4 duration-300">
                                 <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-slate-50/50">
                                     <h4 className="font-black text-sm tracking-tight text-slate-900">Notifications</h4>
                                     {notifications.length > 0 && (

@@ -120,6 +120,7 @@ export interface OrderItem {
     total: number;
     special_instructions: string | null;
     status: 'pending' | 'preparing' | 'ready';
+    created_at?: string; // For NEW badge detection
     menu_items?: MenuItem;
 }
 

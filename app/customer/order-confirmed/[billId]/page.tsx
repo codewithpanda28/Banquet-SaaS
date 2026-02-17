@@ -76,7 +76,7 @@ export default function OrderConfirmedPage() {
                 <Button
                     variant="outline"
                     className="w-full h-12 rounded-xl text-green-700 border-green-200 hover:bg-green-50"
-                    onClick={() => router.push('/menu')}
+                    onClick={() => router.push('/customer/menu')}
                 >
                     Home <ShoppingBag className="ml-2 w-4 h-4" />
                 </Button>

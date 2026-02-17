@@ -18,7 +18,19 @@ export default function OrderTimer({ createdAt }: OrderTimerProps) {
     useEffect(() => {
         const updateTimer = () => {
             const now = new Date()
-            const start = new Date(createdAt.endsWith('Z') ? createdAt : createdAt + 'Z')
+
+            // Database returns UTC timestamps (e.g., "2026-02-17T13:51:00")
+            // We need to ensure it's parsed as UTC, not local time
+            let start: Date
+            if (createdAt.includes('Z') || createdAt.includes('+')) {
+                // Already has timezone info
+                start = new Date(createdAt)
+            } else {
+                // No timezone suffix - treat as UTC by adding 'Z'
+                start = new Date(createdAt + 'Z')
+            }
+
+            // Calculate difference in milliseconds
             const diff = Math.max(0, now.getTime() - start.getTime())
 
             const hours = Math.floor(diff / (1000 * 60 * 60))
@@ -39,8 +51,14 @@ export default function OrderTimer({ createdAt }: OrderTimerProps) {
     if (totalMinutes >= threshold / 2) colorClass = "text-amber-700 bg-amber-50 border-amber-300"
     if (totalMinutes >= threshold) colorClass = "text-red-700 bg-red-50 border-red-300 animate-pulse font-bold"
 
-    // Format order time
-    const orderTime = format(new Date(createdAt.endsWith('Z') ? createdAt : createdAt + 'Z'), 'h:mm a')
+    // Format order time - parse as UTC and convert to local for display
+    let orderTimeDate: Date
+    if (createdAt.includes('Z') || createdAt.includes('+')) {
+        orderTimeDate = new Date(createdAt)
+    } else {
+        orderTimeDate = new Date(createdAt + 'Z')
+    }
+    const orderTime = format(orderTimeDate, 'h:mm a')
 
     return (
         <div className="flex flex-col items-end gap-1">

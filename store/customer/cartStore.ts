@@ -13,6 +13,7 @@ interface CartState {
     customerPhone: string
     deliveryAddress: string
     coupon: Coupon | null
+    usedCoupons: string[]  // Track coupon codes already used by this customer
 
     addItem: (item: MenuItem, quantity: number, instructions: string) => void
     removeItem: (cartId: string) => void
@@ -25,6 +26,7 @@ interface CartState {
     applyCoupon: (coupon: Coupon) => void
     removeCoupon: () => void
     clearCart: () => void
+    isCouponUsed: (code: string) => boolean
 
     getSubtotal: () => number
     getTax: () => number
@@ -48,6 +50,7 @@ export const useCartStore = create<CartState>()(
             customerPhone: '',
             deliveryAddress: '',
             coupon: null,
+            usedCoupons: [],
 
             addItem: (item, quantity, instructions) => {
                 const { items } = get()
@@ -96,10 +99,26 @@ export const useCartStore = create<CartState>()(
                 set({ customerName: name, customerPhone: phone, deliveryAddress: address }),
             setSpecialInstructions: (text) => set({ specialInstructions: text }),
 
-            applyCoupon: (coupon) => set({ coupon }),
+            applyCoupon: (coupon) => {
+                const { usedCoupons } = get()
+                // Check if this coupon code was already used
+                if (usedCoupons.includes(coupon.code)) {
+                    return // Silently reject - UI should check isCouponUsed first
+                }
+                // Mark coupon as used and apply it
+                set({
+                    coupon,
+                    usedCoupons: [...usedCoupons, coupon.code]
+                })
+            },
             removeCoupon: () => set({ coupon: null }),
 
+            // Keep usedCoupons persistent - don't clear on cart reset
             clearCart: () => set({ items: [], specialInstructions: '', coupon: null }),
+
+            isCouponUsed: (code) => {
+                return get().usedCoupons.includes(code)
+            },
 
             getSubtotal: () => {
                 return get().items.reduce((sum, item) => sum + item.lineTotal, 0)

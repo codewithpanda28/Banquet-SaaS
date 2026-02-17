@@ -49,9 +49,14 @@ export function useRealtime() {
         }
         fetchOrders()
 
-        // Setup realtime subscription
+        // Setup realtime subscription with aggressive settings
         const channel = supabase
-            .channel('kitchen-orders-realtime')
+            .channel('kitchen-orders-realtime', {
+                config: {
+                    broadcast: { self: true },
+                    presence: { key: 'kitchen' }
+                }
+            })
             .on(
                 'postgres_changes',
                 {
@@ -60,7 +65,7 @@ export function useRealtime() {
                     table: 'orders',
                 },
                 async (payload: any) => {
-                    console.log('New order received:', payload)
+                    console.log('🔥 [REALTIME] New order received:', payload)
                     if (payload.new.restaurant_id !== RESTAURANT_ID) return
 
                     // Fetch the complete order with items
@@ -85,8 +90,15 @@ export function useRealtime() {
                     table: 'orders',
                 },
                 async (payload: any) => {
-                    console.log('Order updated:', payload)
+                    console.log('🔄 [REALTIME] Order updated:', payload)
                     if (payload.new.restaurant_id !== RESTAURANT_ID) return
+
+                    // Check if items were added (total increased or updated_at changed significantly)
+                    const oldTotal = payload.old?.total || 0
+                    const newTotal = payload.new?.total || 0
+                    const itemsAdded = newTotal > oldTotal
+
+                    console.log(`💰 [TOTAL CHECK] Old: ₹${oldTotal}, New: ₹${newTotal}, Items Added: ${itemsAdded}`)
 
                     // Fetch updated order with items
                     const orders = await getActiveOrders()
@@ -94,6 +106,16 @@ export function useRealtime() {
 
                     if (updatedOrder) {
                         updateOrder(payload.new.id, updatedOrder)
+
+                        // Notify kitchen staff when items are added to existing order
+                        if (itemsAdded) {
+                            console.log('🔔 [NOTIFICATION] Triggering notification for new items!')
+                            playNotificationSound()
+                            toast.info('➕ Items Added!', {
+                                description: `New items added to ${updatedOrder.bill_id}`,
+                                duration: 6000,
+                            })
+                        }
                     } else {
                         // Order moved to completed/cancelled, remove from active list
                         fetchOrders()
@@ -103,24 +125,82 @@ export function useRealtime() {
             .on(
                 'postgres_changes',
                 {
-                    event: '*',
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'order_items',
+                },
+                async (payload: any) => {
+                    console.log('📦 [REALTIME] New order item added:', payload)
+
+                    // Find the order this item belongs to
+                    const orderId = payload.new?.order_id
+                    if (!orderId) return
+
+                    // Refresh orders to get updated data
+                    const orders = await getActiveOrders()
+                    const order = orders.find(o => o.id === orderId)
+
+                    if (order) {
+                        // Check if this is adding to an existing order (not a brand new order)
+                        // If order already has multiple items or was created more than 30 seconds ago, it's adding to existing
+                        const orderCreatedStr = order.created_at
+                        const orderCreated = new Date(orderCreatedStr.includes('Z') || orderCreatedStr.includes('+') ? orderCreatedStr : orderCreatedStr + 'Z')
+                        const now = new Date()
+                        const secondsSinceCreated = (now.getTime() - orderCreated.getTime()) / 1000
+
+                        console.log(`⏰ [TIME CHECK] Order age: ${secondsSinceCreated.toFixed(0)}s, Threshold: 5s`)
+
+                        if (secondsSinceCreated > 5) {
+                            // This is adding items to an existing order
+                            console.log('🔔 [NOTIFICATION] Triggering notification for new items!')
+                            playNotificationSound()
+                            toast.info('➕ Items Added!', {
+                                description: `New items added to ${order.bill_id}`,
+                                duration: 6000,
+                            })
+                        } else {
+                            console.log(`⏭️ [SKIP] Order too new (${secondsSinceCreated.toFixed(0)}s), skipping notification`)
+                        }
+
+                        // Update the order in store
+                        updateOrder(orderId, order)
+                    }
+
+                    // Also refresh all orders
+                    fetchOrders()
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
                     schema: 'public',
                     table: 'order_items',
                 },
                 async () => {
-                    // Refresh orders when items are changed/added
+                    console.log('📦 [REALTIME] Order item updated')
+                    // Just refresh, no notification for updates
                     fetchOrders()
                 }
             )
-            .subscribe((status) => {
-                console.log('Realtime status:', status)
+            .subscribe((status, err) => {
+                console.log('📡 [REALTIME] Kitchen subscription status:', status)
+                if (err) console.error('❌ [REALTIME] Subscription error:', err)
                 setConnectionStatus(status === 'SUBSCRIBED')
+
+                if (status === 'SUBSCRIBED') {
+                    console.log('✅ [REALTIME] Kitchen dashboard is now LIVE!')
+                }
             })
 
-        // Polling as backup (every 30 seconds)
-        const interval = setInterval(fetchOrders, 30000)
+        // Aggressive polling as backup (every 5 seconds for instant updates)
+        const interval = setInterval(() => {
+            console.log('🔄 [POLLING] Refreshing kitchen orders...')
+            fetchOrders()
+        }, 5000)
 
         return () => {
+            console.log('🔌 [CLEANUP] Unsubscribing from kitchen realtime')
             channel.unsubscribe()
             clearInterval(interval)
         }

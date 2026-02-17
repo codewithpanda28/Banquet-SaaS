@@ -63,9 +63,11 @@ function MenuContent() {
             .limit(1)
             .maybeSingle()
 
-        if (data && (data.payment_status === 'paid' || data.status === 'completed' || data.status === 'cancelled')) {
-            // Previous session is done/paid. Start fresh.
-            console.log("Previous session paid/closed. Resetting cart.")
+        // ONLY reset if payment is completed (paid status)
+        // Don't reset just because order is served/completed - customer might order again
+        if (data && data.payment_status === 'paid') {
+            // Previous session is paid. Start fresh.
+            console.log("Previous session paid. Resetting cart.")
             clearCart()
             setOrderType(null)
             sessionStorage.removeItem('orderTypeConfirmed')

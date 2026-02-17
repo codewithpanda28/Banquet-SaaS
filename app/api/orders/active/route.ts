@@ -27,8 +27,8 @@ export async function GET(request: Request) {
             .from('orders')
             .select('id, bill_id, total, subtotal, status, payment_status, table_id, customer_id')
             .eq('restaurant_id', restaurantId)
-            .eq('payment_status', 'pending')
-            .neq('status', 'cancelled')
+            .eq('payment_status', 'pending')  // Only unpaid orders
+            .neq('status', 'cancelled')  // Exclude cancelled only
             .order('created_at', { ascending: false })
             .limit(1)
 

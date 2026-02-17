@@ -127,7 +127,38 @@ export function AdminHeader() {
     }, [])
 
     useEffect(() => {
-        // Subscribe to new orders
+        // Initial fetch for low stock items
+        const checkLowStock = async () => {
+            const { data: lowStockItems } = await supabase
+                .from('menu_items')
+                .select('id, name, stock')
+                .eq('restaurant_id', RESTAURANT_ID)
+                .eq('is_infinite_stock', false)
+                .lte('stock', 10)
+                .order('stock', { ascending: true })
+
+            if (lowStockItems && lowStockItems.length > 0) {
+                const newNotifications = lowStockItems.map(item => ({
+                    id: `low-stock-init-${item.id}`,
+                    title: 'Low Stock Alert',
+                    message: `${item.name} has low stock (${item.stock})`,
+                    time: 'Just now',
+                    isRead: false,
+                    type: 'alert'
+                }))
+
+                setNotifications(prev => {
+                    // Avoid duplicates
+                    const existingIds = new Set(prev.map(n => n.message))
+                    const filteredNew = newNotifications.filter(n => !existingIds.has(n.message))
+                    return [...filteredNew, ...prev]
+                })
+            }
+        }
+
+        checkLowStock()
+
+        // Subscribe to new orders and menu updates
         const channel = supabase
             .channel('admin-notifications')
             .on(
@@ -171,24 +202,36 @@ export function AdminHeader() {
                     const newItem = payload.new as any
                     if (newItem.restaurant_id !== RESTAURANT_ID) return
 
-                    // Only notify if it just dropped into "low stock" range and isn't infinite
-                    if (!newItem.is_infinite_stock && newItem.stock <= 10 && (payload.old as any).stock > 10) {
-                        toast.warning(`Low Stock Alert: ${newItem.name}`, {
-                            description: `Only ${newItem.stock} remaining!`,
-                            duration: 8000,
-                        })
+                    // Check if stock is low (changed from simple transition check to absolute check)
+                    if (!newItem.is_infinite_stock && newItem.stock <= 10) {
+                        // Removed the strict transition check to ensure updates are caught
+                        // But we should debounce strictly if we didn't use a store. 
+                        // For now, let's just add it and rely on the UI to show most recent.
 
-                        setNotifications(prev => [
-                            {
-                                id: `low-stock-${newItem.id}-${Date.now()}`,
-                                title: 'Low Stock Alert',
-                                message: `${newItem.name} has only ${newItem.stock} left`,
-                                time: 'Just now',
-                                isRead: false,
-                                type: 'alert'
-                            },
-                            ...prev
-                        ])
+                        setNotifications(prev => {
+                            // Check if we already have a recent notification for this item to avoid spam
+                            // (Simple check: is the top notification the same?)
+                            if (prev.length > 0 && prev[0].message.includes(newItem.name) && prev[0].message.includes(newItem.stock.toString())) {
+                                return prev
+                            }
+
+                            toast.warning(`Low Stock Alert: ${newItem.name}`, {
+                                description: `Only ${newItem.stock} remaining!`,
+                                duration: 5000,
+                            })
+
+                            return [
+                                {
+                                    id: `low-stock-${newItem.id}-${Date.now()}`,
+                                    title: 'Low Stock Alert',
+                                    message: `${newItem.name} has only ${newItem.stock} left`,
+                                    time: 'Just now',
+                                    isRead: false,
+                                    type: 'alert'
+                                },
+                                ...prev
+                            ]
+                        })
                     }
                 }
             )

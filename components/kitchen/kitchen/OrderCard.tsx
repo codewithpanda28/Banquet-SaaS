@@ -191,29 +191,38 @@ export default function OrderCard({ order, onViewDetails }: OrderCardProps) {
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-2">
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        className="flex-1 border-2 border-slate-200 text-slate-700 hover:bg-slate-100 font-semibold"
-                        onClick={(e) => {
-                            e.stopPropagation()
-                            onViewDetails()
-                        }}
-                    >
-                        <Eye className="mr-1.5 h-3.5 w-3.5" />
-                        View
-                    </Button>
+                    {order.status === 'served' || order.status === 'completed' ? (
+                        <div className="flex-1 h-9 bg-green-50 border-2 border-green-200 rounded-lg flex items-center justify-center gap-2 text-green-700 font-bold text-sm">
+                            <Check className="h-4 w-4" />
+                            Order Completed
+                        </div>
+                    ) : (
+                        <>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex-1 border-2 border-slate-200 text-slate-700 hover:bg-slate-100 font-semibold"
+                                onClick={(e) => {
+                                    e.stopPropagation()
+                                    onViewDetails()
+                                }}
+                            >
+                                <Eye className="mr-1.5 h-3.5 w-3.5" />
+                                View
+                            </Button>
 
-                    {order.status !== 'ready' && order.status !== 'served' && (
-                        <Button
-                            size="sm"
-                            className="flex-1 bg-gradient-to-r from-primary to-orange-500 font-semibold shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30"
-                            onClick={handleQuickAction}
-                        >
-                            {order.status === 'pending' && <Check className="mr-1.5 h-3.5 w-3.5" />}
-                            {order.status === 'preparing' && <ChefHat className="mr-1.5 h-3.5 w-3.5" />}
-                            {getActionLabel()}
-                        </Button>
+                            {order.status !== 'ready' && (
+                                <Button
+                                    size="sm"
+                                    className="flex-1 bg-gradient-to-r from-primary to-orange-500 font-semibold shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30"
+                                    onClick={handleQuickAction}
+                                >
+                                    {order.status === 'pending' && <Check className="mr-1.5 h-3.5 w-3.5" />}
+                                    {order.status === 'preparing' && <ChefHat className="mr-1.5 h-3.5 w-3.5" />}
+                                    {getActionLabel()}
+                                </Button>
+                            )}
+                        </>
                     )}
                 </div>
             </div>

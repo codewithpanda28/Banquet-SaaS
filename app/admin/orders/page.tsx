@@ -47,13 +47,48 @@ export default function OrdersPage() {
     useEffect(() => {
         fetchOrders()
 
-        // Realtime
-        // Realtime
-        const ch = supabase.channel('ord-rt')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchOrders(false))
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, () => fetchOrders(false))
-            .subscribe()
-        return () => { supabase.removeChannel(ch) }
+        // Realtime Subscription
+
+        const channel = supabase.channel('admin-orders-realtime')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'orders',
+                filter: `restaurant_id=eq.${RESTAURANT_ID}`
+            }, (payload) => {
+                console.log('Order change received:', payload)
+                if (payload.eventType === 'INSERT') {
+                    toast.success('New Order Received! 🔔')
+                    // Provide a slight delay to ensure triggering client has finished transaction if any
+                    setTimeout(() => fetchOrders(false), 1000)
+                } else {
+                    fetchOrders(false)
+                }
+            })
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'order_items'
+                // Note: order_items might not have restaurant_id directly on them depending on schema, usually they link to order_id
+                // So we listen to all, or rely on Order updates mostly. keeping it broad for safety but could add filter if schema supports it
+            }, () => {
+                fetchOrders(false)
+            })
+            .subscribe((status, err) => {
+                console.log('Admin Realtime Status:', status)
+                if (status === 'SUBSCRIBED') {
+                    toast.success('Live Updates Active 🟢', { id: 'realtime-status', duration: 2000 })
+                }
+                if (err) console.error('Subscription Error:', err)
+            })
+
+        // Polling fallback every 30s
+        const interval = setInterval(() => fetchOrders(false), 30000)
+
+        return () => {
+            supabase.removeChannel(channel)
+            clearInterval(interval)
+        }
     }, [])
 
     useEffect(() => {
@@ -466,12 +501,12 @@ export default function OrdersPage() {
 
             {/* Order Details Dialog */}
             <Dialog open={!!selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)}>
-                <DialogContent className="max-w-xl bg-background p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
+                <DialogContent className="max-w-xl max-h-[85vh] flex flex-col bg-background p-0 overflow-hidden border-none shadow-2xl rounded-3xl">
                     <DialogTitle className="sr-only">Order Details</DialogTitle>
                     {selectedOrder && (
-                        <div className="flex flex-col bg-white">
-                            {/* Premium Header */}
-                            <div className="flex flex-col gap-1 p-6 pb-2">
+                        <div className="flex flex-col flex-1 overflow-hidden bg-white">
+                            {/* Premium Header - Fixed */}
+                            <div className="flex flex-col gap-1 p-6 pb-2 shrink-0 bg-white z-10">
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
@@ -496,116 +531,120 @@ export default function OrdersPage() {
                                 </div>
                             </div>
 
-                            <div className="px-6 py-2">
+                            <div className="px-6 py-2 shrink-0">
                                 <div className="h-px bg-gray-100 w-full" />
                             </div>
 
-                            {/* Info Grid */}
-                            <div className="grid grid-cols-2 gap-6 p-6 pt-2">
-                                <div className="space-y-3">
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-                                        <Users className="h-3.5 w-3.5" /> Customer
-                                    </p>
-                                    <div>
-                                        <p className="font-semibold text-gray-900 text-base">{selectedOrder.customers?.name || 'Walk-in Customer'}</p>
-                                        <p className="text-sm text-gray-500 font-medium">{selectedOrder.customers?.phone || 'No Phone'}</p>
-                                    </div>
-                                    {(selectedOrder.delivery_address || selectedOrder.customers?.address) && (
-                                        <p className="text-xs text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-100 leading-relaxed">
-                                            {selectedOrder.delivery_address || selectedOrder.customers?.address}
+                            {/* Scrollable Content Body */}
+                            <div className="flex-1 overflow-y-auto px-6 pb-6 custom-scrollbar">
+                                {/* Info Grid */}
+                                <div className="grid grid-cols-2 gap-6 pb-6 pt-2">
+                                    <div className="space-y-3">
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                                            <Users className="h-3.5 w-3.5" /> Customer
                                         </p>
-                                    )}
-                                </div>
-                                <div className="space-y-3">
-                                    <p className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
-                                        <UtensilsCrossed className="h-3.5 w-3.5" /> Order Info
-                                    </p>
-                                    <div className="space-y-1">
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-gray-500 font-medium">Type:</span>
-                                            <span className="font-semibold text-gray-900 capitalize">{selectedOrder.order_type?.replace('_', ' ') || 'Dine In'}</span>
+                                        <div>
+                                            <p className="font-semibold text-gray-900 text-base">{selectedOrder.customers?.name || 'Walk-in Customer'}</p>
+                                            <p className="text-sm text-gray-500 font-medium">{selectedOrder.customers?.phone || 'No Phone'}</p>
                                         </div>
-                                        {selectedOrder.restaurant_tables && (
-                                            <div className="flex justify-between text-sm">
-                                                <span className="text-gray-500 font-medium">Table No:</span>
-                                                <span className="font-semibold text-gray-900">#{selectedOrder.restaurant_tables.table_number}</span>
-                                            </div>
+                                        {(selectedOrder.delivery_address || selectedOrder.customers?.address) && (
+                                            <p className="text-xs text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-100 leading-relaxed">
+                                                {selectedOrder.delivery_address || selectedOrder.customers?.address}
+                                            </p>
                                         )}
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-gray-500 font-medium">Payment:</span>
-                                            <span className={cn("font-semibold capitalize", selectedOrder.payment_status === 'paid' ? "text-green-600" : "text-orange-600")}>
-                                                {selectedOrder.payment_status || 'Pending'}
-                                            </span>
+                                    </div>
+                                    <div className="space-y-3">
+                                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                                            <UtensilsCrossed className="h-3.5 w-3.5" /> Order Info
+                                        </p>
+                                        <div className="space-y-1">
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-gray-500 font-medium">Type:</span>
+                                                <span className="font-semibold text-gray-900 capitalize">{selectedOrder.order_type?.replace('_', ' ') || 'Dine In'}</span>
+                                            </div>
+                                            {selectedOrder.restaurant_tables && (
+                                                <div className="flex justify-between text-sm">
+                                                    <span className="text-gray-500 font-medium">Table No:</span>
+                                                    <span className="font-semibold text-gray-900">#{selectedOrder.restaurant_tables.table_number}</span>
+                                                </div>
+                                            )}
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-gray-500 font-medium">Payment:</span>
+                                                <span className={cn("font-semibold capitalize", selectedOrder.payment_status === 'paid' ? "text-green-600" : "text-orange-600")}>
+                                                    {selectedOrder.payment_status || 'Pending'}
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            {/* Items Table */}
-                            <div className="px-6 pb-6 space-y-4">
-                                <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
-                                    <div className="grid grid-cols-12 bg-gray-50 border-b border-gray-200 p-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                                        <div className="col-span-6 pl-2">Item</div>
-                                        <div className="col-span-2 text-center">Qty</div>
-                                        <div className="col-span-4 text-right pr-2">Total</div>
-                                    </div>
-                                    <div className="divide-y divide-gray-100 max-h-[250px] overflow-y-auto custom-scrollbar">
-                                        {selectedOrder.order_items?.map((item: any) => (
-                                            <div key={item.id} className="grid grid-cols-12 p-3 items-center hover:bg-gray-50/50 transition-colors">
-                                                <div className="col-span-6 pl-2">
-                                                    <p className="text-sm font-semibold text-gray-800">{item.item_name}</p>
-                                                    <p className="text-[10px] text-gray-400 font-medium">₹{(item.total / item.quantity).toFixed(0)} each</p>
-                                                </div>
-                                                <div className="col-span-2 flex justify-center">
-                                                    <div className="h-6 w-6 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-bold">
-                                                        {item.quantity}
+                                {/* Items Table */}
+                                <div className="space-y-4">
+                                    <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
+                                        <div className="grid grid-cols-12 bg-gray-50 border-b border-gray-200 p-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50 z-10">
+                                            <div className="col-span-6 pl-2">Item</div>
+                                            <div className="col-span-2 text-center">Qty</div>
+                                            <div className="col-span-4 text-right pr-2">Total</div>
+                                        </div>
+                                        <div className="divide-y divide-gray-100">
+                                            {selectedOrder.order_items?.map((item: any) => (
+                                                <div key={item.id} className="grid grid-cols-12 p-3 items-center hover:bg-gray-50/50 transition-colors">
+                                                    <div className="col-span-6 pl-2">
+                                                        <p className="text-sm font-semibold text-gray-800">{item.item_name}</p>
+                                                        <p className="text-[10px] text-gray-400 font-medium">₹{(item.total / item.quantity).toFixed(0)} each</p>
+                                                    </div>
+                                                    <div className="col-span-2 flex justify-center">
+                                                        <div className="h-6 w-6 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-bold">
+                                                            {item.quantity}
+                                                        </div>
+                                                    </div>
+                                                    <div className="col-span-4 text-right pr-2">
+                                                        <p className="text-sm font-bold text-gray-900">₹{item.total.toFixed(2)}</p>
                                                     </div>
                                                 </div>
-                                                <div className="col-span-4 text-right pr-2">
-                                                    <p className="text-sm font-bold text-gray-900">₹{item.total.toFixed(2)}</p>
-                                                </div>
+                                            ))}
+                                        </div>
+                                        {/* Summary */}
+                                        <div className="bg-gray-50 p-4 border-t border-gray-200">
+                                            <div className="flex justify-between items-center text-sm mb-1">
+                                                <span className="text-gray-500 font-medium">Subtotal</span>
+                                                <span className="font-semibold text-gray-900">₹{selectedOrder.total.toFixed(2)}</span>
                                             </div>
-                                        ))}
-                                    </div>
-                                    {/* Summary */}
-                                    <div className="bg-gray-50 p-4 border-t border-gray-200">
-                                        <div className="flex justify-between items-center text-sm mb-1">
-                                            <span className="text-gray-500 font-medium">Subtotal</span>
-                                            <span className="font-semibold text-gray-900">₹{selectedOrder.total.toFixed(2)}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center pt-3 border-t border-gray-200 mt-2">
-                                            <span className="text-base font-bold text-gray-900">Grand Total</span>
-                                            <span className="text-2xl font-black text-gray-900">₹{selectedOrder.total.toFixed(2)}</span>
+                                            <div className="flex justify-between items-center pt-3 border-t border-gray-200 mt-2">
+                                                <span className="text-base font-bold text-gray-900">Grand Total</span>
+                                                <span className="text-2xl font-black text-gray-900">₹{selectedOrder.total.toFixed(2)}</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
+                                <div className="h-4" /> {/* Spacer */}
+                            </div>
 
-                                {/* Actions Footer */}
-                                <div className="pt-2">
-                                    {selectedOrder.status !== 'completed' && selectedOrder.payment_status !== 'paid' ? (
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <Button
-                                                className="h-11 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm"
-                                                onClick={() => handlePayment('cash')}
-                                                disabled={processingPayment}
-                                            >
-                                                <DollarSign className="mr-2 h-4 w-4" /> Collect Cash
-                                            </Button>
-                                            <Button
-                                                className="h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm"
-                                                onClick={() => handlePayment('upi')}
-                                                disabled={processingPayment}
-                                            >
-                                                <Smartphone className="mr-2 h-4 w-4" /> Collect UPI
-                                            </Button>
-                                        </div>
-                                    ) : (
-                                        <div className="w-full h-11 bg-green-50 border border-green-200 text-green-700 rounded-xl flex items-center justify-center font-bold text-sm gap-2">
-                                            <CheckCircle2 className="h-5 w-5 text-green-600" />
-                                            Payment Completed via {selectedOrder.payment_method?.toUpperCase()}
-                                        </div>
-                                    )}
-                                </div>
+                            {/* Actions Footer - Fixed */}
+                            <div className="p-6 pt-2 shrink-0 bg-white border-t border-gray-50 z-10">
+                                {selectedOrder.status !== 'completed' && selectedOrder.payment_status !== 'paid' ? (
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <Button
+                                            className="h-11 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm"
+                                            onClick={() => handlePayment('cash')}
+                                            disabled={processingPayment}
+                                        >
+                                            <DollarSign className="mr-2 h-4 w-4" /> Collect Cash
+                                        </Button>
+                                        <Button
+                                            className="h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm"
+                                            onClick={() => handlePayment('upi')}
+                                            disabled={processingPayment}
+                                        >
+                                            <Smartphone className="mr-2 h-4 w-4" /> Collect UPI
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <div className="w-full h-11 bg-green-50 border border-green-200 text-green-700 rounded-xl flex items-center justify-center font-bold text-sm gap-2">
+                                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                                        Payment Completed via {selectedOrder.payment_method?.toUpperCase()}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     )}
