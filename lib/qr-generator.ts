@@ -36,10 +36,13 @@ export async function generateQRDataURL(
 
 // Generate table QR code
 export async function generateTableQR(tableNumber: number): Promise<string> {
-  const baseUrl = process.env.NEXT_PUBLIC_CUSTOMER_URL || 'http://localhost:3001'
-  const menuUrl = `${baseUrl}/menu?table=${tableNumber}&type=dine_in`
+  // Use the same domain but point to /customer/scan route in unified dashboard
+  const baseUrl = typeof window !== 'undefined'
+    ? window.location.origin
+    : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const scanUrl = `${baseUrl}/customer/scan?table=${tableNumber}&type=dine_in`
 
-  return generateQRDataURL(menuUrl, { width: 400 })
+  return generateQRDataURL(scanUrl, { width: 400 })
 }
 
 // Download QR Code

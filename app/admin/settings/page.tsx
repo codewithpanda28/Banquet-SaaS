@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Save, Store, Clock, DollarSign, Phone, Mail, MapPin, Smartphone } from 'lucide-react'
+import { Save, Store, Clock, DollarSign, Phone, Mail, MapPin, Smartphone, Utensils } from 'lucide-react'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 import { Restaurant } from '@/types'
 import { toast } from 'sonner'
@@ -33,9 +33,12 @@ export default function SettingsPage() {
         closing_time: '',
         upi_id: '',
     })
+    const [dietaryType, setDietaryType] = useState('both')
 
     useEffect(() => {
         fetchRestaurantData()
+        const storedDietary = localStorage.getItem('restaurant_dietary_type')
+        if (storedDietary) setDietaryType(storedDietary)
     }, [])
 
     async function fetchRestaurantData() {
@@ -104,6 +107,7 @@ export default function SettingsPage() {
 
             if (error) throw error
 
+            localStorage.setItem('restaurant_dietary_type', dietaryType)
             toast.success('Settings saved successfully')
             fetchRestaurantData()
         } catch (error) {
@@ -377,6 +381,75 @@ export default function SettingsPage() {
                                 className="bg-secondary/20 border-border/50 h-11 font-mono"
                             />
                             <p className="text-xs text-muted-foreground mt-1">This VPA will be encoded in QR codes for direct payments.</p>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Dietary Configuration */}
+                <Card className="glass-panel border-0 overflow-hidden relative group">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />
+                    <CardHeader>
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
+                                <Utensils className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-lg">Dietary Configuration</CardTitle>
+                                <CardDescription>Set your restaurant's dietary restrictions</CardDescription>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-4 max-w-md">
+                            <div className="flex flex-col gap-3">
+                                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Restaurant Type</Label>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <button
+                                        onClick={() => setDietaryType('veg_only')}
+                                        className={cn(
+                                            "flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all gap-2",
+                                            dietaryType === 'veg_only'
+                                                ? "border-green-500 bg-green-50 text-green-700 font-bold"
+                                                : "border-transparent bg-secondary/50 hover:bg-secondary text-muted-foreground"
+                                        )}
+                                    >
+                                        <div className="w-4 h-4 border border-green-600 bg-green-600 rounded-full" />
+                                        <span className="text-xs">Veg Only</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setDietaryType('non_veg_only')}
+                                        className={cn(
+                                            "flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all gap-2",
+                                            dietaryType === 'non_veg_only'
+                                                ? "border-red-500 bg-red-50 text-red-700 font-bold"
+                                                : "border-transparent bg-secondary/50 hover:bg-secondary text-muted-foreground"
+                                        )}
+                                    >
+                                        <div className="w-4 h-4 border border-red-600 bg-red-600 rounded-full" />
+                                        <span className="text-xs">Non-Veg Only</span>
+                                    </button>
+                                    <button
+                                        onClick={() => setDietaryType('both')}
+                                        className={cn(
+                                            "flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all gap-2",
+                                            dietaryType === 'both'
+                                                ? "border-blue-500 bg-blue-50 text-blue-700 font-bold"
+                                                : "border-transparent bg-secondary/50 hover:bg-secondary text-muted-foreground"
+                                        )}
+                                    >
+                                        <div className="flex gap-1">
+                                            <div className="w-2 h-2 border border-green-600 bg-green-600 rounded-full" />
+                                            <div className="w-2 h-2 border border-red-600 bg-red-600 rounded-full" />
+                                        </div>
+                                        <span className="text-xs">Both</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                This setting restricts what kind of items can be added to the menu.
+                                {dietaryType === 'veg_only' && <span className="text-green-600 font-bold block mt-1">Only Vegetarian items can be added.</span>}
+                                {dietaryType === 'non_veg_only' && <span className="text-red-600 font-bold block mt-1">Only Non-Vegetarian items can be added.</span>}
+                            </p>
                         </div>
                     </CardContent>
                 </Card>

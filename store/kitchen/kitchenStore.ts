@@ -1,0 +1,121 @@
+
+import { create } from 'zustand'
+import { Order, OrderStatus, OrderType } from '@/types'
+import { updateOrderStatus } from '@/services/orderService'
+
+interface KitchenStore {
+    // Orders State
+    orders: Order[]
+    selectedOrder: Order | null
+
+    // Filters
+    orderTypeFilter: 'all' | OrderType
+
+    // Settings
+    refreshInterval: number // seconds
+    prepTimeThreshold: number // minutes for warning
+
+    // UI State
+    isSoundEnabled: boolean
+    isConnected: boolean
+    lastUpdated: Date | null
+
+    // Actions
+    setOrders: (orders: Order[]) => void
+    addOrder: (order: Order) => void
+    updateOrder: (orderId: string, updates: Partial<Order>) => void
+    removeOrder: (orderId: string) => void
+
+    setSelectedOrder: (order: Order | null) => void
+    setOrderTypeFilter: (filter: 'all' | OrderType) => void
+    setRefreshInterval: (interval: number) => void
+    setPrepTimeThreshold: (threshold: number) => void
+
+    toggleSound: () => void
+    setConnectionStatus: (status: boolean) => void
+
+    // Computed (as helpers)
+    getNewOrders: () => Order[]
+    getPreparingOrders: () => Order[]
+    getReadyOrders: () => Order[]
+    getOrdersByType: (type: string) => Order[]
+}
+
+export const useKitchenStore = create<KitchenStore>((set, get) => ({
+    orders: [],
+    selectedOrder: null,
+    orderTypeFilter: 'all',
+    refreshInterval: 30,
+    prepTimeThreshold: 20,
+    isSoundEnabled: true,
+    isConnected: true,
+    lastUpdated: null,
+
+    setOrders: (orders) => set({ orders: orders.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()), lastUpdated: new Date() }),
+
+    addOrder: (order) => set((state) => ({
+        orders: [...state.orders, order].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
+        lastUpdated: new Date()
+    })),
+
+    updateOrder: (orderId, updates) => {
+        // Update database if status changes
+        if (updates.status) {
+            updateOrderStatus(orderId, updates.status as OrderStatus)
+        }
+
+        // Update local state
+        set((state) => ({
+            orders: state.orders.map((o) => o.id === orderId ? { ...o, ...updates } : o),
+            lastUpdated: new Date()
+        }))
+    },
+
+    removeOrder: (orderId) => set((state) => ({
+        orders: state.orders.filter((o) => o.id !== orderId)
+    })),
+
+    setSelectedOrder: (order) => set({ selectedOrder: order }),
+
+    setOrderTypeFilter: (filter) => set({ orderTypeFilter: filter }),
+    setRefreshInterval: (interval) => set({ refreshInterval: interval }),
+    setPrepTimeThreshold: (threshold) => set({ prepTimeThreshold: threshold }),
+
+    toggleSound: () => set((state) => ({ isSoundEnabled: !state.isSoundEnabled })),
+
+    setConnectionStatus: (status) => set({ isConnected: status }),
+
+    getNewOrders: () => {
+        const { orders, orderTypeFilter } = get()
+        // New orders are pending or confirmed
+        let filtered = orders.filter(o => o.status === 'pending' || o.status === 'confirmed')
+        if (orderTypeFilter !== 'all') {
+            filtered = filtered.filter(o => o.order_type === orderTypeFilter)
+        }
+        return filtered
+    },
+
+    getPreparingOrders: () => {
+        const { orders, orderTypeFilter } = get()
+        let filtered = orders.filter(o => o.status === 'preparing')
+        if (orderTypeFilter !== 'all') {
+            filtered = filtered.filter(o => o.order_type === orderTypeFilter)
+        }
+        return filtered
+    },
+
+    getReadyOrders: () => {
+        const { orders, orderTypeFilter } = get()
+        let filtered = orders.filter(o => o.status === 'ready')
+        if (orderTypeFilter !== 'all') {
+            filtered = filtered.filter(o => o.order_type === orderTypeFilter)
+        }
+        return filtered
+    },
+
+    getOrdersByType: (type) => {
+        const { orders } = get()
+        if (type === 'all') return orders
+        return orders.filter(o => o.order_type === type)
+    }
+}))

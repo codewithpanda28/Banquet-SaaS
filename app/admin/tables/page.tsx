@@ -211,18 +211,15 @@ export default function TablesPage() {
             // But let's try standard fetch first as n8n webhooks usually allow it or user might have configured it.
             // Update: User specifically asked to "run" it.
 
-            console.log('🔗 [WEBHOOK] Targeting URL:', 'https://n8n.srv1114630.hstgr.cloud/webhook/payment-confirmation')
+            console.log('🔗 [WEBHOOK] Targeting Proxy: /api/webhook/payment')
             console.log('📤 [WEBHOOK] Payload:', payload)
 
-            const response = await fetch('https://n8n.srv1114630.hstgr.cloud/webhook/payment-confirmation', {
+            const response = await fetch('/api/webhook/payment', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(payload)
-            }).catch(fetchErr => {
-                console.error('❌ [WEBHOOK] Fetch failed directly (likely CORS or Network):', fetchErr)
-                throw new Error('Network error or CORS block. Check if n8n allows browser requests.')
             })
 
             if (!response.ok) {

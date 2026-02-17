@@ -22,6 +22,7 @@ import { Order } from '@/types'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { triggerPaymentWebhook } from '@/lib/webhook'
 
 // Helper to robustly parse dates primarily from UTC
 const parseDate = (dateString: string) => {
@@ -49,8 +50,8 @@ export default function OrdersPage() {
         // Realtime
         // Realtime
         const ch = supabase.channel('ord-rt')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchOrders())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, () => fetchOrders())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchOrders(false))
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, () => fetchOrders(false))
             .subscribe()
         return () => { supabase.removeChannel(ch) }
     }, [])
@@ -59,9 +60,9 @@ export default function OrdersPage() {
         filterOrders()
     }, [orders, searchTerm, orderTypeFilter, activeTab])
 
-    async function fetchOrders() {
+    async function fetchOrders(showLoading = true) {
         try {
-            setLoading(true)
+            if (showLoading) setLoading(true)
             const { data, error } = await supabase
                 .from('orders')
                 .select(`
@@ -247,51 +248,29 @@ export default function OrdersPage() {
             if (error) throw error
 
             // Trigger n8n Webhook for Payment Confirmation
-            try {
-                console.log('🚀 Sending Webhook to n8n...', { method, bill_id: selectedOrder.bill_id })
-
-                const webhookResponse = await fetch('https://n8n.srv1114630.hstgr.cloud/webhook/payment-confirmation', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        bill_id: selectedOrder.bill_id,
-                        amount: selectedOrder.total,
-                        customer: {
-                            name: selectedOrder.customers?.name || selectedOrder.customer_name || 'Walk-in',
-                            phone: selectedOrder.customers?.phone || 'N/A',
-                            address: selectedOrder.delivery_address || selectedOrder.customers?.address
-                        },
-                        order_type: selectedOrder.order_type,
-                        table_number: Array.isArray(selectedOrder.restaurant_tables) ? selectedOrder.restaurant_tables[0]?.table_number : selectedOrder.restaurant_tables?.table_number,
-                        items: selectedOrder.order_items?.map((i: any) => ({
-                            name: i.item_name,
-                            quantity: i.quantity,
-                            price: i.price,
-                            total: i.total
-                        })),
-                        payment_method: method,
-                        payment_status: 'paid',
-                        restaurant_id: RESTAURANT_ID,
-                        updated_at: new Date().toISOString(),
-                        source: 'admin_dashboard',
-                        trigger_type: 'payment_marked_manually'
-                    })
-                })
-
-                if (!webhookResponse.ok) {
-                    const errorText = await webhookResponse.text()
-                    console.error('❌ Webhook Failed:', webhookResponse.status, errorText)
-                    toast.error(`Webhook Failed: ${webhookResponse.status}`)
-                } else {
-                    console.log('✅ Webhook Delivered Successfully')
-                }
-            } catch (webhookError) {
-                console.error('❌ Failed to trigger webhook:', webhookError)
-                toast.error('Webhook Error (Check Console)')
-            }
+            await triggerPaymentWebhook({
+                bill_id: selectedOrder.bill_id,
+                amount: selectedOrder.total,
+                customer: {
+                    name: selectedOrder.customers?.name || selectedOrder.customer_name || 'Walk-in',
+                    phone: selectedOrder.customers?.phone || 'N/A',
+                    address: selectedOrder.delivery_address || selectedOrder.customers?.address
+                },
+                order_type: selectedOrder.order_type,
+                table_number: Array.isArray(selectedOrder.restaurant_tables) ? selectedOrder.restaurant_tables[0]?.table_number : selectedOrder.restaurant_tables?.table_number,
+                items: selectedOrder.order_items?.map((i: any) => ({
+                    name: i.item_name,
+                    quantity: i.quantity,
+                    price: i.price,
+                    total: i.total
+                })),
+                payment_method: method,
+                payment_status: 'paid',
+                restaurant_id: RESTAURANT_ID,
+                updated_at: new Date().toISOString(),
+                source: 'admin_dashboard',
+                trigger_type: 'payment_marked_manually'
+            })
 
             toast.success(`Payment marked as ${method.toUpperCase()} & Message Sent 🚀`)
             setSelectedOrder(null)

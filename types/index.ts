@@ -120,6 +120,7 @@ export interface OrderItem {
     total: number;
     special_instructions: string | null;
     status: 'pending' | 'preparing' | 'ready';
+    menu_items?: MenuItem;
 }
 
 export interface DashboardMetrics {

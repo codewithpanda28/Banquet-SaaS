@@ -1,6 +1,7 @@
 'use client'
 
 import { AdminLayout } from '@/components/admin/layout/AdminLayout'
+import { AdminGuard } from '@/components/admin/AdminGuard'
 import { ReactNode, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -17,9 +18,11 @@ export default function Layout({ children }: { children: ReactNode }) {
     }, [router])
 
     return (
-        <AdminLayout>
-            {children}
-        </AdminLayout>
+        <AdminGuard>
+            <AdminLayout>
+                {children}
+            </AdminLayout>
+        </AdminGuard>
     )
 
 }

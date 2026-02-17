@@ -4,6 +4,7 @@ import { ReactNode } from 'react'
 import { useAdminStore } from '@/store/adminStore'
 import { AdminSidebar } from './AdminSidebar'
 import { AdminHeader } from './AdminHeader'
+import { Toaster } from '@/components/ui/sonner'
 import { cn } from '@/lib/utils'
 
 interface AdminLayoutProps {
@@ -25,6 +26,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                 <AdminHeader />
                 <main className="p-6">{children}</main>
             </div>
+            <Toaster />
         </div>
     )
 }

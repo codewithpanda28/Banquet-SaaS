@@ -17,7 +17,8 @@ import {
     ChevronLeft,
     ChevronRight,
     Store,
-    Smartphone
+    Smartphone,
+    Monitor
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -29,8 +30,7 @@ const menuItems = [
     { icon: Users, label: 'Customers', href: '/admin/customers' },
     { icon: TicketPercent, label: 'Coupons', href: '/admin/coupons' },
     { icon: FileBarChart, label: 'Reports', href: '/admin/reports' },
-    { icon: UtensilsCrossed, label: 'Kitchen Display', href: 'http://localhost:3001', external: true },
-    { icon: Smartphone, label: 'Customer App', href: 'http://localhost:3002', external: true },
+    { icon: Monitor, label: 'App Previews', href: '/admin/preview' },
     { icon: Settings, label: 'Settings', href: '/admin/settings' },
 ]
 
@@ -93,7 +93,6 @@ export function AdminSidebar() {
                         <Link
                             key={item.href}
                             href={item.href}
-                            target={item.external ? '_blank' : undefined}
                             className={cn(
                                 'flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-all duration-300 group relative overflow-hidden',
                                 isActive

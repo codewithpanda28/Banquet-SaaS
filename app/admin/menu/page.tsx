@@ -1,5 +1,6 @@
 'use client'
 
+// Force rebuild
 import { useEffect, useState } from 'react'
 import { PageHeader } from '@/components/admin/layout/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -23,6 +24,7 @@ export default function MenuPage() {
     const [loading, setLoading] = useState(true)
     const [searchTerm, setSearchTerm] = useState('')
     const [selectedCategory, setSelectedCategory] = useState<string>('all')
+    const [dietaryType, setDietaryType] = useState('both')
 
     // Dialog states
     const [categoryDialogOpen, setCategoryDialogOpen] = useState(false)
@@ -43,12 +45,14 @@ export default function MenuPage() {
         is_available: true,
         is_spicy: false,
         spicy_level: 0,
-        stock: 0,
+        stock: '' as string | number,
         is_infinite_stock: false,
     })
 
     useEffect(() => {
         fetchData()
+        const type = localStorage.getItem('restaurant_dietary_type')
+        if (type) setDietaryType(type)
 
         const ch = supabase.channel('menu-rt')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_categories' }, () => fetchData())
@@ -81,7 +85,7 @@ export default function MenuPage() {
                 .order('name')
 
             setCategories(cats || [])
-            setItems(menuItems || [])
+            setItems((menuItems || []).filter(i => !i.name.startsWith('[DELETED]')))
         } catch (error) {
             console.error('Error fetching menu data:', error)
             toast.error('Failed to load menu data')
@@ -172,19 +176,18 @@ export default function MenuPage() {
                 image_url: itemForm.image_url || null,
                 is_veg: itemForm.is_veg,
                 is_bestseller: itemForm.is_bestseller,
-                is_available: itemForm.is_available,
+                is_veg: itemForm.is_veg,
+                is_bestseller: itemForm.is_bestseller,
+                is_available: true, // Always true, managed by stock
+                is_spicy: itemForm.is_spicy,
                 is_spicy: itemForm.is_spicy,
                 spicy_level: itemForm.spicy_level,
                 is_new: false,
                 preparation_time: 15,
-                stock: itemForm.is_infinite_stock ? 0 : (parseInt(itemForm.stock.toString()) || 0),
-                is_infinite_stock: itemForm.is_infinite_stock,
+                stock: itemForm.stock === '' || itemForm.stock === null ? null : parseInt(itemForm.stock.toString()),
+                is_infinite_stock: false, // Deprecated
             }
 
-            // Auto-enable availability if stock is added or infinite stock is enabled
-            if (itemForm.is_infinite_stock || (parseInt(itemForm.stock.toString()) || 0) > 0) {
-                itemData.is_available = true
-            }
 
             let error = null
 
@@ -220,7 +223,7 @@ export default function MenuPage() {
                 is_available: true,
                 is_spicy: false,
                 spicy_level: 0,
-                stock: 0,
+                stock: '',
                 is_infinite_stock: false,
             })
             setEditingItem(null)
@@ -259,12 +262,29 @@ export default function MenuPage() {
                 .delete()
                 .eq('id', id)
 
-            if (error) throw error
+            if (error) {
+                // Foreign Key Violation (Item used in orders)
+                if (error.code === '23503') {
+                    const { error: archiveError } = await supabase
+                        .from('menu_items')
+                        .update({
+                            is_available: false,
+                            name: items.find(i => i.id === id) ? `[DELETED] ${items.find(i => i.id === id)?.name}` : `[DELETED] Item ${id}`
+                        })
+                        .eq('id', id)
+
+                    if (archiveError) throw archiveError
+                    toast.success('Item deleted (archived for history)')
+                    fetchData()
+                    return
+                }
+                throw error
+            }
             toast.success('Menu item deleted successfully')
             fetchData()
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error deleting item:', error)
-            toast.error('Failed to delete menu item')
+            toast.error(`Failed to delete: ${error.message || 'Unknown error'}`)
         }
     }
 
@@ -290,8 +310,8 @@ export default function MenuPage() {
             is_available: item.is_available,
             is_spicy: item.is_spicy || false,
             spicy_level: item.spicy_level || 0,
-            stock: item.stock || 0,
-            is_infinite_stock: item.is_infinite_stock || false,
+            stock: item.stock !== null && item.stock !== undefined ? item.stock : '',
+            is_infinite_stock: false,
         })
         setItemDialogOpen(true)
     }
@@ -330,12 +350,12 @@ export default function MenuPage() {
                             description: '',
                             price: '',
                             image_url: '',
-                            is_veg: true,
+                            is_veg: dietaryType === 'non_veg_only' ? false : true,
                             is_bestseller: false,
                             is_available: true,
                             is_spicy: false,
                             spicy_level: 0,
-                            stock: 0,
+                            stock: '',
                             is_infinite_stock: false,
                         })
                         setItemDialogOpen(true)
@@ -456,11 +476,7 @@ export default function MenuPage() {
                                             )}
                                         </div>
 
-                                        {!item.is_available && (
-                                            <div className="absolute inset-0 bg-background/80 backdrop-blur-[2px] flex items-center justify-center pointer-events-none z-10">
-                                                <span className="bg-red-500 text-white px-3 py-1 font-bold rounded-lg shadow-lg transform -rotate-12 border-2 border-white">SOLD OUT</span>
-                                            </div>
-                                        )}
+                                        {/* Removed manual Sold Out overlay based on user feedback */}
 
                                         {/* Hover Actions */}
                                         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[1px]">
@@ -485,8 +501,8 @@ export default function MenuPage() {
 
                                         <div className="flex items-center justify-between text-xs font-medium text-muted-foreground pt-3 border-t border-border/50">
                                             <span className="flex items-center gap-1.5">
-                                                <div className={cn("h-2 w-2 rounded-full animate-pulse", item.is_available ? "bg-green-500" : "bg-red-500")} />
-                                                {item.is_available ? 'Available' : 'Sold Out'}
+                                                <div className={cn("h-2 w-2 rounded-full animate-pulse", (item.stock !== null && item.stock <= 0) ? "bg-red-500" : ((item.stock !== null && item.stock < 10) ? "bg-amber-500" : "bg-green-500"))} />
+                                                {(item.stock !== null && item.stock <= 0) ? 'Out of Stock' : ((item.stock !== null && item.stock < 10) ? 'Low Stock' : 'Available')}
                                             </span>
                                             {item.is_spicy && (
                                                 <span className="flex items-center text-orange-500 font-bold" title="Spicy">
@@ -627,6 +643,7 @@ export default function MenuPage() {
                             <div className="space-y-2">
                                 <Label htmlFor="item-type" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Dietary Type</Label>
                                 <Select
+                                    disabled={dietaryType !== 'both'}
                                     value={itemForm.is_veg ? 'veg' : 'non-veg'}
                                     onValueChange={(value) => setItemForm({ ...itemForm, is_veg: value === 'veg' })}
                                 >
@@ -652,27 +669,15 @@ export default function MenuPage() {
                         <div className="space-y-2">
                             <div className="flex justify-between items-center mb-1">
                                 <Label htmlFor="item-stock" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Stock Quantity</Label>
-                                <label className="flex items-center gap-2 cursor-pointer group">
-                                    <input
-                                        type="checkbox"
-                                        checked={itemForm.is_infinite_stock}
-                                        onChange={(e) => setItemForm({ ...itemForm, is_infinite_stock: e.target.checked })}
-                                        className="h-3.5 w-3.5 rounded border-gray-300 accent-primary"
-                                    />
-                                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground group-hover:text-primary transition-colors">♾️ Infinite</span>
-                                </label>
+                                <span className="text-[10px] text-muted-foreground">Leave empty for infinite stock</span>
                             </div>
                             <Input
                                 id="item-stock"
                                 type="number"
-                                placeholder={itemForm.is_infinite_stock ? "Infinite" : "e.g. 50"}
-                                disabled={itemForm.is_infinite_stock}
-                                value={itemForm.is_infinite_stock ? '' : itemForm.stock}
-                                onChange={(e) => setItemForm({ ...itemForm, stock: parseInt(e.target.value) || 0 })}
-                                className={cn(
-                                    "bg-secondary/20 border-border/50 h-10 font-mono transition-opacity",
-                                    itemForm.is_infinite_stock && "opacity-50"
-                                )}
+                                placeholder="Infinite"
+                                value={itemForm.stock}
+                                onChange={(e) => setItemForm({ ...itemForm, stock: e.target.value })}
+                                className="bg-secondary/20 border-border/50 h-10 font-mono"
                             />
                         </div>
 
@@ -715,15 +720,7 @@ export default function MenuPage() {
                                     />
                                     <span className="text-sm font-medium">🔥 Spicy</span>
                                 </label>
-                                <label className="flex items-center gap-3 p-3 rounded-xl border border-border/50 bg-secondary/10 cursor-pointer hover:bg-secondary/20 transition-colors">
-                                    <input
-                                        type="checkbox"
-                                        checked={itemForm.is_available}
-                                        onChange={(e) => setItemForm({ ...itemForm, is_available: e.target.checked })}
-                                        className="h-4 w-4 rounded border-gray-300 accent-green-500"
-                                    />
-                                    <span className="text-sm font-medium">✅ Available</span>
-                                </label>
+                                {/* Removed Available Checkbox */}
                             </div>
                         </div>
                     </div>

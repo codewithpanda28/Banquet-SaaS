@@ -23,6 +23,7 @@ import { useRouter } from 'next/navigation'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { triggerPaymentWebhook } from '@/lib/webhook'
 
 interface SearchResult {
     id: string
@@ -297,44 +298,29 @@ export function AdminHeader() {
             if (error) throw error
 
             // 2. Trigger Webhook
-            try {
-                console.log('🚀 [SEARCH MODAL] Sending Webhook...', { method, bill_id: billId })
-                const webhookResponse = await fetch('https://n8n.srv1114630.hstgr.cloud/webhook/payment-confirmation', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                    body: JSON.stringify({
-                        bill_id: billId,
-                        amount: total,
-                        customer: {
-                            name: customerName,
-                            phone: phone || 'N/A',
-                            address: selectedDetail.data.delivery_address || selectedDetail.data.customers?.address
-                        },
-                        order_type: selectedDetail.data.order_type,
-                        table_number: selectedDetail.data.restaurant_tables?.table_number,
-                        items: selectedDetail.data.order_items?.map((i: any) => ({
-                            name: i.item_name,
-                            quantity: i.quantity,
-                            price: i.price || (i.total / i.quantity),
-                            total: i.total
-                        })),
-                        payment_method: method,
-                        payment_status: 'paid',
-                        restaurant_id: RESTAURANT_ID,
-                        updated_at: new Date().toISOString(),
-                        source: 'admin_header_search',
-                        trigger_type: 'payment_marked_manually'
-                    })
-                })
-                if (!webhookResponse.ok) {
-                    console.error('❌ Webhook Failed:', webhookResponse.status)
-                    toast.error(`Webhook Failed: ${webhookResponse.status}`)
-                } else {
-                    console.log('✅ Webhook Delivered')
-                }
-            } catch (webhookError) {
-                console.error('❌ Webhook Error:', webhookError)
-            }
+            await triggerPaymentWebhook({
+                bill_id: billId,
+                amount: total,
+                customer: {
+                    name: customerName,
+                    phone: phone || 'N/A',
+                    address: selectedDetail.data.delivery_address || selectedDetail.data.customers?.address
+                },
+                order_type: selectedDetail.data.order_type,
+                table_number: selectedDetail.data.restaurant_tables?.table_number,
+                items: selectedDetail.data.order_items?.map((i: any) => ({
+                    name: i.item_name,
+                    quantity: i.quantity,
+                    price: i.price || (i.total / i.quantity),
+                    total: i.total
+                })),
+                payment_method: method,
+                payment_status: 'paid',
+                restaurant_id: RESTAURANT_ID,
+                updated_at: new Date().toISOString(),
+                source: 'admin_header_search',
+                trigger_type: 'payment_marked_manually'
+            })
 
             toast.success(`Payment marked as ${method.toUpperCase()} & Message Sent 🚀`)
             setSelectedDetail(null)
