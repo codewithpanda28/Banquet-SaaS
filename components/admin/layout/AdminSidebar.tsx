@@ -18,7 +18,16 @@ import {
     ChevronRight,
     Store,
     Smartphone,
-    Monitor
+    Monitor,
+    ConciergeBell,
+    CalendarCheck,
+    Star,
+    Package,
+    Box,
+    Bike,
+    Zap,
+    BarChart3,
+    ChefHat
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -32,6 +41,18 @@ const menuItems = [
     { icon: FileBarChart, label: 'Reports', href: '/admin/reports' },
     { icon: Monitor, label: 'App Previews', href: '/admin/preview' },
     { icon: Settings, label: 'Settings', href: '/admin/settings' },
+]
+
+const automationItems = [
+    { icon: ConciergeBell, label: 'Waiter Dashboard', href: '/waiter', color: 'text-emerald-500' },
+    { icon: CalendarCheck, label: 'Table Booking', href: '/admin/bookings', color: 'text-blue-500' },
+    { icon: Star, label: 'Review Automation', href: '/admin/reviews', color: 'text-amber-500' },
+    { icon: Package, label: 'Inventory', href: '/admin/inventory', color: 'text-orange-500' },
+    { icon: Box, label: 'AR Menu', href: '/admin/ar-menu', color: 'text-purple-500' },
+    { icon: Bike, label: 'Zomato/Swiggy', href: '/admin/delivery', color: 'text-red-500' },
+    { icon: Zap, label: 'AI Upsell', href: '/admin/upsell', color: 'text-yellow-500' },
+    { icon: BarChart3, label: 'Live Analytics', href: '/admin/analytics', color: 'text-cyan-500' },
+    { icon: ChefHat, label: 'Kitchen Dashboard', href: '/kitchen', color: 'text-orange-600' },
 ]
 
 export function AdminSidebar() {
@@ -84,7 +105,7 @@ export function AdminSidebar() {
             </div>
 
             {/* Navigation */}
-            <nav className="flex-1 space-y-1 p-3 mt-4 overflow-y-auto custom-scrollbar">
+            <nav className="flex-1 p-3 mt-2 overflow-y-auto custom-scrollbar space-y-1">
                 {menuItems.map((item) => {
                     const Icon = item.icon
                     const isActive = pathname === item.href
@@ -103,14 +124,55 @@ export function AdminSidebar() {
                             title={!sidebarOpen ? item.label : undefined}
                         >
                             {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-600 rounded-r-full" />}
-
                             <Icon className={cn(
                                 "h-5 w-5 shrink-0 transition-transform duration-300",
                                 isActive ? "scale-110" : "group-hover:scale-110"
                             )} />
-
                             {sidebarOpen && (
                                 <span className={cn("truncate", isActive && "font-bold")}>
+                                    {item.label}
+                                </span>
+                            )}
+                        </Link>
+                    )
+                })}
+
+                {/* Automation Section */}
+                {sidebarOpen && (
+                    <div className="pt-3 pb-1">
+                        <div className="flex items-center gap-2 px-3 mb-2">
+                            <div className="h-px flex-1 bg-gray-100" />
+                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Automation</span>
+                            <div className="h-px flex-1 bg-gray-100" />
+                        </div>
+                    </div>
+                )}
+                {!sidebarOpen && <div className="pt-2 pb-1 border-t border-gray-100 mx-1" />}
+
+                {automationItems.map((item) => {
+                    const Icon = item.icon
+                    const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+
+                    return (
+                        <Link
+                            key={item.href}
+                            href={item.href}
+                            className={cn(
+                                'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-300 group relative overflow-hidden',
+                                isActive
+                                    ? 'bg-gray-900 text-white font-bold shadow-sm'
+                                    : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900',
+                                !sidebarOpen && 'justify-center px-2'
+                            )}
+                            title={!sidebarOpen ? item.label : undefined}
+                        >
+                            {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-gray-700 rounded-r-full" />}
+                            <Icon className={cn(
+                                "h-4 w-4 shrink-0 transition-transform duration-300",
+                                isActive ? cn("scale-110 text-white") : cn("group-hover:scale-110", item.color)
+                            )} />
+                            {sidebarOpen && (
+                                <span className={cn("truncate text-xs", isActive && "font-bold")}>
                                     {item.label}
                                 </span>
                             )}

@@ -11,6 +11,8 @@ import useSound from 'use-sound'
 import { ORDER_STATUS_SOUND } from '@/constants/sounds'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
+import { supabase } from '@/lib/supabase'
+import { triggerAutomationWebhook } from '@/lib/webhook'
 
 const STATUS_STEPS = [
     { id: 'confirmed', label: 'Order Confirmed', description: 'We\'ve received your order!', icon: CheckCircle2, color: 'text-blue-500', bg: 'bg-blue-500/10' },
@@ -26,6 +28,10 @@ export default function TrackOrderPage() {
     const { order, items, loading } = useOrder(billId)
     const [expandDetail, setExpandDetail] = useState(false)
     const [showConfetti, setShowConfetti] = useState(false)
+    const [rating, setRating] = useState(0)
+    const [feedback, setFeedback] = useState('')
+    const [submitted, setSubmitted] = useState(false)
+    const [submitting, setSubmitting] = useState(false)
 
     // Sounds
     const [playConfirmed] = useSound(ORDER_STATUS_SOUND.confirmed)
@@ -176,6 +182,94 @@ export default function TrackOrderPage() {
                         </motion.p>
                     </div>
                 </div>
+
+                {/* Review Section */}
+                {isCompleted && !submitted && (
+                    <motion.div
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        className="bg-white p-6 rounded-[2rem] shadow-xl border border-orange-100 space-y-4"
+                    >
+                        <div className="text-center space-y-1">
+                            <h3 className="font-black text-slate-900">How was the food?</h3>
+                            <p className="text-xs text-slate-500 font-medium uppercase tracking-widest">Rate your experience</p>
+                        </div>
+
+                        <div className="flex justify-center gap-2">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                                <button
+                                    key={star}
+                                    onClick={() => setRating(star)}
+                                    className={cn(
+                                        "w-12 h-12 rounded-2xl flex items-center justify-center transition-all active:scale-90",
+                                        rating >= star ? "bg-orange-500 text-white shadow-lg shadow-orange-200" : "bg-slate-50 text-slate-300"
+                                    )}
+                                >
+                                    <span className="text-2xl">⭐</span>
+                                </button>
+                            ))}
+                        </div>
+
+                        {rating > 0 && (
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-3">
+                                <textarea
+                                    className="w-full bg-slate-50 border-0 rounded-2xl p-4 text-sm focus:ring-2 focus:ring-orange-500 transition-all outline-none min-h-[100px]"
+                                    placeholder="Any feedback for the chef? (Optional)"
+                                    value={feedback}
+                                    onChange={(e) => setFeedback(e.target.value)}
+                                />
+                                <Button
+                                    className="w-full h-12 rounded-[1.5rem] bg-orange-600 hover:bg-orange-700 text-white font-black shadow-lg shadow-orange-200 transition-all active:scale-95"
+                                    onClick={async () => {
+                                        setSubmitting(true)
+                                        // Try to find customer name from order relationship
+                                        const custName = order.customers?.name || order.customer_name || 'Customer'
+                                        const custPhone = order.customers?.phone || order.customer_phone
+
+                                        const { error } = await supabase.from('customer_reviews').insert({
+                                            restaurant_id: order.restaurant_id,
+                                            customer_name: custName,
+                                            customer_phone: custPhone,
+                                            rating,
+                                            feedback,
+                                            source: 'order_tracking'
+                                        })
+
+                                        if (!error) {
+                                            await triggerAutomationWebhook('review-submit', {
+                                                rating,
+                                                feedback,
+                                                customer_name: custName,
+                                                bill_id: order.bill_id,
+                                                restaurant_id: order.restaurant_id
+                                            })
+                                            setSubmitted(true)
+                                            toast.success('Thank you for your review! ❤️')
+                                        } else {
+                                            toast.error('Failed to save review')
+                                        }
+                                        setSubmitting(false)
+                                    }}
+                                    disabled={submitting}
+                                >
+                                    {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Submit Review'}
+                                </Button>
+                            </motion.div>
+                        )}
+                    </motion.div>
+                )}
+
+                {submitted && (
+                    <motion.div
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="bg-green-50 p-6 rounded-[2rem] border border-green-100 text-center space-y-2"
+                    >
+                        <span className="text-4xl text-green-500">❤️</span>
+                        <h3 className="font-black text-green-900">Review Received!</h3>
+                        <p className="text-xs text-green-700/70 font-bold uppercase">Your feedback helps us grow.</p>
+                    </motion.div>
+                )}
 
                 {/* Timeline */}
                 <div className="relative py-4">

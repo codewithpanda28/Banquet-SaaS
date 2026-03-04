@@ -19,6 +19,7 @@ import { Utensils, ShoppingBag, Truck, Bike } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { getAvailableCoupons } from '@/actions/coupon'
 import { format } from 'date-fns'
+import { triggerAutomationWebhook } from '@/lib/webhook'
 import {
     Sheet,
     SheetContent,
@@ -120,21 +121,35 @@ function MenuContent() {
 
         // If table provided, set table but ASK for mode (removed auto-set)
         if (tableParam) {
-            setTableInfo(parseInt(tableParam), 'unknown-guid-placeholder')
-            // setOrderType('dine_in') // REMOVED to force prompt
+            setTableInfo(parseInt(tableParam), 'qr-scan')
+
+            // Trigger QR Scan Webhook (once per scan)
+            const hasScanned = sessionStorage.getItem(`qr_scanned_${tableParam}`)
+            if (!hasScanned) {
+                triggerAutomationWebhook('qr-scan', {
+                    table_id: tableParam,
+                    timestamp: new Date().toISOString(),
+                    restaurant_id: restaurant?.id
+                })
+                sessionStorage.setItem(`qr_scanned_${tableParam}`, 'true')
+            }
         }
 
-        // Show modal if not confirmed in session OR if we want to ask every time for new sessions
+        // Show modal if not confirmed in session
         const isConfirmed = sessionStorage.getItem('orderTypeConfirmed')
-
-        // If we don't have a type (and didn't just set it from URL), or user wants to be asked every time
-        // User said: "har baar puchega" -> implies ask if not explicit in URL?
-        // If I removed 'dine_in' auto-set, orderType is null.
-        // So checking !orderType is enough?
+        if (!isConfirmed) {
+            setOrderType(null) // Reset order type to force modal if not confirmed
+            setShowOrderTypeModal(true)
+        } else {
+            setShowOrderTypeModal(false)
+        }
 
         // Delay slightly to allow state to settle
+        const timer = setTimeout(() => {
+            if (!isConfirmed) setShowOrderTypeModal(true)
+        }, 800)
 
-
+        return () => clearTimeout(timer)
     }, [tableParam, typeParam, setTableInfo, setOrderType])
 
     // Set initial active category
@@ -194,7 +209,7 @@ function MenuContent() {
     return (
         <div className="min-h-screen bg-white pb-32">
             {/* Categories - Sticky Top */}
-            <div className="sticky top-[56px] z-30 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm transition-all duration-300">
+            <div className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm transition-all duration-300">
                 <CategoryTabs
                     categories={categories}
                     activeCategory={activeCategory}
@@ -263,7 +278,7 @@ function MenuContent() {
                         </span>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                         {filteredItems.length > 0 ? (
                             filteredItems.map((item) => (
                                 <MenuItemCard
@@ -291,8 +306,8 @@ function MenuContent() {
             />
 
             {/* Order Type Selection Modal */}
-            <Dialog open={!orderType} onOpenChange={() => { }}>
-                <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white/95 backdrop-blur-md [&>button]:hidden text-center rounded-3xl">
+            <Dialog open={showOrderTypeModal} onOpenChange={setShowOrderTypeModal}>
+                <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white/95 backdrop-blur-md [&>button]:hidden text-center rounded-3xl z-[100]">
                     <div className="p-8 flex flex-col items-center gap-6">
                         <div className="h-20 w-20 bg-primary/10 rounded-full flex items-center justify-center animate-bounce duration-1000">
                             <Utensils className="h-10 w-10 text-primary" />

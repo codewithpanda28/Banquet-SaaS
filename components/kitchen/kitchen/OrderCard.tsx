@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import OrderTimer from "./OrderTimer"
 import { Leaf, Drumstick, ChefHat, Check, Eye } from "lucide-react"
 import { useKitchenStore } from "@/store/kitchenStore"
-import { triggerPaymentWebhook } from "@/lib/webhook"
+import { triggerAutomationWebhook } from "@/lib/webhook"
 
 interface OrderCardProps {
     order: Order
@@ -72,7 +72,7 @@ export default function OrderCard({ order, onViewDetails }: OrderCardProps) {
             updateOrder(order.id, { status: nextStatus })
 
             if (nextStatus === 'served') {
-                triggerPaymentWebhook({
+                triggerAutomationWebhook('order-served', {
                     bill_id: order.bill_id,
                     amount: order.total || 0,
                     customer: {
@@ -80,18 +80,12 @@ export default function OrderCard({ order, onViewDetails }: OrderCardProps) {
                         phone: order.customers?.phone || 'N/A'
                     },
                     order_type: order.order_type,
-                    table_number: order.restaurant_tables?.table_number,
+                    status: 'served',
                     items: (order.order_items || []).map((i) => ({
                         name: i.item_name || i.menu_items?.name || 'Unknown Item',
                         quantity: i.quantity,
-                        price: i.price,
-                        total: i.total
                     })),
-                    status: 'served',
                     restaurant_id: process.env.NEXT_PUBLIC_RESTAURANT_ID,
-                    updated_at: new Date().toISOString(),
-                    source: 'kitchen_dashboard',
-                    trigger_type: 'order_served'
                 })
             }
         }

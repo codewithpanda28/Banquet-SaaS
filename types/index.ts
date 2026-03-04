@@ -101,6 +101,8 @@ export interface Order {
     special_instructions: string | null;
     delivery_address: string | null;
     estimated_time: number;
+    customer_name?: string;
+    customer_phone?: string;
     created_at: string;
     updated_at: string;
     order_items?: OrderItem[];

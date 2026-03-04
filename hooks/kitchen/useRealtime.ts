@@ -42,21 +42,22 @@ export function useRealtime() {
     }
 
     useEffect(() => {
-        // Initial data fetch
+        let fetchTimer: NodeJS.Timeout | null = null;
+
+        // Debounced fetch function to prevent rapid multiple fetches
         const fetchOrders = async () => {
-            const orders = await getActiveOrders()
-            setOrders(orders)
+            if (fetchTimer) clearTimeout(fetchTimer);
+            fetchTimer = setTimeout(async () => {
+                const orders = await getActiveOrders()
+                setOrders(orders)
+            }, 500); // 500ms debounce
         }
+
         fetchOrders()
 
-        // Setup realtime subscription with aggressive settings
+        // Setup realtime subscription
         const channel = supabase
-            .channel('kitchen-orders-realtime', {
-                config: {
-                    broadcast: { self: true },
-                    presence: { key: 'kitchen' }
-                }
-            })
+            .channel('kitchen-orders-realtime')
             .on(
                 'postgres_changes',
                 {
@@ -65,19 +66,18 @@ export function useRealtime() {
                     table: 'orders',
                 },
                 async (payload: any) => {
-                    console.log('🔥 [REALTIME] New order received:', payload)
                     if (payload.new.restaurant_id !== RESTAURANT_ID) return
 
-                    // Fetch the complete order with items
-                    const orders = await getActiveOrders()
-                    const newOrder = orders.find(o => o.id === payload.new.id)
+                    // Fetch full order to show in toast
+                    const fullOrders = await getActiveOrders()
+                    const newOrder = fullOrders.find(o => o.id === payload.new.id)
 
                     if (newOrder) {
                         addOrder(newOrder)
                         playNotificationSound()
                         toast.success('🔔 New Order!', {
                             description: `${newOrder.bill_id} - Table ${newOrder.table_number || 'N/A'}`,
-                            duration: 8000,
+                            duration: 5000,
                         })
                     }
                 }
@@ -90,117 +90,45 @@ export function useRealtime() {
                     table: 'orders',
                 },
                 async (payload: any) => {
-                    console.log('🔄 [REALTIME] Order updated:', payload)
                     if (payload.new.restaurant_id !== RESTAURANT_ID) return
 
-                    // Check if items were added (total increased or updated_at changed significantly)
                     const oldTotal = payload.old?.total || 0
                     const newTotal = payload.new?.total || 0
-                    const itemsAdded = newTotal > oldTotal
+                    const itemsAdded = newTotal > oldTotal && oldTotal > 0 // Only if previously had total
 
-                    console.log(`💰 [TOTAL CHECK] Old: ₹${oldTotal}, New: ₹${newTotal}, Items Added: ${itemsAdded}`)
+                    // Update local state
+                    fetchOrders()
 
-                    // Fetch updated order with items
-                    const orders = await getActiveOrders()
-                    const updatedOrder = orders.find(o => o.id === payload.new.id)
-
-                    if (updatedOrder) {
-                        updateOrder(payload.new.id, updatedOrder)
-
-                        // Notify kitchen staff when items are added to existing order
-                        if (itemsAdded) {
-                            console.log('🔔 [NOTIFICATION] Triggering notification for new items!')
-                            playNotificationSound()
-                            toast.info('➕ Items Added!', {
-                                description: `New items added to ${updatedOrder.bill_id}`,
-                                duration: 6000,
-                            })
-                        }
-                    } else {
-                        // Order moved to completed/cancelled, remove from active list
-                        fetchOrders()
+                    if (itemsAdded) {
+                        playNotificationSound()
+                        toast.info('➕ New Items Added!', {
+                            description: `Check details for ${payload.new.bill_id}`,
+                            duration: 5000,
+                        })
                     }
                 }
             )
             .on(
                 'postgres_changes',
                 {
-                    event: 'INSERT',
+                    event: '*',
                     schema: 'public',
                     table: 'order_items',
                 },
-                async (payload: any) => {
-                    console.log('📦 [REALTIME] New order item added:', payload)
-
-                    // Find the order this item belongs to
-                    const orderId = payload.new?.order_id
-                    if (!orderId) return
-
-                    // Refresh orders to get updated data
-                    const orders = await getActiveOrders()
-                    const order = orders.find(o => o.id === orderId)
-
-                    if (order) {
-                        // Check if this is adding to an existing order (not a brand new order)
-                        // If order already has multiple items or was created more than 30 seconds ago, it's adding to existing
-                        const orderCreatedStr = order.created_at
-                        const orderCreated = new Date(orderCreatedStr.includes('Z') || orderCreatedStr.includes('+') ? orderCreatedStr : orderCreatedStr + 'Z')
-                        const now = new Date()
-                        const secondsSinceCreated = (now.getTime() - orderCreated.getTime()) / 1000
-
-                        console.log(`⏰ [TIME CHECK] Order age: ${secondsSinceCreated.toFixed(0)}s, Threshold: 5s`)
-
-                        if (secondsSinceCreated > 5) {
-                            // This is adding items to an existing order
-                            console.log('🔔 [NOTIFICATION] Triggering notification for new items!')
-                            playNotificationSound()
-                            toast.info('➕ Items Added!', {
-                                description: `New items added to ${order.bill_id}`,
-                                duration: 6000,
-                            })
-                        } else {
-                            console.log(`⏭️ [SKIP] Order too new (${secondsSinceCreated.toFixed(0)}s), skipping notification`)
-                        }
-
-                        // Update the order in store
-                        updateOrder(orderId, order)
-                    }
-
-                    // Also refresh all orders
+                () => {
+                    // Just refresh data when items change, no sounds here to avoid duplication
                     fetchOrders()
                 }
             )
-            .on(
-                'postgres_changes',
-                {
-                    event: 'UPDATE',
-                    schema: 'public',
-                    table: 'order_items',
-                },
-                async () => {
-                    console.log('📦 [REALTIME] Order item updated')
-                    // Just refresh, no notification for updates
-                    fetchOrders()
-                }
-            )
-            .subscribe((status, err) => {
-                console.log('📡 [REALTIME] Kitchen subscription status:', status)
-                if (err) console.error('❌ [REALTIME] Subscription error:', err)
+            .subscribe((status) => {
                 setConnectionStatus(status === 'SUBSCRIBED')
-
-                if (status === 'SUBSCRIBED') {
-                    console.log('✅ [REALTIME] Kitchen dashboard is now LIVE!')
-                }
             })
 
-        // Aggressive polling as backup (every 5 seconds for instant updates)
-        const interval = setInterval(() => {
-            console.log('🔄 [POLLING] Refreshing kitchen orders...')
-            fetchOrders()
-        }, 5000)
+        // Polling backup (30 seconds)
+        const interval = setInterval(fetchOrders, 30000)
 
         return () => {
-            console.log('🔌 [CLEANUP] Unsubscribing from kitchen realtime')
+            if (fetchTimer) clearTimeout(fetchTimer)
             channel.unsubscribe()
             clearInterval(interval)
         }

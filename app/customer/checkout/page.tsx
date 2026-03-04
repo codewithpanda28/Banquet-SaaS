@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { triggerPaymentWebhook } from '@/lib/webhook'
+import { triggerAutomationWebhook } from '@/lib/webhook'
 import { validateCoupon, incrementCouponUsage, getAvailableCoupons } from '@/actions/coupon'
 import { Coupon } from '@/types'
 import { format } from 'date-fns'
@@ -93,13 +93,9 @@ export default function CheckoutPage() {
             return
         }
 
-        const rid = process.env.NEXT_PUBLIC_RESTAURANT_ID
-        if (!rid) {
-            console.error('❌ CONFIG ERROR: NEXT_PUBLIC_RESTAURANT_ID is missing in .env')
-            toast.error('System configuration error. Please contact admin.')
-            setLoading(false)
-            return
-        }
+        const rid = process.env.NEXT_PUBLIC_RESTAURANT_ID || 'f1dde894-c027-4506-a55a-dfe65bb0449f'
+        console.log('🚀 [Checkout] Place Order clicked', { name, phone, rid })
+        toast.info('Starting order placement...')
 
         setLoading(true)
 
@@ -112,7 +108,7 @@ export default function CheckoutPage() {
                 .from('customers')
                 .select('id, name, phone, address')
                 .eq('phone', phone)
-                .eq('restaurant_id', process.env.NEXT_PUBLIC_RESTAURANT_ID)
+                .eq('restaurant_id', rid)
                 .maybeSingle()
 
             let customerId: string
@@ -148,7 +144,7 @@ export default function CheckoutPage() {
                         name: name,
                         email: null,
                         address: address || null,
-                        restaurant_id: process.env.NEXT_PUBLIC_RESTAURANT_ID
+                        restaurant_id: rid
                     })
                     .select('id, name, phone, address')
                     .single()
@@ -319,6 +315,40 @@ export default function CheckoutPage() {
 
             if (itemsError) throw itemsError
 
+            // 5. Trigger n8n Webhook - Sync (Wait for it before clearing cart/redirecting)
+            const webhookData = {
+                bill_id: billId,
+                amount: total,
+                customer: {
+                    name: name,
+                    phone: phone,
+                    address: address
+                },
+                order_type: orderType || 'dine_in',
+                table_number: tableNumber || 0,
+                items: items.map(i => ({
+                    name: i.name,
+                    quantity: i.quantity,
+                    price: i.discounted_price || i.price,
+                    total: i.lineTotal
+                })),
+                payment_method: paymentMethod,
+                restaurant_id: rid,
+            }
+
+            console.log('📡 [Checkout] Sending Webhook:', webhookData)
+
+            // Show a promise toast for the webhook
+            try {
+                await toast.promise(triggerAutomationWebhook('new-order', webhookData), {
+                    loading: 'Sending order to n8n...',
+                    success: 'n8n received the order!',
+                    error: 'n8n error - please check server logs'
+                })
+            } catch (whErr) {
+                console.error('❌ [Checkout] Webhook Promise Error:', whErr)
+            }
+
             // Update Coupon Usage if used
             if (coupon && !existingOrderId) {
                 await incrementCouponUsage(coupon.id)
@@ -356,30 +386,6 @@ export default function CheckoutPage() {
             } catch (stockErr) {
                 console.error('Failed to update stock:', stockErr)
             }
-
-            // Trigger n8n Webhook
-            await triggerPaymentWebhook({
-                bill_id: billId,
-                amount: total,
-                customer: {
-                    name: name,
-                    phone: phone,
-                    address: address
-                },
-                order_type: orderType,
-                table_number: tableNumber,
-                items: items.map(i => ({
-                    name: i.name,
-                    quantity: i.quantity,
-                    price: i.discounted_price || i.price,
-                    total: i.lineTotal
-                })),
-                payment_method: paymentMethod,
-                restaurant_id: process.env.NEXT_PUBLIC_RESTAURANT_ID,
-                created_at: new Date().toISOString(),
-                source: 'customer_app',
-                trigger_type: 'new_order_placed'
-            })
 
             addNotification({
                 title: existingOrderId ? 'Items Added!' : 'Order Placed!',
