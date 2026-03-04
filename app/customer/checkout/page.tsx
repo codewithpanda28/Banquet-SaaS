@@ -338,15 +338,14 @@ export default function CheckoutPage() {
 
             console.log('📡 [Checkout] Sending Webhook:', webhookData)
 
-            // Show a promise toast for the webhook
+            // 5. Trigger Webhook - Background (No visitor notification for technical details)
             try {
-                await toast.promise(triggerAutomationWebhook('new-order', webhookData), {
-                    loading: 'Sending order to n8n...',
-                    success: 'n8n received the order!',
-                    error: 'n8n error - please check server logs'
-                })
+                // Call it silently but await to ensure it finishes before cart clear
+                await triggerAutomationWebhook('new-order', webhookData);
             } catch (whErr) {
-                console.error('❌ [Checkout] Webhook Promise Error:', whErr)
+                console.error('❌ [Checkout] Webhook silent error:', whErr);
+                // We DON'T show a toast here because we don't want to confuse the customer
+                // with technical errors if the order is already in the DB.
             }
 
             // Update Coupon Usage if used
