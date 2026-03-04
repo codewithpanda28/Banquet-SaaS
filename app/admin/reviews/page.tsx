@@ -43,19 +43,36 @@ export default function ReviewsPage() {
     }, [])
 
     async function loadSettings() {
-        const { data } = await supabase.from('restaurants').select('google_review_link, review_threshold').eq('id', RESTAURANT_ID).single()
+        if (!RESTAURANT_ID) {
+            console.error('❌ [Reviews] RESTAURANT_ID is missing from environment variables!')
+            return
+        }
+        const { data, error } = await supabase.from('restaurants').select('google_review_link, review_threshold').eq('id', RESTAURANT_ID).single()
         if (data) {
             setGoogleLink(data.google_review_link || '')
             setThreshold(data.review_threshold || 4)
         }
+        if (error) {
+            console.error('❌ [Reviews] Error loading settings:', error)
+        }
     }
 
     async function fetchReviews() {
-        const { data } = await supabase.from('review_logs')
+        if (!RESTAURANT_ID) return
+
+        console.log('📡 [Reviews] Fetching for:', RESTAURANT_ID)
+        const { data, error } = await supabase.from('review_logs')
             .select('*').eq('restaurant_id', RESTAURANT_ID)
             .order('created_at', { ascending: false }).limit(100)
 
+        if (error) {
+            console.error('❌ [Reviews] Fetch error:', error)
+            toast.error('Failed to load reviews')
+            return
+        }
+
         const logs = data || []
+        console.log('✅ [Reviews] Found:', logs.length, 'records')
         setReviewLogs(logs)
         const total = logs.length
         const googleSent = logs.filter((r: ReviewLog) => r.google_link_sent).length
