@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Search, MapPin, Phone, Info, Ticket, Percent, Copy } from 'lucide-react'
+import { Search, MapPin, Phone, Info, Ticket, Percent, Copy, ChevronRight } from 'lucide-react'
 import { useMenu } from '@/hooks/useMenu'
 import { useRestaurant } from '@/hooks/useRestaurant'
 import { useCartStore } from '@/store/cartStore'
@@ -305,60 +305,68 @@ function MenuContent() {
                 onClose={() => setIsModalOpen(false)}
             />
 
-            {/* Order Type Selection Modal */}
+            {/* Order Type Selection Modal - Narrower and more compact */}
             <Dialog open={showOrderTypeModal} onOpenChange={setShowOrderTypeModal}>
-                <DialogContent className="max-w-md p-0 overflow-hidden border-none shadow-2xl bg-white/95 backdrop-blur-md [&>button]:hidden text-center rounded-3xl z-[100]">
-                    <div className="p-8 flex flex-col items-center gap-6">
-                        <div className="h-20 w-20 bg-primary/10 rounded-full flex items-center justify-center animate-bounce duration-1000">
-                            <Utensils className="h-10 w-10 text-primary" />
+                <DialogContent className="max-w-[340px] w-[90%] p-0 overflow-hidden border-none shadow-[0_20px_50px_rgba(0,0,0,0.2)] bg-white/95 backdrop-blur-xl rounded-[2.5rem] fixed left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 outline-none group [&>button]:hidden">
+                    <div className="p-6 pb-8 flex flex-col items-center gap-6">
+                        {/* Header Section */}
+                        <div className="relative group/icon">
+                            <div className="h-20 w-20 bg-gradient-to-br from-orange-50 to-orange-100/50 rounded-full flex items-center justify-center relative z-10 border border-orange-100/50 shadow-inner">
+                                <Utensils className="h-8 w-8 text-orange-500" />
+                            </div>
+                            <div className="absolute inset-0 bg-orange-400/10 rounded-full blur-2xl transition-all duration-500" />
                         </div>
 
-                        <div className="space-y-2">
-                            <DialogTitle className="text-2xl font-black text-gray-900">Welcome! 👋</DialogTitle>
-                            <DialogDescription className="text-gray-500 font-medium text-base">
-                                How would you like to order today?
-                            </DialogDescription>
+                        <div className="space-y-1 text-center">
+                            <h2 className="text-2xl font-black text-gray-900 tracking-tight">Welcome! 👋</h2>
+                            <p className="text-gray-500 font-medium text-sm px-2">
+                                Choose your order mode
+                            </p>
                         </div>
 
-                        <div className="grid grid-cols-1 gap-4 w-full">
-                            <Button
-                                className="h-16 text-lg font-bold rounded-2xl bg-white border-2 border-orange-100 hover:border-primary hover:bg-orange-50 text-gray-700 hover:text-primary shadow-sm flex items-center justify-between px-6 group transition-all"
+                        {/* Options Grid - Narrower */}
+                        <div className="grid grid-cols-1 gap-3 w-full px-2">
+                            {/* Dine In Card */}
+                            <button
+                                className="group relative w-full p-3 rounded-2xl bg-white border border-gray-100 hover:border-orange-200 hover:bg-orange-50/30 shadow-sm transition-all duration-300 flex items-center gap-4 active:scale-[0.97]"
                                 onClick={() => handleOrderTypeSelection('dine_in')}
                             >
-                                <span className="flex items-center gap-3">
-                                    <div className="p-2 bg-orange-100 rounded-lg group-hover:bg-primary/20 transition-colors">
-                                        <Utensils className="h-5 w-5 text-orange-600 group-hover:text-primary" />
-                                    </div>
-                                    Dine In
-                                </span>
-                                <div className="h-4 w-4 rounded-full border-2 border-gray-200 group-hover:border-primary group-hover:bg-primary transition-all" />
-                            </Button>
+                                <div className="h-10 w-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600 transition-all duration-300">
+                                    <Utensils className="h-5 w-5" />
+                                </div>
+                                <div className="flex-1 text-left">
+                                    <p className="font-black text-gray-900 text-base">Dine In</p>
+                                </div>
+                                <ChevronRight className="h-4 w-4 text-gray-300" />
+                            </button>
 
-                            <Button
-                                className="h-16 text-lg font-bold rounded-2xl bg-white border-2 border-blue-100 hover:border-blue-500 hover:bg-blue-50 text-gray-700 hover:text-blue-600 shadow-sm flex items-center justify-between px-6 group transition-all"
+                            {/* Take Away Card */}
+                            <button
+                                className="group relative w-full p-3 rounded-2xl bg-white border border-gray-100 hover:border-blue-200 hover:bg-blue-50/30 shadow-sm transition-all duration-300 flex items-center gap-4 active:scale-[0.97]"
                                 onClick={() => handleOrderTypeSelection('take_away')}
                             >
-                                <span className="flex items-center gap-3">
-                                    <div className="p-2 bg-blue-100 rounded-lg group-hover:bg-blue-200 transition-colors">
-                                        <ShoppingBag className="h-5 w-5 text-blue-600" />
-                                    </div>
-                                    Take Away
-                                </span>
-                                <div className="h-4 w-4 rounded-full border-2 border-gray-200 group-hover:border-blue-500 group-hover:bg-blue-500 transition-all" />
-                            </Button>
+                                <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 transition-all duration-300">
+                                    <ShoppingBag className="h-5 w-5" />
+                                </div>
+                                <div className="flex-1 text-left">
+                                    <p className="font-black text-gray-900 text-base">Take Away</p>
+                                </div>
+                                <ChevronRight className="h-4 w-4 text-gray-300" />
+                            </button>
 
-                            <Button
-                                className="h-16 text-lg font-bold rounded-2xl bg-white border-2 border-green-100 hover:border-green-500 hover:bg-green-50 text-gray-700 hover:text-green-600 shadow-sm flex items-center justify-between px-6 group transition-all"
+                            {/* Home Delivery Card */}
+                            <button
+                                className="group relative w-full p-3 rounded-2xl bg-white border border-gray-100 hover:border-green-200 hover:bg-green-50/30 shadow-sm transition-all duration-300 flex items-center gap-4 active:scale-[0.97]"
                                 onClick={() => handleOrderTypeSelection('home_delivery')}
                             >
-                                <span className="flex items-center gap-3">
-                                    <div className="p-2 bg-green-100 rounded-lg group-hover:bg-green-200 transition-colors">
-                                        <Truck className="h-5 w-5 text-green-600" />
-                                    </div>
-                                    Home Delivery
-                                </span>
-                                <div className="h-4 w-4 rounded-full border-2 border-gray-200 group-hover:border-green-500 group-hover:bg-green-500 transition-all" />
-                            </Button>
+                                <div className="h-10 w-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600 transition-all duration-300">
+                                    <Truck className="h-5 w-5" />
+                                </div>
+                                <div className="flex-1 text-left">
+                                    <p className="font-black text-gray-900 text-base">Home Delivery</p>
+                                </div>
+                                <ChevronRight className="h-4 w-4 text-gray-300" />
+                            </button>
                         </div>
                     </div>
                 </DialogContent>
