@@ -50,20 +50,43 @@ export default function InventoryPage() {
         cost_per_unit: '', supplier: ''
     })
 
+    const isSyncingRef = useRef(false)
+    const fetchTimerRef = useRef<NodeJS.Timeout | null>(null)
+
     useEffect(() => {
         fetchItems()
         const ch = supabase.channel('inventory-rt')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_items' }, fetchItems)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_items' }, () => {
+                // Only auto-fetch if we are NOT currently doing a manual sync
+                if (!isSyncingRef.current) {
+                    debouncedFetch()
+                }
+            })
             .subscribe()
-        return () => { supabase.removeChannel(ch) }
+        return () => {
+            supabase.removeChannel(ch)
+            if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current)
+        }
     }, [])
 
-    async function fetchItems() {
-        setLoading(true)
-        const { data } = await supabase.from('inventory_items')
-            .select('*').eq('restaurant_id', RESTAURANT_ID).order('name')
-        setItems(data || [])
-        setLoading(false)
+    const debouncedFetch = () => {
+        if (fetchTimerRef.current) clearTimeout(fetchTimerRef.current)
+        fetchTimerRef.current = setTimeout(() => {
+            fetchItems(true)
+        }, 500) // Wait 500ms for batch updates to finish
+    }
+
+    async function fetchItems(quiet = false) {
+        if (!quiet) setLoading(true)
+        try {
+            const { data } = await supabase.from('inventory_items')
+                .select('*').eq('restaurant_id', RESTAURANT_ID).order('name')
+            setItems(data || [])
+        } catch (err) {
+            console.error('Fetch items error:', err)
+        } finally {
+            if (!quiet) setLoading(false)
+        }
     }
 
     async function saveItem() {
@@ -233,30 +256,33 @@ export default function InventoryPage() {
     async function applyScannedBill() {
         if (parsedItems.length === 0) return
         setLoading(true)
-        let updatedCount = 0
+        isSyncingRef.current = true // Lock real-time updates
 
         try {
-            for (const item of parsedItems) {
-                // Check if item exists
-                const { data: existing } = await supabase
-                    .from('inventory_items')
-                    .select('*')
-                    .eq('name', item.name)
-                    .eq('restaurant_id', RESTAURANT_ID)
-                    .maybeSingle()
+            // Step 1: Fetch all possibly existing items in one go
+            const itemNames = parsedItems.map(i => i.name)
+            const { data: existingItems } = await supabase
+                .from('inventory_items')
+                .select('*')
+                .eq('restaurant_id', RESTAURANT_ID)
+                .in('name', itemNames)
+
+            const existingMap = new Map(existingItems?.map(i => [i.name, i]))
+
+            // Step 2: Prepare all promises for parallel execution
+            const promises = parsedItems.map(item => {
+                const existing = existingMap.get(item.name)
 
                 if (existing) {
-                    // Update stock
-                    await supabase.from('inventory_items')
+                    return supabase.from('inventory_items')
                         .update({
-                            current_stock: existing.current_stock + item.qty,
+                            current_stock: (existing.current_stock || 0) + item.qty,
                             cost_per_unit: item.price,
                             last_restocked: new Date().toISOString()
                         })
                         .eq('id', existing.id)
                 } else {
-                    // Create new
-                    await supabase.from('inventory_items').insert({
+                    return supabase.from('inventory_items').insert({
                         restaurant_id: RESTAURANT_ID,
                         name: item.name,
                         category: 'Other',
@@ -268,16 +294,28 @@ export default function InventoryPage() {
                         last_restocked: new Date().toISOString()
                     })
                 }
-                updatedCount++
+            })
+
+            // Step 3: Run all updates in parallel
+            const results = await Promise.all(promises)
+
+            // Check for errors
+            const errors = results.filter(r => r.error)
+            if (errors.length > 0) {
+                console.error('Batch update errors:', errors)
+                toast.warning(`${errors.length} items failed to update.`)
             }
 
-            toast.success(`Successfully updated ${updatedCount} items in inventory!`)
+            toast.success(`Successfully synced ${parsedItems.length - errors.length} items to inventory!`)
             setBillScanOpen(false)
             setParsedItems([])
-            fetchItems()
+            // Final refresh and unlock
+            await fetchItems(true)
         } catch (err) {
+            console.error('Inventory sync error:', err)
             toast.error('Failed to update inventory')
         } finally {
+            isSyncingRef.current = false // Unlock
             setLoading(false)
         }
     }
