@@ -68,10 +68,21 @@ export default function CheckoutPage() {
     const total = getTotal()
 
     const handleApplyCoupon = async () => {
-        if (!couponCode.trim()) return
+        const trimmedCode = couponCode.trim().toUpperCase()
+        if (!trimmedCode) return
 
-        // Check if already used in this session
-        if (useCartStore.getState().isCouponUsed(couponCode.trim().toUpperCase())) {
+        // 1. Check if ANY coupon is already applied
+        if (coupon) {
+            if (coupon.code === trimmedCode) {
+                toast.error('This coupon is already applied!')
+            } else {
+                toast.error('A coupon is already applied. Remove it first to apply another.')
+            }
+            return
+        }
+
+        // 2. Check if already used in past orders (persistent check)
+        if (useCartStore.getState().isCouponUsed(trimmedCode)) {
             toast.error('You have already used this coupon code!')
             setCouponCode('')
             return
@@ -83,7 +94,7 @@ export default function CheckoutPage() {
             const res = await fetch('/api/coupons', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: couponCode.trim(), cartTotal: subtotal, restaurantId: rid })
+                body: JSON.stringify({ code: trimmedCode, cartTotal: subtotal, restaurantId: rid })
             })
             const result = await res.json()
             console.log('🎟️ [Checkout] Validate result:', result)
@@ -692,6 +703,17 @@ export default function CheckoutPage() {
                                                                             toast.error('You have already used this coupon!')
                                                                             return
                                                                         }
+
+                                                                        const currentCoupon = useCartStore.getState().coupon
+                                                                        if (currentCoupon) {
+                                                                            if (currentCoupon.code === deal.code) {
+                                                                                toast.error('This coupon is already applied!')
+                                                                            } else {
+                                                                                toast.error('A coupon is already applied. Remove it first.')
+                                                                            }
+                                                                            return
+                                                                        }
+
                                                                         const rid = process.env.NEXT_PUBLIC_RESTAURANT_ID || ''
                                                                         try {
                                                                             const res = await fetch('/api/coupons', {

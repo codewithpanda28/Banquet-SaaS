@@ -46,21 +46,33 @@ export default function OrderCard({ order, onViewDetails }: OrderCardProps) {
     const config = orderTypeConfig[order.order_type as keyof typeof orderTypeConfig]
     const [isRecentlyUpdated, setIsRecentlyUpdated] = useState(false)
     const prevUpdatedAtRef = useRef(order.updated_at)
+    const prevTotalRef = useRef(order.total)
+    const prevStatusRef = useRef(order.status)
 
     useEffect(() => {
-        // Only trigger pulse if updated_at changed and it's NOT the first time it's being created
-        // (i.e. updated_at is different from created_at and from previous value)
-        if (order.updated_at !== prevUpdatedAtRef.current && order.updated_at !== order.created_at) {
+        // Only trigger pulse if:
+        // 1. updated_at changed
+        // 2. It's NOT the initial creation
+        // 3. The status hasn't changed (meaning it's an item update, not a column move)
+        //    OR the total has increased (meaning new items were added)
+        const totalIncreased = order.total > prevTotalRef.current
+        const timeChanged = order.updated_at !== prevUpdatedAtRef.current
+
+        if (timeChanged && totalIncreased) {
             setIsRecentlyUpdated(true)
 
             const timer = setTimeout(() => {
                 setIsRecentlyUpdated(false)
-            }, 15000) // Keep highlighted for 15 seconds
+            }, 15000)
 
-            prevUpdatedAtRef.current = order.updated_at
             return () => clearTimeout(timer)
         }
-    }, [order.updated_at, order.created_at])
+
+        // Always sync refs even if we don't pulse
+        prevUpdatedAtRef.current = order.updated_at
+        prevTotalRef.current = order.total
+        prevStatusRef.current = order.status
+    }, [order.updated_at, order.created_at, order.total, order.status])
 
     const getNextStatus = (): OrderStatus | undefined => {
         const statusFlow: Record<string, OrderStatus> = {
@@ -84,6 +96,7 @@ export default function OrderCard({ order, onViewDetails }: OrderCardProps) {
 
     const handleQuickAction = (e: React.MouseEvent) => {
         e.stopPropagation()
+        setIsRecentlyUpdated(false) // Clear highlight when acted upon
         const nextStatus = getNextStatus()
         if (nextStatus) {
             updateOrder(order.id, { status: nextStatus })
