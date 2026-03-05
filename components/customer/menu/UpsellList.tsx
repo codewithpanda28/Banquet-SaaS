@@ -35,49 +35,85 @@ export function UpsellList({ restaurantId, limit = 5, title = "Complete Your Mea
             // Get all IDs in cart to avoid suggesting what's already there
             const cartItemIds = items.map(i => i.id)
 
-            // 1. Get rules based on items in cart
-            const { data: rules } = await supabase
+            let finalItems: (MenuItem & { upsellMessage?: string })[] = []
+            const addedItemIds = new Set<string>(cartItemIds)
+
+            // 1. PHASE 1: Rules for items CURRENTLY IN CART (The absolute priority)
+            const { data: cartRules } = await supabase
                 .from('upsell_rules')
-                .select('suggest_item_id')
+                .select(`
+                    id,
+                    message,
+                    suggest_item:menu_items!suggest_item_id (*)
+                `)
                 .eq('restaurant_id', restaurantId)
                 .in('trigger_item_id', cartItemIds)
                 .eq('is_active', true)
-                .limit(10)
+                .order('priority', { ascending: true })
 
-            let suggestIds: string[] = []
-            if (rules && rules.length > 0) {
-                suggestIds = rules.map(r => r.suggest_item_id)
+            if (cartRules && cartRules.length > 0) {
+                cartRules.forEach(r => {
+                    const item = Array.isArray(r.suggest_item) ? r.suggest_item[0] : r.suggest_item
+                    if (item && item.is_available && !addedItemIds.has(item.id)) {
+                        finalItems.push({ ...item, upsellMessage: r.message })
+                        addedItemIds.add(item.id)
+                    }
+                })
             }
 
-            // 2. If no rules, get some bestsellers
-            if (suggestIds.length === 0) {
+            // 2. PHASE 2: Other MANUAL RULES for this restaurant (Global Suggestions)
+            if (finalItems.length < 8) {
+                const { data: globalRules } = await supabase
+                    .from('upsell_rules')
+                    .select(`
+                        id,
+                        message,
+                        suggest_item:menu_items!suggest_item_id (*)
+                    `)
+                    .eq('restaurant_id', restaurantId)
+                    .eq('is_active', true)
+                    .limit(10)
+
+                if (globalRules) {
+                    globalRules.forEach(r => {
+                        const item = Array.isArray(r.suggest_item) ? r.suggest_item[0] : r.suggest_item
+                        if (item && item.is_available && !addedItemIds.has(item.id)) {
+                            finalItems.push({
+                                ...item,
+                                upsellMessage: r.message || "Customers' top choice! ⭐"
+                            })
+                            addedItemIds.add(item.id)
+                        }
+                    })
+                }
+            }
+
+            // 3. PHASE 3: Bestsellers Filler
+            if (finalItems.length < 5) {
+                const exclusionList = Array.from(addedItemIds)
                 const { data: bestsellers } = await supabase
                     .from('menu_items')
-                    .select('id')
+                    .select('*')
                     .eq('restaurant_id', restaurantId)
                     .eq('is_bestseller', true)
                     .eq('is_available', true)
+                    .not('id', 'in', exclusionList.length > 0 ? `(${exclusionList.join(',')})` : '("")')
                     .limit(5)
 
-                if (bestsellers) suggestIds = bestsellers.map(b => b.id)
+                if (bestsellers) {
+                    bestsellers.forEach(item => {
+                        if (!addedItemIds.has(item.id)) {
+                            finalItems.push({
+                                ...item,
+                                upsellMessage: "Our customer favorite! 🏆"
+                            })
+                            addedItemIds.add(item.id)
+                        }
+                    })
+                }
             }
 
-            // Filter out items already in cart
-            const filteredIds = suggestIds.filter(id => !cartItemIds.includes(id))
-
-            if (filteredIds.length === 0) {
-                setSuggestions([])
-                return
-            }
-
-            // 3. Fetch item details
-            const { data: menuItems } = await supabase
-                .from('menu_items')
-                .select('*')
-                .in('id', filteredIds.slice(0, limit))
-                .eq('is_available', true)
-
-            setSuggestions(menuItems || [])
+            setSuggestions(finalItems.slice(0, 10))
         } catch (err) {
             console.error('❌ [UpsellList] Error:', err)
         } finally {
@@ -100,7 +136,9 @@ export function UpsellList({ restaurantId, limit = 5, title = "Complete Your Mea
     return (
         <div className="space-y-4 py-4">
             <div className="flex items-center gap-2 px-1">
-                <div className="h-1 w-8 bg-orange-500 rounded-full" />
+                <div className="h-8 w-8 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600">
+                    <Sparkles className="w-4 h-4 fill-orange-500" />
+                </div>
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">{title}</h3>
             </div>
 
@@ -115,7 +153,7 @@ export function UpsellList({ restaurantId, limit = 5, title = "Complete Your Mea
                         <div className="absolute inset-0 bg-gradient-to-b from-transparent to-orange-50/10 pointer-events-none" />
 
                         {/* Image */}
-                        <div className="h-28 w-full rounded-xl overflow-hidden mb-3 bg-slate-50 relative">
+                        <div className="h-28 w-full rounded-xl overflow-hidden mb-3 bg-slate-50 relative border border-slate-50">
                             {item.image_url ? (
                                 <img src={item.image_url} alt={item.name} className="w-full h-full object-cover transition-transform group-hover:scale-110" />
                             ) : (
@@ -132,23 +170,29 @@ export function UpsellList({ restaurantId, limit = 5, title = "Complete Your Mea
 
                         {/* Info */}
                         <div className="space-y-1">
-                            <div className="flex items-center gap-1">
-                                <div className={`w-2 h-2 rounded-full ${item.is_veg ? 'bg-green-600' : 'bg-red-600'}`} />
-                                <h4 className="font-bold text-xs text-slate-900 truncate">{item.name}</h4>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                                <div className={`w-2 h-2 rounded-full ring-2 ring-white shrink-0 ${item.is_veg ? 'bg-green-600' : 'bg-red-600'}`} />
+                                <h4 className="font-black text-[11px] text-slate-900 truncate tracking-tight">{item.name}</h4>
                             </div>
 
-                            <div className="flex items-center justify-between mt-2">
+                            {(item as any).upsellMessage && (
+                                <p className="text-[9px] text-slate-400 font-medium line-clamp-1 italic px-0.5 mt-0.5">
+                                    &quot;{(item as any).upsellMessage}&quot;
+                                </p>
+                            )}
+
+                            <div className="flex items-center justify-between mt-2 pt-1">
                                 <div className="flex flex-col">
-                                    <span className="font-black text-sm text-orange-600">₹{item.discounted_price || item.price}</span>
+                                    <span className="font-black text-xs text-orange-600">₹{item.discounted_price || item.price}</span>
                                     {item.discounted_price && (
-                                        <span className="text-[10px] text-slate-400 line-through">₹{item.price}</span>
+                                        <span className="text-[9px] text-slate-400 line-through">₹{item.price}</span>
                                     )}
                                 </div>
                                 <button
                                     onClick={() => handleAdd(item)}
-                                    className="h-8 w-8 rounded-lg bg-slate-900 text-white flex items-center justify-center hover:bg-black transition-colors active:scale-90"
+                                    className="h-7 w-7 rounded-lg bg-slate-900 text-white flex items-center justify-center hover:bg-black transition-colors active:scale-90 shadow-sm shadow-black/10"
                                 >
-                                    <Plus className="w-4 h-4" />
+                                    <Plus className="w-3.5 h-3.5" />
                                 </button>
                             </div>
                         </div>

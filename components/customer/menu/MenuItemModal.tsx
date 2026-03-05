@@ -49,10 +49,7 @@ export function MenuItemModal({ item, isOpen, onClose }: MenuItemModalProps) {
                 <span className="font-bold">Added to Order!</span>
             </div>
         )
-        // Close main modal first
         onClose()
-        // Trigger global upsell
-        setTimeout(() => openUpsell(item.id), 400)
     }
 
     return (

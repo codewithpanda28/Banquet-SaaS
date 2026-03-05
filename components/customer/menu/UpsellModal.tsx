@@ -35,86 +35,151 @@ export function UpsellModal({ triggerItemId, restaurantId, onClose }: UpsellModa
     }, [triggerItemId, restaurantId])
 
     async function fetchSuggestions() {
+        if (!restaurantId) return
         setLoading(true)
         try {
-            // Fetch active upsell rules for this trigger item
-            const { data: rules } = await supabase
-                .from('upsell_rules')
-                .select('suggest_item_id, message')
-                .eq('restaurant_id', restaurantId)
-                .eq('trigger_item_id', triggerItemId)
-                .eq('is_active', true)
-                .order('priority')
-                .limit(3)
+            // Get current cart items
+            const cartItems = useCartStore.getState().items
+            const cartItemIds = cartItems.map(i => i.id)
 
-            if (!rules || rules.length === 0) {
-                // FALLBACK: No rules found, use bestsellers
+            let suggestionsList: UpsellSuggestion[] = []
+            const addedItemIds = new Set<string>(cartItemIds)
+
+            // --- SMART BIDIRECTIONAL LOGIC ---
+            // If Rule A -> B exists, and B is added to cart, suggest A.
+            // This satisfies the user's request: "Ice cream add kiya to rasmalai uper aana chahiye" 
+            // even if the rule is "Rasmalai -> Ice Cream".
+
+            // 1. PHASE 1: Direct & Reverse Rules for the TRIGGER ITEM (Absolute Priority)
+            if (triggerItemId) {
+                // Fetch rules where triggerItemId is EITHER the trigger or the suggestion
+                const { data: triggerRules } = await supabase
+                    .from('upsell_rules')
+                    .select(`
+                        id,
+                        message,
+                        trigger_item_id,
+                        suggest_item_id,
+                        trigger:menu_items!trigger_item_id (*),
+                        suggest:menu_items!suggest_item_id (*)
+                    `)
+                    .eq('restaurant_id', restaurantId)
+                    .or(`trigger_item_id.eq.${triggerItemId},suggest_item_id.eq.${triggerItemId}`)
+                    .eq('is_active', true)
+                    .order('priority', { ascending: true })
+
+                if (triggerRules && triggerRules.length > 0) {
+                    triggerRules.forEach(r => {
+                        // If triggerItemId is the 'trigger', suggest the 'suggest_item'
+                        // If triggerItemId is the 'suggest_item', suggest the 'trigger'
+                        const isDirectMatch = r.trigger_item_id === triggerItemId
+                        const suggestedItemRaw = isDirectMatch ? r.suggest : r.trigger
+                        const item = Array.isArray(suggestedItemRaw) ? suggestedItemRaw[0] : suggestedItemRaw
+
+                        if (item && item.is_available && !addedItemIds.has(item.id)) {
+                            suggestionsList.push({
+                                item: item as MenuItem,
+                                message: r.message || (isDirectMatch ? "Goes perfectly with your meal! 🍽️" : "Goes great with your selection! ✨")
+                            })
+                            addedItemIds.add(item.id)
+                        }
+                    })
+                }
+            }
+
+            // 2. PHASE 2: Rules for OTHER items CURRENTLY IN CART (Including Reverse)
+            const otherCartItemIds = cartItemIds.filter(id => id !== triggerItemId)
+            if (otherCartItemIds.length > 0) {
+                const { data: cartRules } = await supabase
+                    .from('upsell_rules')
+                    .select(`
+                        id,
+                        message,
+                        trigger_item_id,
+                        suggest_item_id,
+                        trigger:menu_items!trigger_item_id (*),
+                        suggest:menu_items!suggest_item_id (*)
+                    `)
+                    .eq('restaurant_id', restaurantId)
+                    .or(`trigger_item_id.in.(${otherCartItemIds.join(',')}),suggest_item_id.in.(${otherCartItemIds.join(',')})`)
+                    .eq('is_active', true)
+                    .order('priority', { ascending: true })
+
+                if (cartRules && cartRules.length > 0) {
+                    cartRules.forEach(r => {
+                        // Check which cart item matches which side of the rule
+                        const matchingCartId = otherCartItemIds.find(cid => cid === r.trigger_item_id || cid === r.suggest_item_id)
+                        const isDirectMatch = matchingCartId === r.trigger_item_id
+                        const suggestedItemRaw = isDirectMatch ? r.suggest : r.trigger
+                        const item = Array.isArray(suggestedItemRaw) ? suggestedItemRaw[0] : suggestedItemRaw
+
+                        if (item && item.is_available && !addedItemIds.has(item.id)) {
+                            suggestionsList.push({
+                                item: item as MenuItem,
+                                message: r.message || "Goes perfectly with your meal! 🍽️"
+                            })
+                            addedItemIds.add(item.id)
+                        }
+                    })
+                }
+            }
+
+            // 3. PHASE 3: Other MANUAL RULES for this restaurant (Global Suggestions)
+            if (suggestionsList.length < 8) {
+                const { data: globalRules } = await supabase
+                    .from('upsell_rules')
+                    .select(`
+                        id,
+                        message,
+                        suggest_item:menu_items!suggest_item_id (*)
+                    `)
+                    .eq('restaurant_id', restaurantId)
+                    .eq('is_active', true)
+                    .limit(10)
+
+                if (globalRules) {
+                    globalRules.forEach(r => {
+                        const item = Array.isArray(r.suggest_item) ? r.suggest_item[0] : r.suggest_item
+                        if (item && item.is_available && !addedItemIds.has(item.id)) {
+                            suggestionsList.push({
+                                item: item as MenuItem,
+                                message: r.message || "Customers' top choice! ⭐"
+                            })
+                            addedItemIds.add(item.id)
+                        }
+                    })
+                }
+            }
+
+            // 4. PHASE 4: Bestsellers Filler
+            if (suggestionsList.length < 5) {
+                const exclusionList = Array.from(addedItemIds)
                 const { data: bestsellers } = await supabase
                     .from('menu_items')
                     .select('*')
                     .eq('restaurant_id', restaurantId)
                     .eq('is_bestseller', true)
                     .eq('is_available', true)
-                    .neq('id', triggerItemId)
-                    .limit(3)
+                    .not('id', 'in', exclusionList.length > 0 ? `(${exclusionList.join(',')})` : '("")')
+                    .limit(5)
 
-                if (bestsellers && bestsellers.length > 0) {
-                    setSuggestions(bestsellers.map(item => ({
-                        item: item as MenuItem,
-                        message: "Recommended bestseller for you! 🌟"
-                    })))
-                } else {
-                    setSuggestions([])
+                if (bestsellers) {
+                    bestsellers.forEach(item => {
+                        if (!addedItemIds.has(item.id)) {
+                            suggestionsList.push({
+                                item: item as MenuItem,
+                                message: "Best Seller! 🏆"
+                            })
+                            addedItemIds.add(item.id)
+                        }
+                    })
                 }
-                setLoading(false)
-                return
             }
 
-            // Fetch the actual menu item details for suggestions
-            const suggestIds = rules.map(r => r.suggest_item_id)
-            const { data: menuItems } = await supabase
-                .from('menu_items')
-                .select('*')
-                .in('id', suggestIds)
-                .eq('is_available', true)
-
-            if (!menuItems || menuItems.length === 0) {
-                // FALLBACK: If no rules, show bestsellers (excluding the current item)
-                const { data: bestsellers } = await supabase
-                    .from('menu_items')
-                    .select('*')
-                    .eq('restaurant_id', restaurantId)
-                    .eq('is_bestseller', true)
-                    .eq('is_available', true)
-                    .neq('id', triggerItemId)
-                    .limit(3)
-
-                if (bestsellers && bestsellers.length > 0) {
-                    setSuggestions(bestsellers.map(item => ({
-                        item: item as MenuItem,
-                        message: "Recommended bestseller for you! 🌟"
-                    })))
-                } else {
-                    setSuggestions([])
-                }
-                setLoading(false)
-                return
-            }
-
-            const result: UpsellSuggestion[] = rules
-                .map(rule => {
-                    const item = menuItems.find(m => m.id === rule.suggest_item_id)
-                    if (!item) return null
-                    return { item: item as MenuItem, message: rule.message }
-                })
-                .filter(Boolean) as UpsellSuggestion[]
-
-            // Ensure unique suggestions by item ID
-            const uniqueResults = result.filter((v, i, a) => a.findIndex(t => (t.item.id === v.item.id)) === i)
-
-            setSuggestions(uniqueResults)
+            // Final safety filter and limit to 10
+            setSuggestions(suggestionsList.slice(0, 10))
         } catch (err) {
-            console.error('❌ [Upsell] Error fetching suggestions:', err)
+            console.error('❌ [UpsellModal] Error:', err)
             setSuggestions([])
         } finally {
             setLoading(false)
@@ -181,7 +246,7 @@ export function UpsellModal({ triggerItemId, restaurantId, onClose }: UpsellModa
                     </div>
 
                     {/* Suggestions */}
-                    <div className="px-4 pb-6 space-y-3">
+                    <div className="px-4 pb-6 space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar">
                         {suggestions.map((suggestion, index) => {
                             const price = suggestion.item.discounted_price || suggestion.item.price
                             const hasDiscount = !!suggestion.item.discounted_price

@@ -9,7 +9,7 @@ import { useUIStore } from '@/store/uiStore'
 
 export function FloatingCartButton() {
     const { items, getTotal, getItemCount } = useCartStore()
-    const { openCart, isCartOpen } = useUIStore()
+    const { openCart, isCartOpen, openUpsell } = useUIStore()
     const [isClient, setIsClient] = React.useState(false)
     const pathname = usePathname()
 
@@ -28,6 +28,18 @@ export function FloatingCartButton() {
 
     if (count === 0) return null
 
+    const handleViewCart = () => {
+        openCart()
+        // Trigger upsell based on cart contents
+        if (items.length > 0) {
+            // Give a tiny moment for sidebar animation to start, then pop the modal
+            setTimeout(() => {
+                // Pass the last item as a hint, but the modal will check all items
+                openUpsell(items[items.length - 1].id)
+            }, 300)
+        }
+    }
+
     return (
         <AnimatePresence>
             {!isCartOpen && (
@@ -39,7 +51,7 @@ export function FloatingCartButton() {
                     className="fixed bottom-6 left-6 right-6 z-40 pointer-events-none"
                 >
                     <button
-                        onClick={openCart}
+                        onClick={handleViewCart}
                         className="w-full bg-foreground text-background shadow-2xl shadow-black/20 rounded-2xl p-4 flex items-center justify-between pointer-events-auto hover:bg-foreground/90 active:scale-[0.98] transition-all group overflow-hidden relative"
                     >
                         <div className="absolute inset-0 bg-gradient-to-r from-primary/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />

@@ -5,6 +5,7 @@ import { ShoppingBag, Utensils, Box, MapPin, Bell, Check, Trash2, ArrowRight, Cl
 import { useRestaurant } from '@/hooks/useRestaurant'
 import { useCartStore } from '@/store/cartStore'
 import { useNotificationStore } from '@/store/notificationStore'
+import { useUIStore } from '@/store/uiStore'
 import { Button } from '@/components/ui/button'
 import {
     DropdownMenu,
@@ -120,7 +121,15 @@ export function Header() {
                         <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => router.push('/customer/menu')} // In case they are elsewhere, or just to trigger cart
+                            onClick={() => {
+                                // Unified cart & upsell trigger
+                                const { openCart, openUpsell } = useUIStore.getState()
+                                const { items } = useCartStore.getState()
+                                openCart()
+                                if (items.length > 0) {
+                                    setTimeout(() => openUpsell(items[items.length - 1].id), 200)
+                                }
+                            }}
                             className="rounded-2xl w-10 h-10 relative hover:bg-slate-100/80 transition-all active:scale-90 mr-1"
                         >
                             <ShoppingBag className="w-5 h-5 text-slate-600" />

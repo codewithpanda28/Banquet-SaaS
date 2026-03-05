@@ -10,14 +10,25 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
     Sparkles, TrendingUp, DollarSign, Star, ShoppingBag,
-    Zap, Edit, Save, X, ArrowUpRight, Brain, RefreshCw
+    Zap, Edit, Save, X, ArrowUpRight, Brain, RefreshCw, Plus, Search, Trash2
 } from 'lucide-react'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface MenuItem { id: string; name: string; price: number; category_id: string; is_veg: boolean; image_url?: string; is_bestseller?: boolean }
-interface UpsellRule { id: string; trigger_item_id: string; suggest_item_id: string; message: string; priority: number; is_active: boolean }
+interface Category { id: string; name: string }
+interface UpsellRule {
+    id: string;
+    trigger_item_id: string;
+    suggest_item_id: string;
+    message: string;
+    priority: number;
+    is_active: boolean;
+    trigger_item?: MenuItem;
+    suggest_item?: MenuItem;
+}
 
 // AI-generated upsell suggestions (simulated - in production use OpenAI)
 const generateUpsellMessage = (trigger: string, suggest: string, margin: string) =>
@@ -25,6 +36,7 @@ const generateUpsellMessage = (trigger: string, suggest: string, margin: string)
 
 export default function AIUpsellPage() {
     const [menuItems, setMenuItems] = useState<MenuItem[]>([])
+    const [categories, setCategories] = useState<Category[]>([])
     const [upsellRules, setUpsellRules] = useState<UpsellRule[]>([])
     const [loading, setLoading] = useState(true)
     const [generating, setGenerating] = useState(false)
@@ -33,15 +45,23 @@ export default function AIUpsellPage() {
     const [topItems, setTopItems] = useState<{ name: string; revenue: number; orders: number }[]>([])
     const [aiSuggestions, setAiSuggestions] = useState<{ trigger: string; suggest: string; reason: string; estimatedRevenue: number }[]>([])
 
+    const [ruleSearch, setRuleSearch] = useState('')
+    const [manualForm, setManualForm] = useState({
+        triggerId: '',
+        suggestId: '',
+        message: ''
+    })
+
     useEffect(() => {
         fetchData()
     }, [])
 
     async function fetchData() {
         setLoading(true)
-        const [{ data: items }, { data: rules }] = await Promise.all([
+        const [{ data: items }, { data: rules }, { data: cats }] = await Promise.all([
             supabase.from('menu_items').select('*').eq('restaurant_id', RESTAURANT_ID).eq('is_available', true),
-            supabase.from('upsell_rules').select('*').eq('restaurant_id', RESTAURANT_ID).order('priority'),
+            supabase.from('upsell_rules').select('*, trigger_item:menu_items!trigger_item_id(*), suggest_item:menu_items!suggest_item_id(*)').eq('restaurant_id', RESTAURANT_ID).order('priority'),
+            supabase.from('categories').select('id, name').eq('restaurant_id', RESTAURANT_ID)
         ])
 
         // Also fetch top selling items
@@ -58,6 +78,7 @@ export default function AIUpsellPage() {
 
         const sortedItems = Object.values(itemSales).sort((a, b) => b.revenue - a.revenue).slice(0, 8)
 
+        setCategories(cats || [])
         setMenuItems((items || []).filter((i: MenuItem) => !i.name.startsWith('[DELETED]')))
         setUpsellRules(rules || [])
         setTopItems(sortedItems)
@@ -275,78 +296,256 @@ export default function AIUpsellPage() {
                 </Card>
             </div>
 
-            {/* Active Upsell Rules */}
-            <Card className="border-gray-100 shadow-sm">
-                <CardHeader className="border-b border-gray-100">
-                    <CardTitle className="text-base flex items-center gap-2">
-                        <Zap className="h-4 w-4 text-primary" /> Active Upsell Rules
-                    </CardTitle>
-                    <CardDescription>These messages show to customers during ordering</CardDescription>
-                </CardHeader>
-                <CardContent className="p-5">
-                    {upsellRules.length === 0 ? (
-                        <div className="text-center py-10 text-gray-400">
-                            <Zap className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                            <p className="text-sm">No upsell rules yet</p>
-                            <p className="text-xs mt-1">Click "Generate AI Suggestions" to get started</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {upsellRules.map(rule => (
-                                <div key={rule.id} className={cn(
-                                    'p-4 rounded-2xl border-2 transition-all',
-                                    rule.is_active ? 'border-primary/20 bg-primary/5' : 'border-gray-100 bg-gray-50 opacity-60'
-                                )}>
-                                    <div className="flex items-start justify-between gap-3">
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <span className="text-sm font-bold text-gray-900">{getItemName(rule.trigger_item_id)}</span>
-                                                <span className="text-gray-400">→</span>
-                                                <span className="text-sm font-bold text-primary">{getItemName(rule.suggest_item_id)}</span>
-                                                <span className="text-xs text-gray-500">+₹{getItemPrice(rule.suggest_item_id)}</span>
-                                            </div>
-                                            {editingRule === rule.id ? (
-                                                <div className="flex gap-2 mt-2">
-                                                    <Textarea
-                                                        value={editMessage}
-                                                        onChange={e => setEditMessage(e.target.value)}
-                                                        className="text-xs h-16 resize-none"
-                                                    />
-                                                    <div className="flex flex-col gap-1">
-                                                        <Button size="icon" className="h-8 w-8 bg-green-600" onClick={() => saveEditMessage(rule.id)}><Save className="h-3 w-3" /></Button>
-                                                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingRule(null)}><X className="h-3 w-3" /></Button>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <p className="text-xs text-gray-500 italic mt-1 line-clamp-2">"{rule.message}"</p>
+            <div className="grid gap-6 lg:grid-cols-3">
+                {/* Create Manual Rule */}
+                <div className="lg:col-span-1 space-y-6">
+                    <Card className="border-primary/20 shadow-xl overflow-hidden">
+                        <CardHeader className="bg-gradient-to-br from-primary/10 to-transparent border-b border-primary/10">
+                            <CardTitle className="text-base flex items-center gap-2">
+                                <Plus className="h-4 w-4 text-primary" /> Create Manual Rule
+                            </CardTitle>
+                            <CardDescription>Custom triggers for your menu</CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-5 space-y-4">
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Step 1: If Customer Adds:</Label>
+                                <Select
+                                    value={manualForm.triggerId}
+                                    onValueChange={(v) => setManualForm(prev => ({ ...prev, triggerId: v }))}
+                                >
+                                    <SelectTrigger className="w-full h-11 bg-gray-50/50 border-gray-200">
+                                        <SelectValue placeholder="Select Trigger Item" />
+                                    </SelectTrigger>
+                                    <SelectContent className="max-h-80 z-[100]">
+                                        {categories.length > 0 ? categories.map(cat => (
+                                            <SelectGroup key={cat.id}>
+                                                <SelectLabel className="px-2 py-1.5 text-[10px] font-black text-gray-400 uppercase bg-gray-100/50">{cat.name}</SelectLabel>
+                                                {menuItems.filter(i => i.category_id === cat.id).map(item => (
+                                                    <SelectItem key={item.id} value={item.id}>
+                                                        {item.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectGroup>
+                                        )) : menuItems.map(item => (
+                                            <SelectItem key={item.id} value={item.id}>
+                                                {item.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Step 2: Suggest This Item:</Label>
+                                <Select
+                                    value={manualForm.suggestId}
+                                    onValueChange={(v) => setManualForm(prev => ({ ...prev, suggestId: v }))}
+                                >
+                                    <SelectTrigger className="w-full h-11 bg-gray-50/50 border-gray-200">
+                                        <SelectValue placeholder="Select Suggestion" />
+                                    </SelectTrigger>
+                                    <SelectContent className="max-h-80 z-[100]">
+                                        {categories.length > 0 ? categories.map(cat => (
+                                            <SelectGroup key={cat.id}>
+                                                <SelectLabel className="px-2 py-1.5 text-[10px] font-black text-gray-400 uppercase bg-gray-100/50">{cat.name}</SelectLabel>
+                                                {menuItems.filter(i => i.category_id === cat.id).map(item => (
+                                                    <SelectItem key={item.id} value={item.id}>
+                                                        {item.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectGroup>
+                                        )) : menuItems.map(item => (
+                                            <SelectItem key={item.id} value={item.id}>
+                                                {item.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-[10px] font-black uppercase text-gray-400 tracking-wider">Step 3: Custom Message (Optional):</Label>
+                                <Textarea
+                                    placeholder="E.g. Great choice! Add a cold drink to finish your meal."
+                                    value={manualForm.message}
+                                    onChange={(e) => setManualForm(prev => ({ ...prev, message: e.target.value }))}
+                                    className="h-20 text-xs resize-none bg-gray-50/50 border-gray-200 focus:bg-white transition-colors"
+                                />
+                            </div>
+
+                            <Button
+                                className="w-full h-12 rounded-xl font-bold shadow-lg bg-primary hover:bg-primary/90 shadow-primary/20 transition-all active:scale-[0.98]"
+                                onClick={() => {
+                                    if (!manualForm.triggerId || !manualForm.suggestId) {
+                                        toast.error('Select both trigger and suggestion items')
+                                        return
+                                    }
+                                    const trigger = menuItems.find(m => m.id === manualForm.triggerId)?.name || ''
+                                    const suggest = menuItems.find(m => m.id === manualForm.suggestId)?.name || ''
+                                    saveRule(
+                                        manualForm.triggerId,
+                                        manualForm.suggestId,
+                                        manualForm.message || generateUpsellMessage(trigger, suggest, '')
+                                    )
+                                    setManualForm({ triggerId: '', suggestId: '', message: '' })
+                                }}
+                            >
+                                <Save className="h-4 w-4 mr-2" /> Save Promotion Rule
+                            </Button>
+                        </CardContent>
+                    </Card>
+
+                    {/* Preview Card */}
+                    {manualForm.triggerId && manualForm.suggestId && (
+                        <Card className="border-orange-200 bg-orange-50/30 overflow-hidden animate-in zoom-in-95">
+                            <CardHeader className="p-4 border-b border-orange-100">
+                                <CardTitle className="text-xs font-black uppercase text-orange-600 flex items-center gap-2">
+                                    <Sparkles className="h-3.5 w-3.5" /> Live Preview
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-4">
+                                <div className="bg-white rounded-2xl p-4 shadow-sm border border-orange-100 space-y-3">
+                                    <div className="flex gap-3">
+                                        <div className="h-12 w-12 rounded-lg bg-gray-100 shrink-0 overflow-hidden">
+                                            {menuItems.find(m => m.id === manualForm.suggestId)?.image_url && (
+                                                <img src={menuItems.find(m => m.id === manualForm.suggestId)?.image_url} className="w-full h-full object-cover" />
                                             )}
                                         </div>
-                                        <div className="flex gap-1 shrink-0">
-                                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
-                                                setEditingRule(rule.id)
-                                                setEditMessage(rule.message)
-                                            }}>
-                                                <Edit className="h-3 w-3" />
-                                            </Button>
-                                            <button
-                                                onClick={() => toggleRule(rule.id, rule.is_active)}
-                                                className={cn('h-7 px-3 rounded-lg text-[10px] font-bold transition-all',
-                                                    rule.is_active ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-xs font-bold text-gray-900">{menuItems.find(m => m.id === manualForm.suggestId)?.name}</p>
+                                            <p className="text-[10px] text-gray-500 line-clamp-2 mt-0.5">
+                                                {manualForm.message || generateUpsellMessage(
+                                                    menuItems.find(m => m.id === manualForm.triggerId)?.name || '',
+                                                    menuItems.find(m => m.id === manualForm.suggestId)?.name || '',
+                                                    ''
                                                 )}
-                                            >
-                                                {rule.is_active ? 'ON' : 'OFF'}
-                                            </button>
-                                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400" onClick={() => deleteRule(rule.id)}>
-                                                <X className="h-3 w-3" />
-                                            </Button>
+                                            </p>
                                         </div>
                                     </div>
+                                    <Button size="sm" className="w-full bg-orange-500 text-[10px] h-8 font-bold">Add to Order +₹{menuItems.find(m => m.id === manualForm.suggestId)?.price}</Button>
                                 </div>
-                            ))}
-                        </div>
+                            </CardContent>
+                        </Card>
                     )}
-                </CardContent>
-            </Card>
+                </div>
+
+                {/* Active Upsell Rules */}
+                <Card className="border-gray-100 shadow-xl lg:col-span-2 overflow-hidden flex flex-col">
+                    <CardHeader className="border-b border-gray-100 pb-4 bg-white sticky top-0 z-10">
+                        <div className="flex items-center justify-between gap-4 flex-wrap">
+                            <div>
+                                <CardTitle className="text-base flex items-center gap-2">
+                                    <Zap className="h-4 w-4 text-primary fill-primary/20" /> Active Promotions
+                                </CardTitle>
+                                <CardDescription>Currently driving {upsellRules.length} product pairings</CardDescription>
+                            </div>
+                            <div className="relative w-full sm:w-64">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                <Input
+                                    placeholder="Search by product name..."
+                                    className="pl-10 h-10 text-sm bg-gray-50/50 border-gray-200 rounded-xl"
+                                    value={ruleSearch}
+                                    onChange={(e) => setRuleSearch(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-0 flex-1 overflow-hidden">
+                        {upsellRules.length === 0 ? (
+                            <div className="text-center py-20 text-gray-400">
+                                <Zap className="h-12 w-12 mx-auto mb-4 opacity-10" />
+                                <p className="text-sm font-medium">No active promotions yet</p>
+                                <p className="text-xs mt-1">Start by creating a manual rule or use AI suggestions</p>
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-gray-50 overflow-y-auto max-h-[800px] scrollbar-hide">
+                                {upsellRules
+                                    .filter(r =>
+                                        getItemName(r.trigger_item_id).toLowerCase().includes(ruleSearch.toLowerCase()) ||
+                                        getItemName(r.suggest_item_id).toLowerCase().includes(ruleSearch.toLowerCase())
+                                    )
+                                    .map(rule => (
+                                        <div key={rule.id} className={cn(
+                                            'p-5 transition-all group hover:bg-gray-50/80',
+                                            !rule.is_active && 'opacity-60 bg-gray-50/40'
+                                        )}>
+                                            <div className="flex items-start gap-4">
+                                                {/* Rule Visual */}
+                                                <div className="flex items-center gap-2 shrink-0 pt-1">
+                                                    <div className="h-10 w-10 rounded-lg bg-gray-100 border border-gray-200 overflow-hidden shadow-sm">
+                                                        {rule.trigger_item?.image_url ? (
+                                                            <img src={rule.trigger_item.image_url} className="h-full w-full object-cover" />
+                                                        ) : (
+                                                            <div className="h-full w-full flex items-center justify-center text-[10px] text-gray-400">Trigger</div>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-gray-300">→</div>
+                                                    <div className="h-10 w-10 rounded-lg bg-primary/10 border border-primary/20 overflow-hidden shadow-sm ring-2 ring-primary/5">
+                                                        {rule.suggest_item?.image_url ? (
+                                                            <img src={rule.suggest_item.image_url} className="h-full w-full object-cover" />
+                                                        ) : (
+                                                            <div className="h-full w-full flex items-center justify-center text-[10px] text-primary">Suggest</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-sm font-black text-gray-900 truncate">
+                                                            {getItemName(rule.trigger_item_id)}
+                                                        </span>
+                                                        <Badge variant="outline" className="text-[9px] px-1 h-4 font-black uppercase text-gray-400 border-gray-200">Triggers</Badge>
+                                                        <span className="text-gray-900 font-bold ml-1">{getItemName(rule.suggest_item_id)}</span>
+                                                        <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-0 text-[10px] h-4">₹{getItemPrice(rule.suggest_item_id)}</Badge>
+                                                    </div>
+                                                    {editingRule === rule.id ? (
+                                                        <div className="flex gap-2 mt-3 p-3 bg-white rounded-xl border border-primary/20 shadow-inner">
+                                                            <Textarea
+                                                                value={editMessage}
+                                                                onChange={e => setEditMessage(e.target.value)}
+                                                                className="text-xs h-16 resize-none bg-gray-50 focus:bg-white"
+                                                            />
+                                                            <div className="flex flex-col gap-2">
+                                                                <Button size="icon" className="h-8 w-8 bg-green-600 shadow-md shadow-green-200" onClick={() => saveEditMessage(rule.id)}><Save className="h-3.5 w-3.5" /></Button>
+                                                                <Button size="icon" variant="outline" className="h-8 w-8 hover:bg-gray-100" onClick={() => setEditingRule(null)}><X className="h-3.5 w-3.5" /></Button>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <p className="text-xs text-gray-500 font-medium italic mt-1.5 bg-gray-100/50 p-2 rounded-lg inline-block line-clamp-2 max-w-full">
+                                                            "{rule.message}"
+                                                        </p>
+                                                    )}
+                                                </div>
+
+                                                <div className="flex items-center gap-1 shrink-0 pt-1">
+                                                    <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-400 hover:text-primary hover:bg-primary/5 rounded-xl transition-all" onClick={() => {
+                                                        setEditingRule(rule.id)
+                                                        setEditMessage(rule.message)
+                                                    }}>
+                                                        <Edit className="h-4 w-4" />
+                                                    </Button>
+                                                    <button
+                                                        onClick={() => toggleRule(rule.id, rule.is_active)}
+                                                        className={cn('h-8 px-4 rounded-xl text-[10px] font-black tracking-widest transition-all shadow-sm active:scale-95 mx-1',
+                                                            rule.is_active
+                                                                ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white shadow-green-200'
+                                                                : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                                                        )}
+                                                    >
+                                                        {rule.is_active ? 'ACTIVE' : 'DISABLED'}
+                                                    </button>
+                                                    <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all" onClick={() => deleteRule(rule.id)}>
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     )
 }
