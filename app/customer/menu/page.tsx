@@ -17,9 +17,6 @@ import { MenuItem, Coupon } from '@/types'
 import { toast } from 'sonner'
 import { Utensils, ShoppingBag, Truck, Bike } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { getAvailableCoupons } from '@/actions/coupon'
-import { format } from 'date-fns'
-import { triggerAutomationWebhook } from '@/lib/webhook'
 import {
     Sheet,
     SheetContent,
@@ -31,7 +28,6 @@ import {
 
 function MenuContent() {
     const searchParams = useSearchParams()
-    const router = useRouter()
     const tableParam = searchParams.get('table')
     const typeParam = searchParams.get('type')
 
@@ -101,13 +97,6 @@ function MenuContent() {
         return () => { supabase.removeChannel(channel) }
     }, [customerPhone, clearCart, setOrderType])
 
-    // Order Type Selection
-    const handleOrderTypeSelect = (type: 'dine_in' | 'take_away' | 'home_delivery') => {
-        setOrderType(type)
-        if (type === 'dine_in' && tableParam) {
-            if (tableParam) setTableInfo(parseInt(tableParam), 'qr-scan')
-        }
-    }
 
     // Handle initialization and order type selection logic
     useEffect(() => {
@@ -119,20 +108,11 @@ function MenuContent() {
             return
         }
 
-        // If table provided, set table but ASK for mode (removed auto-set)
+        // If table provided, set table but ASK for mode
         if (tableParam) {
             setTableInfo(parseInt(tableParam), 'qr-scan')
-
-            // Trigger QR Scan Webhook (once per scan)
-            const hasScanned = sessionStorage.getItem(`qr_scanned_${tableParam}`)
-            if (!hasScanned) {
-                triggerAutomationWebhook('qr-scan', {
-                    table_id: tableParam,
-                    timestamp: new Date().toISOString(),
-                    restaurant_id: restaurant?.id
-                })
-                sessionStorage.setItem(`qr_scanned_${tableParam}`, 'true')
-            }
+            // NOTE: QR scan webhook is handled in /customer/scan page
+            // Do NOT trigger it here to avoid duplicate WhatsApp messages
         }
 
         // Show modal if not confirmed in session
@@ -157,14 +137,12 @@ function MenuContent() {
 
     const handleOrderTypeSelection = (type: 'dine_in' | 'take_away' | 'home_delivery') => {
         setOrderType(type)
+        if (tableParam) setTableInfo(parseInt(tableParam), tableParam)
         sessionStorage.setItem('orderTypeConfirmed', 'true')
         setShowOrderTypeModal(false)
-
-        const params = new URLSearchParams(searchParams.toString())
-        params.set('type', type)
-        router.push(`?${params.toString()}`)
-
-        toast.success(`Order mode set to ${type.replace('_', ' ').toUpperCase()}`)
+        // ❌ router.push NAHI karo — isse useEffect dobara run hota tha
+        // aur webhook/side-effects trigger hote the
+        toast.success(`${type === 'dine_in' ? '🍽️ Dine In' : type === 'take_away' ? '🛍️ Take Away' : '🏠 Home Delivery'} selected!`)
     }
 
     const filteredItems = useMemo(() => {

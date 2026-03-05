@@ -141,33 +141,93 @@ export default function InventoryPage() {
     async function handleBillPhoto(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0]
         if (!file) return
+
         setScanning(true)
         setScannedText('')
         setParsedItems([])
-        toast.info('AI is analyzing your bill...')
+        toast.info('AI bill scanning kar raha hai... thoda wait karo 🔍')
 
-        // 1. Trigger Automation (Log only for now)
-        await triggerAutomationWebhook('inventory-upload', {
-            file_name: file.name,
-            file_type: file.type,
-            restaurant_id: RESTAURANT_ID,
-            timestamp: new Date().toISOString()
-        })
+        try {
+            // Step 1: Convert image to base64
+            const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader()
+                reader.onload = () => {
+                    const result = reader.result as string
+                    // Remove "data:image/jpeg;base64," prefix and keep only base64 data
+                    resolve(result.split(',')[1])
+                }
+                reader.onerror = reject
+                reader.readAsDataURL(file)
+            })
 
-        // 2. Simulated AI Result (In production, replace with real OCR data)
-        const mockItems = [
-            { name: 'Tomatoes', qty: 5, unit: 'kg', price: 40 },
-            { name: 'Onions', qty: 10, unit: 'kg', price: 30 },
-            { name: 'Cooking Oil', qty: 5, unit: 'L', price: 120 },
-            { name: 'Garam Masala', qty: 1, unit: 'kg', price: 400 },
-        ]
+            // Step 2: Send image to n8n scan-bill webhook
+            const webhookUrl = process.env.NEXT_PUBLIC_SCAN_BILL_WEBHOOK_URL!
+            const response = await fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    file_name: file.name,
+                    file_type: file.type,
+                    file_size: file.size,
+                    image_base64: base64,
+                    restaurant_id: RESTAURANT_ID,
+                    timestamp: new Date().toISOString()
+                })
+            })
 
-        setTimeout(() => {
-            setParsedItems(mockItems)
-            setScannedText(`Extracted ${mockItems.length} items from bill.`)
+            if (!response.ok) {
+                throw new Error(`Webhook failed with status: ${response.status}`)
+            }
+
+            const data = await response.json()
+
+            // Step 3: Parse response — n8n should return { items: [{name, qty, unit, price}] }
+            // Support multiple response formats from n8n
+            let extractedItems: { name: string, qty: number, unit: string, price: number }[] = []
+
+            if (Array.isArray(data)) {
+                // If n8n returns an array directly
+                extractedItems = data.map((item: any) => ({
+                    name: item.name || item.item_name || item.product || '',
+                    qty: parseFloat(item.qty || item.quantity || item.amount || 0),
+                    unit: item.unit || item.uom || 'kg',
+                    price: parseFloat(item.price || item.rate || item.cost || item.unit_price || 0)
+                })).filter(item => item.name)
+            } else if (data.items && Array.isArray(data.items)) {
+                extractedItems = data.items.map((item: any) => ({
+                    name: item.name || item.item_name || item.product || '',
+                    qty: parseFloat(item.qty || item.quantity || item.amount || 0),
+                    unit: item.unit || item.uom || 'kg',
+                    price: parseFloat(item.price || item.rate || item.cost || item.unit_price || 0)
+                })).filter((item: any) => item.name)
+            } else if (data[0]?.items && Array.isArray(data[0].items)) {
+                // n8n sometimes wraps in array: [{items: [...]}]
+                extractedItems = data[0].items.map((item: any) => ({
+                    name: item.name || item.item_name || item.product || '',
+                    qty: parseFloat(item.qty || item.quantity || item.amount || 0),
+                    unit: item.unit || item.uom || 'kg',
+                    price: parseFloat(item.price || item.rate || item.cost || item.unit_price || 0)
+                })).filter((item: any) => item.name)
+            }
+
+            if (extractedItems.length === 0) {
+                toast.error('Koi item nahi mila bill mein. Please clear photo upload karo.')
+                setScanning(false)
+                return
+            }
+
+            setParsedItems(extractedItems)
+            setScannedText(`${extractedItems.length} items nikale gaye bill se ✅`)
+            toast.success(`Bill scan hua! ${extractedItems.length} items mile 🎉`)
+
+        } catch (err: any) {
+            console.error('Bill scan error:', err)
+            toast.error('Bill scan failed. Webhook se data nahi aaya. Console check karo.')
+        } finally {
             setScanning(false)
-            toast.success('Bill scanned successfully!')
-        }, 1500)
+            // Reset file input so same file can be re-uploaded
+            if (fileRef.current) fileRef.current.value = ''
+        }
     }
 
     async function applyScannedBill() {

@@ -1,0 +1,170 @@
+{
+    "name": "Scan Bill - AI Inventory Extractor (OpenRouter)",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "scan-bill",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "id": "node-webhook",
+            "name": "Webhook - Scan Bill",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 2,
+            "position": [
+                200,
+                300
+            ],
+            "webhookId": "scan-bill"
+        },
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://openrouter.ai/api/v1/chat/completions",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpHeaderAuth",
+                "sendHeaders": true,
+                "headerParameters": {
+                    "parameters": [
+                        {
+                            "name": "Authorization",
+                            "value": "Bearer YOUR_OPENROUTER_API_KEY"
+                        },
+                        {
+                            "name": "Content-Type",
+                            "value": "application/json"
+                        },
+                        {
+                            "name": "HTTP-Referer",
+                            "value": "https://restaurant-admin.app"
+                        },
+                        {
+                            "name": "X-Title",
+                            "value": "Restaurant Bill Scanner"
+                        }
+                    ]
+                },
+                "sendBody": true,
+                "specifyBody": "json",
+                "jsonBody": "={\n  \"model\": \"google/gemini-2.0-flash-exp:free\",\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"text\",\n          \"text\": \"You are an expert at reading supplier/vendor bills and invoices. Extract all items from this bill image and return ONLY a valid JSON object in this exact format (no explanation, no markdown, just pure JSON):\\n\\n{\\\"items\\\": [{\\\"name\\\": \\\"item name\\\", \\\"qty\\\": 5, \\\"unit\\\": \\\"kg\\\", \\\"price\\\": 40}]}\\n\\nRules:\\n- name: item/product name as written on bill\\n- qty: numeric quantity purchased\\n- unit: unit of measurement (kg, g, L, ml, pieces, dozen, packets, boxes, bottles) - guess if unclear\\n- price: cost per UNIT in INR (if only total given, divide by qty)\\n- Extract ALL items visible in the bill\\n- Return ONLY the JSON object, absolutely nothing else\"\n        },\n        {\n          \"type\": \"image_url\",\n          \"image_url\": {\n            \"url\": \"={{ 'data:' + $json.file_type + ';base64,' + $json.image_base64 }}\"\n          }\n        }\n      ]\n    }\n  ],\n  \"max_tokens\": 2000,\n  \"temperature\": 0.1\n}",
+                "options": {
+                    "timeout": 60000
+                }
+            },
+            "id": "node-openrouter",
+            "name": "OpenRouter - Gemini Vision",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                460,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Get AI response text\nconst responseData = $input.first().json;\nconst aiText = responseData?.choices?.[0]?.message?.content || '';\n\nconsole.log('Raw AI Response:', aiText);\n\nlet parsedData = { items: [] };\n\ntry {\n  // Clean response - remove markdown/code blocks\n  let clean = aiText\n    .replace(/```json/gi, '')\n    .replace(/```/g, '')\n    .trim();\n\n  // Extract JSON object if mixed with text\n  const jsonMatch = clean.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    clean = jsonMatch[0];\n  }\n\n  parsedData = JSON.parse(clean);\n\n  // Normalize: handle if AI returned direct array\n  if (Array.isArray(parsedData)) {\n    parsedData = { items: parsedData };\n  }\n\n  // Ensure items array exists\n  if (!parsedData.items || !Array.isArray(parsedData.items)) {\n    parsedData.items = [];\n  }\n\n  // Validate & clean each item\n  parsedData.items = parsedData.items\n    .filter(item => item && item.name && String(item.name).trim() !== '')\n    .map(item => ({\n      name: String(item.name || '').trim(),\n      qty: parseFloat(item.qty || item.quantity || item.amount || 1) || 1,\n      unit: String(item.unit || item.uom || 'kg').toLowerCase().trim(),\n      price: parseFloat(item.price || item.rate || item.cost || item.unit_price || 0) || 0\n    }));\n\n  console.log('Parsed items:', JSON.stringify(parsedData.items));\n\n} catch (err) {\n  console.error('Parse error:', err.message);\n  parsedData = {\n    items: [],\n    error: 'Bill se data parse nahi hua',\n    raw_response: aiText\n  };\n}\n\nreturn [{ json: parsedData }];"
+            },
+            "id": "node-parse",
+            "name": "Parse & Clean Response",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                720,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ JSON.stringify($json) }}",
+                "options": {
+                    "responseCode": 200,
+                    "responseHeaders": {
+                        "entries": [
+                            {
+                                "name": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "name": "Access-Control-Allow-Origin",
+                                "value": "*"
+                            },
+                            {
+                                "name": "Access-Control-Allow-Methods",
+                                "value": "POST, OPTIONS"
+                            }
+                        ]
+                    }
+                }
+            },
+            "id": "node-respond",
+            "name": "Respond to Webhook",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                980,
+                300
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook - Scan Bill": {
+            "main": [
+                [
+                    {
+                        "node": "OpenRouter - Gemini Vision",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "OpenRouter - Gemini Vision": {
+            "main": [
+                [
+                    {
+                        "node": "Parse & Clean Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Parse & Clean Response": {
+            "main": [
+                [
+                    {
+                        "node": "Respond to Webhook",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1",
+        "saveManualExecutions": true,
+        "callerPolicy": "workflowsFromSameOwner"
+    },
+    "staticData": null,
+    "meta": {
+        "templateCredsSetupCompleted": true
+    },
+    "pinData": {},
+    "tags": [
+        {
+            "id": "restaurant",
+            "name": "restaurant"
+        },
+        {
+            "id": "inventory",
+            "name": "inventory"
+        },
+        {
+            "id": "scan-bill",
+            "name": "scan-bill"
+        }
+    ]
+}

@@ -84,16 +84,6 @@ export default function WaiterDashboard() {
         console.log('🔍 Verifying staff with passcode:', passcode)
 
         try {
-            // ✅ HARDCODED BYPASS FOR TESTING
-            if (passcode === '1234' || passcode === '1801') {
-                setStaffId('bypass-id')
-                setStaffName('Test Staff')
-                setStep('name')
-                toast.success('Maintenance Bypass Login!')
-                setVerifying(false)
-                return
-            }
-
             const { data, error } = await supabase
                 .from('staff')
                 .select('*')
@@ -105,10 +95,12 @@ export default function WaiterDashboard() {
                 console.error('❌ DB Error:', error)
                 toast.error('Database Connection Error')
             } else if (!data) {
-                toast.error('Access Denied: Invalid Passcode')
-                setPasscode('')
+                // Allows new staff members to proceed to name step for registration
+                setStaffId('')
+                setStaffName('')
+                setStep('name')
+                toast.info('New Passcode! Please enter your name to register.')
             } else {
-                setTempStaffData(data)
                 setStaffId(data.id)
                 setStaffName(data.name || '')
                 setStep('name')
@@ -122,20 +114,68 @@ export default function WaiterDashboard() {
         }
     }
 
-    const handleConfirmName = () => {
+    const handleConfirmName = async () => {
         if (!staffName.trim()) {
             toast.error('Please enter your name')
             return
         }
-        toast.success(`Welcome, ${staffName}!`)
-        setStep('table')
-        if (tempStaffData) {
+
+        setVerifying(true)
+        try {
+            let finalStaffId = staffId
+            let finalStaffName = staffName
+
+            // Check if staff already exists with this passcode
+            const { data: existingStaff } = await supabase
+                .from('staff')
+                .select('*')
+                .eq('passcode', passcode)
+                .eq('restaurant_id', RESTAURANT_ID)
+                .maybeSingle()
+
+            if (existingStaff) {
+                finalStaffId = existingStaff.id
+                // Update name if different
+                if (existingStaff.name !== staffName) {
+                    await supabase.from('staff').update({ name: staffName }).eq('id', existingStaff.id)
+                }
+            } else {
+                // Create NEW staff member
+                const { data: newStaff, error: insertErr } = await supabase.from('staff').insert({
+                    restaurant_id: RESTAURANT_ID,
+                    passcode: passcode,
+                    name: staffName,
+                    role: passcode === '1801' ? 'admin' : 'waiter',
+                    status: true
+                }).select().single()
+
+                if (insertErr) {
+                    console.error('❌ Insert Error:', insertErr)
+                } else if (newStaff) {
+                    finalStaffId = newStaff.id
+                    finalStaffName = newStaff.name
+                }
+            }
+
+            // Sync the staff list globally on the dashboard
+            await fetchAll()
+
+            setStaffId(finalStaffId)
+            setStaffName(finalStaffName)
+            setStep('table')
+            toast.success(`Welcome, ${finalStaffName}!`)
+
             triggerAutomationWebhook('waiter-login', {
-                staff_id: staffId || tempStaffData.id,
-                name: staffName,
+                staff_id: finalStaffId || 'temp',
+                name: finalStaffName,
                 restaurant_id: RESTAURANT_ID,
                 login_at: new Date().toISOString()
             })
+        } catch (err) {
+            console.error('💥 Login Save Error:', err)
+            setStep('table')
+        } finally {
+            setVerifying(false)
         }
     }
 
@@ -242,20 +282,26 @@ export default function WaiterDashboard() {
             const { error: itemsError } = await supabase.from('order_items').insert(orderItems)
             if (itemsError) throw itemsError
 
-            await triggerAutomationWebhook('waiter-order', {
-                action: 'waiter-order',
-                bill_id: billId,
-                order_id: orderId,
-                table_number: selectedTable.table_number,
-                customer_name: customerName || 'Walk-in',
-                customer_phone: customerPhone || 'N/A',
-                items: cart.map(item => ({ name: item.name, quantity: item.quantity, price: item.price })),
-                total: cartTotal,
-                waiter_name: staffName || 'Guest Waiter',
-                waiter_id: staffId || 'guest',
-                restaurant_id: RESTAURANT_ID,
-                timestamp: new Date().toISOString()
-            })
+            // Trigger Webhook with Logging
+            try {
+                const webhookRes = await triggerAutomationWebhook('waiter-order', {
+                    action: 'waiter-order',
+                    bill_id: billId,
+                    order_id: orderId,
+                    table_number: selectedTable.table_number,
+                    customer_name: customerName || 'Walk-in',
+                    customer_phone: customerPhone || 'N/A',
+                    items: cart.map(item => ({ name: item.name, quantity: item.quantity, price: item.price })),
+                    total: cartTotal,
+                    waiter_name: staffName || 'Guest Waiter',
+                    waiter_id: staffId || 'guest',
+                    restaurant_id: RESTAURANT_ID,
+                    timestamp: new Date().toISOString()
+                })
+                console.log('✅ Webhook Sent Successfully:', webhookRes)
+            } catch (webhookErr) {
+                console.error('❌ Webhook Failure:', webhookErr)
+            }
 
             toast.success(`Items added successfully to Table ${selectedTable.table_number}! 🎉`)
             setCart([])
@@ -376,8 +422,9 @@ export default function WaiterDashboard() {
                         <Button
                             className="w-full h-16 rounded-[1.5rem] bg-primary hover:bg-primary/90 text-white font-black text-xl shadow-lg shadow-primary/20"
                             onClick={handleConfirmName}
+                            disabled={verifying}
                         >
-                            Continue to Dashboard
+                            {verifying ? 'SAVING...' : 'Continue to Dashboard'}
                         </Button>
                         <button
                             onClick={() => { setStep('login'); setPasscode('') }}
@@ -654,15 +701,17 @@ export default function WaiterDashboard() {
 
                     {/* Confirm Dialog */}
                     <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
-                        <DialogContent className="sm:max-w-md rounded-[3rem] p-0 overflow-hidden border-0 shadow-2xl">
-                            <div className="bg-slate-900 p-8 text-white relative">
+                        <DialogContent className="sm:max-w-md rounded-[3rem] p-0 overflow-hidden border-0 shadow-2xl flex flex-col max-h-[90vh]">
+                            {/* Sticky Header */}
+                            <div className="bg-slate-900 p-8 text-white relative shrink-0">
                                 <Badge className="absolute top-8 right-8 bg-primary/20 text-primary border-0 font-black px-4 py-1">T{selectedTable?.table_number}</Badge>
                                 <ChefHat className="h-12 w-12 text-primary mb-6" />
                                 <DialogTitle className="text-3xl font-black tracking-tight mb-2">Almost Done!</DialogTitle>
                                 <p className="text-slate-400 font-medium">Review the order before sending to kitchen</p>
                             </div>
 
-                            <div className="p-8 space-y-6">
+                            {/* Scrollable Body */}
+                            <div className="p-8 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
                                 <div className="p-5 bg-gray-50 rounded-[2rem] border-2 border-gray-100 flex justify-between items-center">
                                     <div>
                                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">TOTAL PAYABLE</p>
@@ -678,7 +727,7 @@ export default function WaiterDashboard() {
                                     <div className="space-y-2">
                                         <Label className="text-[10px] font-black uppercase text-gray-400 tracking-widest px-1">Selected Waiter</Label>
                                         <Select
-                                            value={staffId}
+                                            value={staffId || 'guest'}
                                             onValueChange={(id) => {
                                                 const s = staffList.find(x => x.id === id);
                                                 setStaffId(id);
@@ -709,7 +758,8 @@ export default function WaiterDashboard() {
                                 </div>
                             </div>
 
-                            <DialogFooter className="p-8 pt-0 flex flex-col gap-3">
+                            {/* Sticky Footer Actions */}
+                            <div className="p-8 pt-4 border-t border-gray-100 flex flex-col gap-3 shrink-0 bg-white">
                                 <Button
                                     className="w-full h-16 rounded-[1.5rem] bg-primary hover:bg-primary/90 text-white font-black text-lg shadow-xl shadow-primary/20"
                                     onClick={placeOrder}
@@ -718,7 +768,7 @@ export default function WaiterDashboard() {
                                     {isPlacing ? 'PLACING...' : 'CONFIRM & PRINT KOT'}
                                 </Button>
                                 <Button variant="ghost" className="w-full font-black text-gray-400 uppercase tracking-widest text-[10px]" onClick={() => setIsConfirmOpen(false)}>Go Back</Button>
-                            </DialogFooter>
+                            </div>
                         </DialogContent>
                     </Dialog>
                 </div>
