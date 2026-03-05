@@ -55,6 +55,7 @@ export interface MenuItem {
     serves: string | null;
     stock?: number;
     is_infinite_stock?: boolean;
+    ar_model_url?: string;
     menu_categories?: {
         name: string;
     };

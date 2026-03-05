@@ -43,9 +43,7 @@ export default function OrderDetails({ order: initialOrder, onClose }: OrderDeta
 
     const handleStatusChange = (status: Order["status"]) => {
         updateOrder(localOrder.id, { status })
-        // DO NOT auto-update items when localOrder status changes
-        // Items must be manually checked by kitchen staff
-        console.log(`🔄 [KITCHEN] Order status changed to ${status} - items remain unchanged`)
+        console.log(`🔄 [KITCHEN] Order status changed to ${status}`)
         onClose()
     }
 
@@ -214,13 +212,13 @@ export default function OrderDetails({ order: initialOrder, onClose }: OrderDeta
                 </div>
 
                 <DialogFooter className="gap-2 sm:gap-0">
-                    <Button variant="destructive" onClick={() => handleStatusChange('cancelled')}>
+                    <Button variant="destructive" size="sm" onClick={() => handleStatusChange('cancelled')}>
                         <XCircle className="mr-2 h-4 w-4" /> Cancel Order
                     </Button>
                     <div className="flex-1" />
                     {localOrder.status === 'pending' && (
-                        <Button onClick={() => handleStatusChange('confirmed')} className="bg-blue-600 hover:bg-blue-700">
-                            <Check className="mr-2 h-4 w-4" /> Accept Order
+                        <Button onClick={() => handleStatusChange('preparing')} className="bg-purple-600 hover:bg-purple-700">
+                            <ChefHat className="mr-2 h-4 w-4" /> Start Cooking
                         </Button>
                     )}
                     {localOrder.status === 'confirmed' && (
@@ -229,12 +227,12 @@ export default function OrderDetails({ order: initialOrder, onClose }: OrderDeta
                         </Button>
                     )}
                     {localOrder.status === 'preparing' && (
-                        <Button onClick={() => handleStatusChange('ready')} className="bg-green-600 hover:bg-green-700">
+                        <Button onClick={() => handleStatusChange('ready')} className="bg-green-600 hover:bg-green-700 shadow-lg shadow-green-500/20">
                             <Check className="mr-2 h-4 w-4" /> Mark Ready
                         </Button>
                     )}
                     {localOrder.status === 'ready' && (
-                        <Button onClick={() => handleStatusChange('served')} className="bg-gray-600 hover:bg-gray-700">
+                        <Button onClick={() => handleStatusChange('served')} className="bg-gray-700 hover:bg-gray-800">
                             <Check className="mr-2 h-4 w-4" /> Served
                         </Button>
                     )}

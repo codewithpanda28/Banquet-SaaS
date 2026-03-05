@@ -25,6 +25,7 @@ interface CartState {
     setSpecialInstructions: (text: string) => void
     applyCoupon: (coupon: Coupon) => void
     removeCoupon: () => void
+    markCouponUsed: (code: string) => void
     clearCart: () => void
     isCouponUsed: (code: string) => boolean
 
@@ -100,18 +101,18 @@ export const useCartStore = create<CartState>()(
             setSpecialInstructions: (text) => set({ specialInstructions: text }),
 
             applyCoupon: (coupon) => {
-                const { usedCoupons } = get()
-                // Check if this coupon code was already used
-                if (usedCoupons.includes(coupon.code)) {
-                    return // Silently reject - UI should check isCouponUsed first
-                }
-                // Mark coupon as used and apply it
-                set({
-                    coupon,
-                    usedCoupons: [...usedCoupons, coupon.code]
-                })
+                // Just set the coupon - don't mark as used yet (that happens after order is placed)
+                set({ coupon })
             },
             removeCoupon: () => set({ coupon: null }),
+
+            // Call this ONLY after order is successfully placed
+            markCouponUsed: (code) => {
+                const { usedCoupons } = get()
+                if (!usedCoupons.includes(code)) {
+                    set({ usedCoupons: [...usedCoupons, code] })
+                }
+            },
 
             // Keep usedCoupons persistent - don't clear on cart reset
             clearCart: () => set({ items: [], specialInstructions: '', coupon: null }),

@@ -92,31 +92,65 @@ export function useRealtime() {
                 async (payload: any) => {
                     if (payload.new.restaurant_id !== RESTAURANT_ID) return
 
-                    const oldTotal = payload.old?.total || 0
-                    const newTotal = payload.new?.total || 0
-                    const itemsAdded = newTotal > oldTotal && oldTotal > 0 // Only if previously had total
+                    // Check if items were added (total increased or updated_at changed significantly)
+                    // We also check if it's not just a status change to 'served/completed'
+                    const isExtraItems =
+                        (payload.new.total > (payload.old?.total || 0)) ||
+                        (payload.new.status === payload.old?.status && payload.new.total === payload.old?.total); // Message might have changed or items updated
 
-                    // Update local state
+                    // Refresh data
                     fetchOrders()
 
-                    if (itemsAdded) {
-                        playNotificationSound()
-                        toast.info('➕ New Items Added!', {
-                            description: `Check details for ${payload.new.bill_id}`,
-                            duration: 5000,
-                        })
+                    // If it's an update to an existing order that's not just a status change
+                    if (payload.new.status !== 'served' && payload.new.status !== 'completed' && payload.new.status !== 'cancelled') {
+                        // Play sound and toast only if total changed or specifically marked as updated
+                        if (payload.new.total > (payload.old?.total || 0)) {
+                            // Find the existing order in store to get table number
+                            const existingOrder = useKitchenStore.getState().orders.find(o => o.id === payload.new.id)
+
+                            playNotificationSound()
+                            toast.info('➕ Order Updated: New Items!', {
+                                description: `${existingOrder?.restaurant_tables?.table_number ? `Table ${existingOrder.restaurant_tables.table_number}` : 'Delivery/Takeaway'} (Bill: ${payload.new.bill_id})`,
+                                duration: 8000,
+                            })
+                        }
                     }
                 }
             )
             .on(
                 'postgres_changes',
                 {
-                    event: '*',
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'order_items',
+                },
+                async (payload: any) => {
+                    // Check if this item belongs to an existing order being tracked
+                    const currentOrders = useKitchenStore.getState().orders
+                    const targetOrder = currentOrders.find(o => o.id === payload.new.order_id)
+
+                    if (targetOrder) {
+                        // This is a new item added to an EXISTING order
+                        // If the order is already in "preparing" or "ready", notify specifically
+                        playNotificationSound()
+                        toast.error('🔥 EXTRA ITEM ADDED!', {
+                            description: `${payload.new.item_name} added to ${targetOrder.restaurant_tables?.table_number ? `Table ${targetOrder.restaurant_tables.table_number}` : 'Order'}`,
+                            duration: 10000,
+                            style: { background: '#ef4444', color: '#fff', border: 'none' }
+                        })
+                    }
+
+                    fetchOrders()
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE', // Also listen for item updates (like instructions)
                     schema: 'public',
                     table: 'order_items',
                 },
                 () => {
-                    // Just refresh data when items change, no sounds here to avoid duplication
                     fetchOrders()
                 }
             )

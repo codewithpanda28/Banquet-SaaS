@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { triggerAutomationWebhook } from '@/lib/webhook'
-import { validateCoupon, incrementCouponUsage, getAvailableCoupons } from '@/actions/coupon'
+import { incrementCouponUsage } from '@/actions/coupon'
 import { Coupon } from '@/types'
 import { format } from 'date-fns'
 import { supabase } from '@/lib/supabase'
@@ -24,8 +24,11 @@ import {
     SheetTitle,
     SheetTrigger,
 } from "@/components/ui/sheet"
+import { UpsellList } from '@/components/customer/menu/UpsellList'
+import { useRestaurant } from '@/hooks/useRestaurant'
 
 export default function CheckoutPage() {
+    const { restaurant } = useRestaurant()
     const router = useRouter()
     const {
         items,
@@ -43,7 +46,8 @@ export default function CheckoutPage() {
         setCustomerInfo,
         clearCart,
         applyCoupon,
-        removeCoupon
+        removeCoupon,
+        markCouponUsed
     } = useCartStore()
     const { addNotification } = useNotificationStore()
 
@@ -66,16 +70,42 @@ export default function CheckoutPage() {
     const handleApplyCoupon = async () => {
         if (!couponCode.trim()) return
 
-        setVerifyingCoupon(true)
-        const result = await validateCoupon(couponCode, subtotal)
-        setVerifyingCoupon(false)
-
-        if (result.error) {
-            toast.error(result.error)
-        } else if (result.coupon) {
-            applyCoupon(result.coupon)
-            toast.success(`Coupon ${result.coupon.code} applied!`)
+        // Check if already used in this session
+        if (useCartStore.getState().isCouponUsed(couponCode.trim().toUpperCase())) {
+            toast.error('You have already used this coupon code!')
             setCouponCode('')
+            return
+        }
+
+        setVerifyingCoupon(true)
+        try {
+            const rid = process.env.NEXT_PUBLIC_RESTAURANT_ID || ''
+            const res = await fetch('/api/coupons', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: couponCode.trim(), cartTotal: subtotal, restaurantId: rid })
+            })
+            const result = await res.json()
+            console.log('🎟️ [Checkout] Validate result:', result)
+
+            if (result.error) {
+                toast.error(result.error)
+            } else if (result.coupon) {
+                applyCoupon(result.coupon)
+                toast.success(`🎉 Coupon ${result.coupon.code} applied! You save ₹${(
+                    result.coupon.discount_type === 'percentage'
+                        ? (subtotal * result.coupon.discount_value / 100)
+                        : result.coupon.discount_value
+                ).toFixed(2)}`)
+                setCouponCode('')
+            } else {
+                toast.error('Invalid coupon code')
+            }
+        } catch (err) {
+            console.error('❌ [Checkout] Coupon validate error:', err)
+            toast.error('Failed to validate coupon. Please try again.')
+        } finally {
+            setVerifyingCoupon(false)
         }
     }
 
@@ -351,6 +381,7 @@ export default function CheckoutPage() {
             // Update Coupon Usage if used
             if (coupon && !existingOrderId) {
                 await incrementCouponUsage(coupon.id)
+                markCouponUsed(coupon.code)  // Mark as permanently used after successful order
             }
 
             clearCart()
@@ -616,9 +647,17 @@ export default function CheckoutPage() {
                                         <SheetTrigger asChild>
                                             <Button variant="link" className="text-orange-600 h-auto p-0 font-bold text-xs flex items-center gap-1 hover:no-underline" onClick={async () => {
                                                 const rid = process.env.NEXT_PUBLIC_RESTAURANT_ID
-                                                if (rid) {
-                                                    const deals = await getAvailableCoupons(rid)
-                                                    setAvailableCoupons(deals)
+                                                console.log('🎟️ [Checkout] Fetching available coupons for rid:', rid)
+                                                try {
+                                                    const res = await fetch(`/api/coupons?restaurantId=${rid || ''}`)
+                                                    const json = await res.json()
+                                                    console.log('✅ [Checkout] Coupons API response:', json)
+                                                    if (json.error) {
+                                                        console.error('❌ [Checkout] Coupons API error:', json.error)
+                                                    }
+                                                    setAvailableCoupons(json.coupons || [])
+                                                } catch (err) {
+                                                    console.error('❌ [Checkout] Failed to fetch coupons:', err)
                                                 }
                                             }}>
                                                 View Available Offers <ChevronRight className="w-3 h-3" />
@@ -639,63 +678,91 @@ export default function CheckoutPage() {
                                                     </div>
                                                 ) : (
                                                     availableCoupons
-                                                        .filter(deal => !useCartStore.getState().isCouponUsed(deal.code))
-                                                        .map((deal) => (
-                                                            <div
-                                                                key={deal.id}
-                                                                className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden group active:scale-[0.98] transition-all cursor-pointer"
-                                                                onClick={() => {
-                                                                    if (useCartStore.getState().isCouponUsed(deal.code)) {
-                                                                        toast.error('Already Used')
-                                                                        return
-                                                                    }
-                                                                    setCouponCode(deal.code)
-                                                                    validateCoupon(deal.code, subtotal).then(res => {
-                                                                        if (res.coupon) {
-                                                                            applyCoupon(res.coupon)
-                                                                            toast.success(`Applied ${deal.code}!`)
-                                                                        } else if (res.error) {
-                                                                            toast.error(res.error)
+                                                        .map((deal) => {
+                                                            const alreadyUsed = useCartStore.getState().isCouponUsed(deal.code)
+                                                            return (
+                                                                <div
+                                                                    key={deal.id}
+                                                                    className={`bg-white p-4 rounded-xl border shadow-sm relative overflow-hidden transition-all ${alreadyUsed
+                                                                        ? 'border-slate-100 opacity-50 cursor-not-allowed'
+                                                                        : 'border-slate-200 group active:scale-[0.98] cursor-pointer hover:border-orange-200'
+                                                                        }`}
+                                                                    onClick={async () => {
+                                                                        if (alreadyUsed) {
+                                                                            toast.error('You have already used this coupon!')
+                                                                            return
                                                                         }
-                                                                    })
-                                                                }}
-                                                            >
-                                                                <div className="flex gap-4 relative z-0">
-                                                                    <div className="flex flex-col items-center justify-center w-20 border-r border-dashed border-slate-200 pr-4">
-                                                                        <div className="h-10 w-10 bg-orange-100 rounded-lg flex items-center justify-center mb-1">
-                                                                            <Percent className="h-5 w-5 text-orange-600" />
-                                                                        </div>
-                                                                        <span className="text-[10px] font-bold text-slate-400 uppercase">
-                                                                            {deal.discount_type === 'percentage' ? `${deal.discount_value}%` : `₹${deal.discount_value}`}
-                                                                        </span>
-                                                                    </div>
-                                                                    <div className="flex-1 py-1">
-                                                                        <div className="flex justify-between items-start mb-1">
-                                                                            <span className="font-black text-lg text-slate-800 uppercase tracking-wide bg-slate-100 px-2 py-0.5 rounded border border-slate-200/50">
-                                                                                {deal.code}
+                                                                        const rid = process.env.NEXT_PUBLIC_RESTAURANT_ID || ''
+                                                                        try {
+                                                                            const res = await fetch('/api/coupons', {
+                                                                                method: 'POST',
+                                                                                headers: { 'Content-Type': 'application/json' },
+                                                                                body: JSON.stringify({ code: deal.code, cartTotal: subtotal, restaurantId: rid })
+                                                                            })
+                                                                            const result = await res.json()
+                                                                            if (result.coupon) {
+                                                                                applyCoupon(result.coupon)
+                                                                                toast.success(`🎉 Applied ${deal.code}!`)
+                                                                            } else if (result.error) {
+                                                                                toast.error(result.error)
+                                                                            }
+                                                                        } catch {
+                                                                            toast.error('Could not apply coupon. Try again.')
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <div className="flex gap-4 relative z-0">
+                                                                        <div className="flex flex-col items-center justify-center w-20 border-r border-dashed border-slate-200 pr-4">
+                                                                            <div className="h-10 w-10 bg-orange-100 rounded-lg flex items-center justify-center mb-1">
+                                                                                <Percent className="h-5 w-5 text-orange-600" />
+                                                                            </div>
+                                                                            <span className="text-[10px] font-bold text-slate-400 uppercase">
+                                                                                {deal.discount_type === 'percentage' ? `${deal.discount_value}%` : `₹${deal.discount_value}`}
                                                                             </span>
                                                                         </div>
-                                                                        <p className="text-xs text-slate-500 font-medium line-clamp-2 mb-2">
-                                                                            {deal.description || 'Special discount for you!'}
-                                                                        </p>
-                                                                        <div className="flex items-center justify-between mt-2">
-                                                                            <p className="text-[10px] text-slate-400 font-semibold bg-slate-50 inline-block px-1.5 py-0.5 rounded">
-                                                                                Valid until {format(new Date(deal.valid_until), 'MMM dd')}
+                                                                        <div className="flex-1 py-1">
+                                                                            <div className="flex justify-between items-start mb-1">
+                                                                                <span className="font-black text-lg text-slate-800 uppercase tracking-wide bg-slate-100 px-2 py-0.5 rounded border border-slate-200/50">
+                                                                                    {deal.code}
+                                                                                </span>
+                                                                                {alreadyUsed && (
+                                                                                    <span className="text-[10px] font-bold text-red-400 bg-red-50 px-2 py-0.5 rounded-full border border-red-100">USED</span>
+                                                                                )}
+                                                                            </div>
+                                                                            <p className="text-xs text-slate-500 font-medium line-clamp-2 mb-2">
+                                                                                {deal.description || 'Special discount for you!'}
                                                                             </p>
-                                                                            <Button size="sm" variant="ghost" className="h-7 text-xs font-bold text-orange-600 hover:text-orange-700 hover:bg-orange-50 px-0">
-                                                                                TAP TO APPLY
-                                                                            </Button>
+                                                                            <div className="flex items-center justify-between mt-2">
+                                                                                <p className="text-[10px] text-slate-400 font-semibold bg-slate-50 inline-block px-1.5 py-0.5 rounded">
+                                                                                    Valid until {format(new Date(deal.valid_until), 'MMM dd')}
+                                                                                </p>
+                                                                                {!alreadyUsed && (
+                                                                                    <Button size="sm" variant="ghost" className="h-7 text-xs font-bold text-orange-600 hover:text-orange-700 hover:bg-orange-50 px-0">
+                                                                                        TAP TO APPLY
+                                                                                    </Button>
+                                                                                )}
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                 </div>
-                                                            </div>
-                                                        ))
+                                                            )
+                                                        })
                                                 )}
                                             </div>
                                         </SheetContent>
                                     </Sheet>
                                 )}
                             </div>
+
+                            {restaurant?.id && (
+                                <div className="pt-2 border-t border-dashed border-slate-200">
+                                    <UpsellList
+                                        restaurantId={restaurant.id}
+                                        limit={3}
+                                        title="Missed Something?"
+                                    />
+                                </div>
+                            )}
 
                             <div className="space-y-2 text-sm pt-2">
                                 <div className="flex justify-between">

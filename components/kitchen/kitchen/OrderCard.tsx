@@ -1,13 +1,13 @@
-"use client"
-
+import { useEffect, useState, useRef } from "react"
 import { Order, OrderStatus } from "@/types"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import OrderTimer from "./OrderTimer"
-import { Leaf, Drumstick, ChefHat, Check, Eye } from "lucide-react"
+import { Leaf, Drumstick, ChefHat, Check, Eye, Sparkles } from "lucide-react"
 import { useKitchenStore } from "@/store/kitchenStore"
 import { triggerAutomationWebhook } from "@/lib/webhook"
+import { cn } from "@/lib/utils"
 
 interface OrderCardProps {
     order: Order
@@ -44,10 +44,27 @@ const orderTypeConfig = {
 export default function OrderCard({ order, onViewDetails }: OrderCardProps) {
     const { updateOrder } = useKitchenStore()
     const config = orderTypeConfig[order.order_type as keyof typeof orderTypeConfig]
+    const [isRecentlyUpdated, setIsRecentlyUpdated] = useState(false)
+    const prevUpdatedAtRef = useRef(order.updated_at)
+
+    useEffect(() => {
+        // Only trigger pulse if updated_at changed and it's NOT the first time it's being created
+        // (i.e. updated_at is different from created_at and from previous value)
+        if (order.updated_at !== prevUpdatedAtRef.current && order.updated_at !== order.created_at) {
+            setIsRecentlyUpdated(true)
+
+            const timer = setTimeout(() => {
+                setIsRecentlyUpdated(false)
+            }, 15000) // Keep highlighted for 15 seconds
+
+            prevUpdatedAtRef.current = order.updated_at
+            return () => clearTimeout(timer)
+        }
+    }, [order.updated_at, order.created_at])
 
     const getNextStatus = (): OrderStatus | undefined => {
         const statusFlow: Record<string, OrderStatus> = {
-            'pending': 'confirmed',
+            'pending': 'preparing', // Skip confirmed, go straight to preparing
             'confirmed': 'preparing',
             'preparing': 'ready',
             'ready': 'served'
@@ -57,7 +74,7 @@ export default function OrderCard({ order, onViewDetails }: OrderCardProps) {
 
     const getActionLabel = () => {
         const labels: Record<string, string> = {
-            'pending': 'Accept',
+            'pending': 'Start', // Changed from Accept to Start
             'confirmed': 'Start',
             'preparing': 'Ready',
             'ready': 'Serve'
@@ -95,11 +112,26 @@ export default function OrderCard({ order, onViewDetails }: OrderCardProps) {
 
     return (
         <Card
-            className="group relative overflow-hidden border-2 border-slate-200 bg-white shadow-sm transition-all duration-300 hover:scale-[1.02] hover:border-primary/50 hover:shadow-xl hover:shadow-primary/10 animate-slide-in cursor-pointer"
+            className={cn(
+                "group relative overflow-hidden border-2 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl cursor-pointer",
+                isRecentlyUpdated
+                    ? "border-red-500 shadow-[0_0_20px_rgba(239,44,44,0.3)] animate-pulse"
+                    : "border-slate-200 bg-white shadow-sm hover:border-primary/50 hover:shadow-primary/10 animate-slide-in"
+            )}
             onClick={onViewDetails}
         >
             {/* Top Accent Bar */}
-            <div className={`h-1.5 w-full ${config.gradient}`} />
+            <div className={`h-1.5 w-full ${isRecentlyUpdated ? 'bg-red-500' : config.gradient}`} />
+
+            {/* New Items Badge */}
+            {isRecentlyUpdated && (
+                <div className="absolute top-3 right-0 z-20">
+                    <div className="bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded-l-lg shadow-lg flex items-center gap-1 animate-bounce">
+                        <Sparkles className="w-3 h-3" />
+                        NEW ITEMS ADDED
+                    </div>
+                </div>
+            )}
 
             <div className="p-4 space-y-3">
                 {/* Header */}
@@ -129,7 +161,10 @@ export default function OrderCard({ order, onViewDetails }: OrderCardProps) {
                 </div>
 
                 {/* Items List */}
-                <div className="space-y-2 rounded-lg bg-slate-50 border border-slate-100 p-3">
+                <div className={cn(
+                    "space-y-2 rounded-lg border p-3 transition-colors",
+                    isRecentlyUpdated ? "bg-red-50 border-red-100" : "bg-slate-50 border-slate-100"
+                )}>
                     {orderItems.length > 0 ? (
                         <>
                             {orderItems.slice(0, 3).map((item, idx) => (
@@ -208,7 +243,12 @@ export default function OrderCard({ order, onViewDetails }: OrderCardProps) {
                             {order.status !== 'ready' && (
                                 <Button
                                     size="sm"
-                                    className="flex-1 bg-gradient-to-r from-primary to-orange-500 font-semibold shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30"
+                                    className={cn(
+                                        "flex-1 font-semibold shadow-lg transition-all",
+                                        isRecentlyUpdated
+                                            ? "bg-red-600 hover:bg-red-700 text-white shadow-red-200"
+                                            : "bg-gradient-to-r from-primary to-orange-500 shadow-primary/25 hover:shadow-primary/30"
+                                    )}
                                     onClick={handleQuickAction}
                                 >
                                     {order.status === 'pending' && <Check className="mr-1.5 h-3.5 w-3.5" />}

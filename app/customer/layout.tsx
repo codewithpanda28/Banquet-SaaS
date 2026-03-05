@@ -3,6 +3,7 @@ import { Header } from '@/components/customer/layout/Header'
 import { CartSidebar } from '@/components/customer/cart/CartSidebar'
 import { FloatingCartButton } from '@/components/customer/cart/FloatingCartButton'
 import { Toaster } from '@/components/ui/sonner'
+import { GlobalUpsell } from '@/components/customer/menu/GlobalUpsell'
 
 const font = Plus_Jakarta_Sans({ subsets: ['latin'] })
 
@@ -25,6 +26,9 @@ export default function CustomerLayout({
             <CartSidebar />
             <FloatingCartButton />
             <Toaster position="top-center" richColors />
+
+            {/* AI Upsell Modal (Client Component) */}
+            <GlobalUpsell />
         </div>
     )
 }

@@ -62,26 +62,33 @@ export async function incrementCouponUsage(couponId: string) {
 export async function getAvailableCoupons(restaurantId: string) {
     try {
         const now = new Date().toISOString()
+        const rid = restaurantId || process.env.NEXT_PUBLIC_RESTAURANT_ID || ''
+
+        console.log('🎟️ [Coupon] Fetching coupons for restaurant:', rid, 'at time:', now)
+
         const { data: coupons, error } = await supabase
             .from('coupons')
             .select('*')
-            .eq('restaurant_id', restaurantId)
+            .eq('restaurant_id', rid)
             .eq('is_active', true)
-            .lte('valid_from', now)
-            .gte('valid_until', now)
+            .lte('valid_from', now)   // Start date already passed
+            .gte('valid_until', now)  // Not expired yet
             .order('created_at', { ascending: false })
 
         if (error) {
-            console.error('Error fetching available coupons:', error)
+            console.error('❌ [Coupon] Error fetching coupons:', error)
             return []
         }
 
-        // Filter out coupons that have reached usage limit locally if needed, 
-        // though typically we might show them as 'fully redeemed' or not fetch them.
-        // Supabase filter for usage limit is harder in one query without a computed column.
-        return coupons.filter(c => c.usage_limit === 0 || c.used_count < c.usage_limit) as Coupon[]
+        console.log('✅ [Coupon] Found coupons:', coupons?.length || 0)
+
+        // Usage limit filter — 0 means unlimited
+        return (coupons || []).filter(c =>
+            c.usage_limit === 0 || c.used_count < c.usage_limit
+        ) as Coupon[]
     } catch (err) {
-        console.error('Failed to get available coupons:', err)
+        console.error('❌ [Coupon] Failed to get available coupons:', err)
         return []
     }
 }
+

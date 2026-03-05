@@ -14,10 +14,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useCartStore } from '@/store/cartStore'
+import { useUIStore } from '@/store/uiStore'
 import { toast } from 'sonner'
 import { Minus, Plus, Flame, ChefHat } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { cn } from '@/lib/utils'
+import { useRestaurant } from '@/hooks/useRestaurant'
 
 interface MenuItemModalProps {
     item: MenuItem | null
@@ -29,6 +29,8 @@ export function MenuItemModal({ item, isOpen, onClose }: MenuItemModalProps) {
     const [quantity, setQuantity] = useState(1)
     const [instructions, setInstructions] = useState('')
     const { addItem } = useCartStore()
+    const { openUpsell } = useUIStore()
+    const { restaurant } = useRestaurant()
 
     useEffect(() => {
         if (isOpen) {
@@ -47,7 +49,10 @@ export function MenuItemModal({ item, isOpen, onClose }: MenuItemModalProps) {
                 <span className="font-bold">Added to Order!</span>
             </div>
         )
+        // Close main modal first
         onClose()
+        // Trigger global upsell
+        setTimeout(() => openUpsell(item.id), 400)
     }
 
     return (
@@ -71,7 +76,7 @@ export function MenuItemModal({ item, isOpen, onClose }: MenuItemModalProps) {
                         )}
 
                         {/* WebAR Button (Demo) */}
-                        {item.ar_model_url && ( // Only show if ar_model_url exists
+                        {item.ar_model_url && (
                             <a
                                 href={item.ar_model_url || "https://arvr.google.com/scene-viewer?file=https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Avocado/glTF/Avocado.gltf&title=" + encodeURIComponent(item.name)}
                                 target="_blank"

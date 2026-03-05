@@ -1,7 +1,7 @@
 
 import { create } from 'zustand'
 import { Order, OrderStatus, OrderType } from '@/types'
-import { updateOrderStatus } from '@/services/orderService'
+import { updateOrderStatus, updateOrderItemStatus } from '@/services/orderService'
 
 interface KitchenStore {
     // Orders State
@@ -59,14 +59,37 @@ export const useKitchenStore = create<KitchenStore>((set, get) => ({
     })),
 
     updateOrder: (orderId, updates) => {
+        const { orders } = get()
+        const targetOrder = orders.find(o => o.id === orderId)
+
         // Update database if status changes
         if (updates.status) {
             updateOrderStatus(orderId, updates.status as OrderStatus)
+
+            // If marking as READY, also mark all items as ready in DB
+            if (updates.status === 'ready' && targetOrder) {
+                const items = targetOrder.order_items || []
+                items.forEach(item => {
+                    if (item.status !== 'ready') {
+                        updateOrderItemStatus(item.id, 'ready')
+                    }
+                })
+            }
         }
 
         // Update local state
         set((state) => ({
-            orders: state.orders.map((o) => o.id === orderId ? { ...o, ...updates } : o),
+            orders: state.orders.map((o) => {
+                if (o.id === orderId) {
+                    const newOrder = { ...o, ...updates }
+                    // Also update local items if marking as ready
+                    if (updates.status === 'ready') {
+                        newOrder.order_items = o.order_items?.map(item => ({ ...item, status: 'ready' }))
+                    }
+                    return newOrder
+                }
+                return o
+            }),
             lastUpdated: new Date()
         }))
     },

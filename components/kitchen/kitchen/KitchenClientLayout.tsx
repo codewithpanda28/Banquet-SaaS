@@ -27,7 +27,7 @@ export default function KitchenClientLayout({ children }: { children: React.Reac
             <main className="flex-1 overflow-hidden relative bg-muted/20">
                 {children}
             </main>
-            <Toaster />
+            <Toaster position="top-center" richColors />
         </div>
     )
 }

@@ -57,12 +57,30 @@ export default function OrderColumn({ title, orders, emptyMessage, columnType }:
                         </div>
                     </div>
 
-                    {/* Order Count Badge */}
-                    {orders.length > 0 && (
-                        <div className="flex h-8 min-w-[2rem] items-center justify-center rounded-full bg-white/90 px-3 font-mono text-sm font-bold text-gray-900 shadow-lg">
+                    <div className="flex items-center gap-2">
+                        {/* Mark All Ready Button for Preparing Column */}
+                        {columnType === 'preparing' && orders.length > 0 && (
+                            <button
+                                onClick={() => {
+                                    if (confirm('Mark all active orders as READY?')) {
+                                        orders.forEach(order => {
+                                            const { updateOrder } = useKitchenStore.getState()
+                                            updateOrder(order.id, { status: 'ready' })
+                                        })
+                                    }
+                                }}
+                                className="flex items-center gap-1.5 rounded-lg bg-white/90 px-3 py-1.5 text-xs font-bold text-emerald-700 shadow-lg hover:bg-white transition-colors"
+                            >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Mark All Ready
+                            </button>
+                        )}
+
+                        {/* Order Count Badge */}
+                        <div className="flex h-8 min-w-[2rem] items-center justify-center rounded-full bg-white/20 backdrop-blur-sm px-3 font-mono text-sm font-bold text-white shadow-lg">
                             {orders.length}
                         </div>
-                    )}
+                    </div>
                 </div>
 
                 {/* Decorative Pattern */}
