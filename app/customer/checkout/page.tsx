@@ -47,7 +47,8 @@ export default function CheckoutPage() {
         clearCart,
         applyCoupon,
         removeCoupon,
-        markCouponUsed
+        markCouponUsed,
+        joinExisting
     } = useCartStore()
     const { addNotification } = useNotificationStore()
 
@@ -225,7 +226,7 @@ export default function CheckoutPage() {
             let existingBillId = null
             let existingTotal = 0
             let existingSubtotal = 0
-            let existingStatus = 'pending'  // Default to pending if no existing order
+            let existingStatus = 'pending'
 
             try {
                 const params = new URLSearchParams()
@@ -233,6 +234,11 @@ export default function CheckoutPage() {
                 if (resolvedTableId) params.append('tableId', resolvedTableId)
                 if (tableNumber) params.append('tableNumber', tableNumber.toString())
                 if (customerId) params.append('customerId', customerId)
+                
+                // Add the join intent
+                if (joinExisting !== null) {
+                    params.append('join', joinExisting.toString())
+                }
 
                 console.log('🔍 [Step 2.5] Checking active order via API...', params.toString())
                 const res = await fetch(`/api/orders/active?${params.toString()}`)
@@ -356,7 +362,7 @@ export default function CheckoutPage() {
 
             if (itemsError) throw itemsError
 
-            // 5. Trigger n8n Webhook - Sync (Wait for it before clearing cart/redirecting)
+            // 5. Prepare Webhook Data
             const webhookData = {
                 bill_id: billId,
                 amount: total,
@@ -377,56 +383,55 @@ export default function CheckoutPage() {
                 restaurant_id: rid,
             }
 
-            console.log('📡 [Checkout] Sending Webhook:', webhookData)
+            // 5. Background Tasks (Non-blocking)
+            // We fire these and don't block the UI for the customer since their order is already in DB.
+            const backgroundTasks = async () => {
+                try {
+                    // Trigger n8n Webhook
+                    console.log('📡 [Checkout] Sending Webhook (Background):', webhookData)
+                    triggerAutomationWebhook('new-order', webhookData).catch(e => console.error('Webhook BG error:', e));
 
-            // 5. Trigger Webhook - Background (No visitor notification for technical details)
-            try {
-                // Call it silently but await to ensure it finishes before cart clear
-                await triggerAutomationWebhook('new-order', webhookData);
-            } catch (whErr) {
-                console.error('❌ [Checkout] Webhook silent error:', whErr);
-                // We DON'T show a toast here because we don't want to confuse the customer
-                // with technical errors if the order is already in the DB.
-            }
-
-            // Update Coupon Usage if used
-            if (coupon && !existingOrderId) {
-                await incrementCouponUsage(coupon.id)
-                markCouponUsed(coupon.code)  // Mark as permanently used after successful order
-            }
-
-            clearCart()
-
-            // 3.5 Update Stock Logic
-            try {
-                for (const item of items) {
-                    // Fetch current stock
-                    const { data: menuItem } = await supabase
-                        .from('menu_items')
-                        .select('stock, is_available, is_infinite_stock')
-                        .eq('id', item.id)
-                        .single()
-
-                    if (menuItem && !menuItem.is_infinite_stock && typeof menuItem.stock === 'number') {
-                        const newStock = Math.max(0, menuItem.stock - item.quantity)
-                        const shouldDisable = newStock <= 0
-
-                        await supabase
-                            .from('menu_items')
-                            .update({
-                                stock: newStock,
-                                is_available: shouldDisable ? false : menuItem.is_available
-                            })
-                            .eq('id', item.id)
-
-                        if (shouldDisable) {
-                            console.log(`Item ${item.name} is now out of stock`)
-                        }
+                    // Update Coupon Usage if used
+                    if (coupon && !existingOrderId) {
+                        incrementCouponUsage(coupon.id).catch(e => console.error('Coupon increment error:', e));
+                        markCouponUsed(coupon.code);
                     }
+
+                    // Update Stock Logic in Parallel
+                    await Promise.all(items.map(async (item) => {
+                        try {
+                            const { data: menuItem } = await supabase
+                                .from('menu_items')
+                                .select('stock, is_available, is_infinite_stock')
+                                .eq('id', item.id)
+                                .single();
+
+                            if (menuItem && !menuItem.is_infinite_stock && typeof menuItem.stock === 'number') {
+                                const newStock = Math.max(0, menuItem.stock - item.quantity);
+                                const shouldDisable = newStock <= 0;
+
+                                await supabase
+                                    .from('menu_items')
+                                    .update({
+                                        stock: newStock,
+                                        is_available: shouldDisable ? false : menuItem.is_available
+                                    })
+                                    .eq('id', item.id);
+                            }
+                        } catch (itemErr) {
+                            console.error(`Stock update failed for ${item.name}:`, itemErr);
+                        }
+                    }));
+                } catch (bgErr) {
+                    console.error('❌ Background tasks failed:', bgErr);
                 }
-            } catch (stockErr) {
-                console.error('Failed to update stock:', stockErr)
-            }
+            };
+
+            // Start background tasks
+            backgroundTasks();
+
+            // 6. Finalize UI Flow (Fast Redirect)
+            clearCart()
 
             addNotification({
                 title: existingOrderId ? 'Items Added!' : 'Order Placed!',
@@ -437,6 +442,7 @@ export default function CheckoutPage() {
                 link: `/customer/track/${billId}`
             })
 
+            // Navigate immediately
             if (paymentMethod === 'upi') {
                 router.push(`/customer/payment/upi?billId=${billId}&amount=${total}`)
             } else {

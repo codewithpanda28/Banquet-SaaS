@@ -88,10 +88,31 @@ function ScanRedirect() {
                 return
             }
 
-            // Step 3: Menu pe redirect karo (NO AUTO-OCCUPY as per user request)
+            // Step 3: Auto-occupy the table if available
             setStatus('redirecting')
+            
+            // ✅ Occupy the table in real-time for Admin Dashboard
+            await supabase
+                .from('restaurant_tables')
+                .update({ status: 'occupied' })
+                .eq('id', tableData.id)
+
+            // ✅ Log a temporary booking for Admin visibility
+            await supabase.from('table_bookings').insert({
+                restaurant_id: RESTAURANT_ID,
+                table_id: tableData.id,
+                customer_name: 'Walk-in Customer',
+                customer_phone: 'qr-scan',
+                party_size: 1,
+                booking_date: today,
+                booking_time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }),
+                status: 'seated',
+                notes: `Auto-seated via QR scan — Table ${tableNumber}`
+            })
+
             setTimeout(() => {
-                router.replace(`/customer/menu?table=${tableNumber}&type=dine_in`)
+                // Since table is available, this is always a fresh order
+                router.replace(`/customer/menu?table=${tableNumber}&type=dine_in&join=false&tableId=${tableData.id}`)
             }, 800)
 
         } catch (err) {
@@ -166,17 +187,32 @@ function ScanRedirect() {
                 Yeh table abhi Reserved hai ya Occupied dikh rahi hai.
             </p>
 
-            <div className="w-full max-w-sm flex flex-col gap-3 mb-8">
+            <div className="w-full max-w-sm flex flex-col gap-3 mb-8 px-4">
                 <Button 
-                    className="h-14 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-lg"
-                    onClick={() => router.replace(`/customer/menu?table=${occupiedTable?.table_number}&type=dine_in`)}
+                    className="h-14 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-lg shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all"
+                    onClick={() => {
+                        // Store the intent to join the group
+                        router.replace(`/customer/menu?table=${occupiedTable?.table_number}&type=dine_in&join=true`)
+                    }}
                 >
-                    I am with this Group 🤝
+                    Join My Group 👥
                 </Button>
-                <div className="flex items-center gap-2 px-1">
-                    <div className="h-px bg-gray-200 flex-1" />
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">or choose another</span>
-                    <div className="h-px bg-gray-200 flex-1" />
+                
+                <Button 
+                    variant="outline"
+                    className="h-14 rounded-2xl border-slate-200 bg-white text-slate-700 font-bold text-lg hover:bg-slate-50 active:scale-[0.98] transition-all"
+                    onClick={() => {
+                        // Store the intent to start a separate order
+                        router.replace(`/customer/menu?table=${occupiedTable?.table_number}&type=dine_in&join=false`)
+                    }}
+                >
+                    Start Separate Order 👤
+                </Button>
+
+                <div className="flex items-center gap-2 px-1 mt-4">
+                    <div className="h-px bg-slate-100 flex-1" />
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">or change table</span>
+                    <div className="h-px bg-slate-100 flex-1" />
                 </div>
             </div>
 

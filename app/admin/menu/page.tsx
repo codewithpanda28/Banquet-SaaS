@@ -167,6 +167,7 @@ export default function MenuPage() {
                 return
             }
 
+            const isInfinite = itemForm.stock === '' || itemForm.stock === null;
             const itemData = {
                 restaurant_id: RESTAURANT_ID,
                 category_id: itemForm.category_id,
@@ -176,16 +177,13 @@ export default function MenuPage() {
                 image_url: itemForm.image_url || null,
                 is_veg: itemForm.is_veg,
                 is_bestseller: itemForm.is_bestseller,
-                is_veg: itemForm.is_veg,
-                is_bestseller: itemForm.is_bestseller,
-                is_available: true, // Always true, managed by stock
-                is_spicy: itemForm.is_spicy,
+                is_available: true, // Items are available when added/updated through admin
                 is_spicy: itemForm.is_spicy,
                 spicy_level: itemForm.spicy_level,
                 is_new: false,
                 preparation_time: 15,
-                stock: itemForm.stock === '' || itemForm.stock === null ? null : parseInt(itemForm.stock.toString()),
-                is_infinite_stock: false, // Deprecated
+                stock: isInfinite ? null : parseInt(itemForm.stock.toString()),
+                is_infinite_stock: isInfinite,
             }
 
 

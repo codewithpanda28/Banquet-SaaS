@@ -14,6 +14,7 @@ interface CartState {
     deliveryAddress: string
     coupon: Coupon | null
     usedCoupons: string[]  // Track coupon codes already used by this customer
+    joinExisting: boolean | null // null = undecided, true = join group, false = separate
 
     addItem: (item: MenuItem, quantity: number, instructions: string) => void
     removeItem: (cartId: string) => void
@@ -28,6 +29,7 @@ interface CartState {
     markCouponUsed: (code: string) => void
     clearCart: () => void
     isCouponUsed: (code: string) => boolean
+    setJoinExisting: (value: boolean | null) => void
 
     getSubtotal: () => number
     getTax: () => number
@@ -52,6 +54,7 @@ export const useCartStore = create<CartState>()(
             deliveryAddress: '',
             coupon: null,
             usedCoupons: [],
+            joinExisting: null,
 
             addItem: (item, quantity, instructions) => {
                 const { items } = get()
@@ -99,6 +102,7 @@ export const useCartStore = create<CartState>()(
             setCustomerInfo: (name, phone, address) =>
                 set({ customerName: name, customerPhone: phone, deliveryAddress: address }),
             setSpecialInstructions: (text) => set({ specialInstructions: text }),
+            setJoinExisting: (value) => set({ joinExisting: value }),
 
             applyCoupon: (coupon) => {
                 // Just set the coupon - don't mark as used yet (that happens after order is placed)
@@ -115,7 +119,7 @@ export const useCartStore = create<CartState>()(
             },
 
             // Keep usedCoupons persistent - don't clear on cart reset
-            clearCart: () => set({ items: [], specialInstructions: '', coupon: null }),
+            clearCart: () => set({ items: [], specialInstructions: '', coupon: null, joinExisting: null }),
 
             isCouponUsed: (code) => {
                 return get().usedCoupons.includes(code)

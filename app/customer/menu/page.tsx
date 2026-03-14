@@ -29,12 +29,20 @@ import {
 function MenuContent() {
     const searchParams = useSearchParams()
     const router = useRouter()
+    const joinParam = searchParams.get('join')
     const tableParam = searchParams.get('table')
     const typeParam = searchParams.get('type')
 
     const { restaurant, loading: loadingRestaurant } = useRestaurant()
     const { categories, items, loading: loadingMenu } = useMenu(restaurant?.id || null)
-    const { setTableInfo, setOrderType, orderType, customerPhone, clearCart } = useCartStore()
+    const { setTableInfo, setOrderType, orderType, customerPhone, clearCart, setJoinExisting } = useCartStore()
+
+    // Sync URL params with store
+    useEffect(() => {
+        if (joinParam) {
+            setJoinExisting(joinParam === 'true')
+        }
+    }, [joinParam])
 
     const [activeCategory, setActiveCategory] = useState<string>('all')
     const [searchQuery, setSearchQuery] = useState('')
@@ -124,8 +132,12 @@ function MenuContent() {
             setOrderType(typeParam as any)
             if (tableParam) {
                 const tNum = parseInt(tableParam)
-                setTableInfo(tNum, 'unknown-guid-placeholder')
-                checkTableStatusAndRedirect(tNum)
+                if (!isNaN(tNum)) {
+                    const tId = searchParams.get('tableId') || 'qr-scan'
+                    setTableInfo(tNum, tId)
+                    checkTableStatusAndRedirect(tNum)
+                    console.log(`📍 [MENU] Table set to: ${tNum}`)
+                }
             }
             sessionStorage.setItem('orderTypeConfirmed', 'true')
             return
@@ -134,8 +146,12 @@ function MenuContent() {
         // If table provided, check its status
         if (tableParam) {
             const tNum = parseInt(tableParam)
-            setTableInfo(tNum, 'qr-scan')
-            checkTableStatusAndRedirect(tNum)
+            if (!isNaN(tNum)) {
+                const tId = searchParams.get('tableId') || 'qr-scan'
+                setTableInfo(tNum, tId)
+                checkTableStatusAndRedirect(tNum)
+                console.log(`📍 [MENU] Table set to: ${tNum}`)
+            }
         }
 
         // Show modal if not confirmed in session

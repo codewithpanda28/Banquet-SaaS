@@ -230,10 +230,17 @@ export function Header() {
                                         "ring-1 ring-black/5 hover:ring-orange-200"
                                     )}
                                 >
-                                    <TypeIcon className="w-3.5 h-3.5" />
-                                    <span className="max-sm:hidden">
-                                        {currentType.label}
-                                        {orderType === 'dine_in' && tableNumber ? ` • T-${tableNumber}` : ''}
+                                    <TypeIcon className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
+                                    <span>
+                                        <span className="max-sm:hidden">{currentType.label}</span>
+                                        {orderType === 'dine_in' && tableNumber ? (
+                                            <>
+                                                <span className="max-sm:hidden mx-1.5 opacity-50">•</span>
+                                                <span className="bg-white/20 px-1.5 py-0.5 rounded-md">T-{tableNumber}</span>
+                                            </>
+                                        ) : (
+                                            <span className="sm:hidden">{currentType.label.charAt(0)}</span>
+                                        )}
                                     </span>
                                 </Button>
                             </DropdownMenuTrigger>

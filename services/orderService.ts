@@ -1,18 +1,57 @@
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 
 export async function getActiveOrders() {
+    const rid = RESTAURANT_ID || process.env.NEXT_PUBLIC_RESTAURANT_ID;
+    
     try {
+        if (!rid) {
+            console.error('🛑 [getActiveOrders] Missing RESTAURANT_ID!');
+            return [];
+        }
+
+        console.log('🔄 [getActiveOrders] Fetching for RID:', rid);
+        
+        // Try the query with explicit relationship names
         const { data, error } = await supabase
             .from('orders')
-            .select('*, customers(*), order_items(*, menu_items(*)), restaurant_tables(*)')
-            .eq('restaurant_id', RESTAURANT_ID)
+            .select(`
+                *,
+                customers!customer_id(id, name, phone),
+                order_items(*, menu_items!menu_item_id(id, name, is_veg, image_url)),
+                restaurant_tables!table_id(id, table_number)
+            `)
+            .eq('restaurant_id', rid)
             .in('status', ['pending', 'confirmed', 'preparing', 'ready', 'served'])
-            .order('created_at', { ascending: false })
+            .order('created_at', { ascending: false });
 
-        if (error) throw error
+        if (error) {
+            console.error('❌ [getActiveOrders] Query Error:', {
+                message: error.message,
+                details: error.details,
+                hint: error.hint,
+                code: error.code
+            });
+            
+            // Fallback: Try a simpler query if the join fails
+            console.log('⚠️ [getActiveOrders] Attempting fallback query...');
+            const { data: fallbackData, error: fallbackError } = await supabase
+                .from('orders')
+                .select('*, order_items(*)')
+                .eq('restaurant_id', rid)
+                .in('status', ['pending', 'confirmed', 'preparing', 'ready', 'served'])
+                .order('created_at', { ascending: false });
+                
+            if (fallbackError) {
+                console.error('❌ [getActiveOrders] Fallback also failed:', fallbackError.message);
+                return [];
+            }
+            return fallbackData || [];
+        }
+        
+        console.log(`✅ [getActiveOrders] Success! Found ${data?.length || 0} orders.`);
         return data || []
-    } catch (error) {
-        console.error('Error fetching active orders:', error)
+    } catch (err: any) {
+        console.error('🛑 [getActiveOrders] Critical Exception:', err);
         return []
     }
 }
