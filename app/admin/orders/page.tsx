@@ -308,6 +308,15 @@ export default function OrdersPage() {
             })
 
             toast.success(`Payment marked as ${method.toUpperCase()} & Message Sent 🚀`)
+            
+            // 3. Mark Table as Available if it's a Dine In order
+            if (selectedOrder.table_id) {
+                await supabase
+                    .from('restaurant_tables')
+                    .update({ status: 'available' })
+                    .eq('id', selectedOrder.table_id)
+            }
+
             setSelectedOrder(null)
             fetchOrders()
         } catch (error) {
@@ -397,7 +406,7 @@ export default function OrdersPage() {
                 <div className="flex justify-center mb-6">
                     <TabsList className="bg-gray-100 p-1 rounded-full border border-gray-200">
                         <TabsTrigger value="active" className="rounded-full px-6 data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm transition-all text-gray-500 font-medium">
-                            Active Orders <Badge className="ml-2 bg-green-100 text-green-700 hover:bg-green-200 border-0">{orders.filter((o) => ['pending', 'confirmed', 'preparing', 'ready'].includes(o.status)).length}</Badge>
+                            Active Orders <Badge className="ml-2 bg-green-100 text-green-700 hover:bg-green-200 border-0">{orders.filter((o) => ['pending', 'confirmed', 'preparing', 'ready', 'served'].includes(o.status)).length}</Badge>
                         </TabsTrigger>
                         <TabsTrigger value="completed" className="rounded-full px-6 data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm transition-all text-gray-500 font-medium">
                             Completed <span className="ml-2 opacity-70 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">{orders.filter((o) => o.status === 'completed').length}</span>
@@ -466,7 +475,7 @@ export default function OrdersPage() {
                                     <div className="flex items-center gap-6 border-l border-gray-100 pl-6 border-dashed">
                                         <div className="text-right">
                                             <p className="text-[10px] uppercase font-bold text-gray-400 tracking-widest">Total Amount</p>
-                                            <p className="text-3xl font-black text-gray-900">₹{order.total.toFixed(0)}</p>
+                                            <p className="text-3xl font-black text-gray-900">₹{Number(order.total).toFixed(2)}</p>
                                             <div className="flex items-center justify-end gap-1 mt-1">
                                                 <span className={cn("h-2 w-2 rounded-full", order.payment_status === 'paid' ? "bg-green-500" : "bg-red-500")} />
                                                 <p className="text-xs font-medium text-gray-500 uppercase">{order.payment_status}</p>
@@ -591,7 +600,7 @@ export default function OrdersPage() {
                                                 <div key={item.id} className="grid grid-cols-12 p-3 items-center hover:bg-gray-50/50 transition-colors">
                                                     <div className="col-span-6 pl-2">
                                                         <p className="text-sm font-semibold text-gray-800">{item.item_name}</p>
-                                                        <p className="text-[10px] text-gray-400 font-medium">₹{(item.total / item.quantity).toFixed(0)} each</p>
+                                                        <p className="text-[10px] text-gray-400 font-medium">₹{(Number(item.total) / Number(item.quantity)).toFixed(2)} each</p>
                                                     </div>
                                                     <div className="col-span-2 flex justify-center">
                                                         <div className="h-6 w-6 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-bold">
@@ -622,7 +631,17 @@ export default function OrdersPage() {
 
                             {/* Actions Footer - Fixed */}
                             <div className="p-6 pt-2 shrink-0 bg-white border-t border-gray-50 z-10">
-                                {selectedOrder.status !== 'completed' && selectedOrder.payment_status !== 'paid' ? (
+                                {selectedOrder.status === 'cancelled' ? (
+                                    <div className="w-full h-11 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center justify-center font-bold text-sm gap-2">
+                                        <XCircle className="h-5 w-5 text-red-600" />
+                                        Order Cancelled
+                                    </div>
+                                ) : selectedOrder.status === 'completed' || selectedOrder.payment_status === 'paid' ? (
+                                    <div className="w-full h-11 bg-green-50 border border-green-200 text-green-700 rounded-xl flex items-center justify-center font-bold text-sm gap-2">
+                                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                                        Payment Completed {selectedOrder.payment_method ? `via ${selectedOrder.payment_method.toUpperCase()}` : ''}
+                                    </div>
+                                ) : (
                                     <div className="grid grid-cols-2 gap-3">
                                         <Button
                                             className="h-11 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm"
@@ -638,11 +657,6 @@ export default function OrdersPage() {
                                         >
                                             <Smartphone className="mr-2 h-4 w-4" /> Collect UPI
                                         </Button>
-                                    </div>
-                                ) : (
-                                    <div className="w-full h-11 bg-green-50 border border-green-200 text-green-700 rounded-xl flex items-center justify-center font-bold text-sm gap-2">
-                                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                                        Payment Completed via {selectedOrder.payment_method?.toUpperCase()}
                                     </div>
                                 )}
                             </div>

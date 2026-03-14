@@ -24,6 +24,7 @@ export interface Restaurant {
     avg_preparation_time: number;
     opening_time: string;
     closing_time: string;
+    dietary_type?: 'veg_only' | 'non_veg_only' | 'both';
 }
 
 export interface MenuCategory {
@@ -104,6 +105,7 @@ export interface Order {
     estimated_time: number;
     customer_name?: string;
     customer_phone?: string;
+    waiter_id?: string | null;
     created_at: string;
     updated_at: string;
     order_items?: OrderItem[];

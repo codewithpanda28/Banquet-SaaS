@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { MenuItem, Coupon } from '@/types'
 import { toast } from 'sonner'
 import { Utensils, ShoppingBag, Truck, Bike } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 import {
     Sheet,
     SheetContent,
@@ -28,6 +28,7 @@ import {
 
 function MenuContent() {
     const searchParams = useSearchParams()
+    const router = useRouter()
     const tableParam = searchParams.get('table')
     const typeParam = searchParams.get('type')
 
@@ -100,25 +101,47 @@ function MenuContent() {
 
     // Handle initialization and order type selection logic
     useEffect(() => {
+        const checkTableStatusAndRedirect = async (tNum: number) => {
+            const { data: tableData } = await supabase
+                .from('restaurant_tables')
+                .select('status')
+                .eq('restaurant_id', RESTAURANT_ID)
+                .eq('table_number', tNum)
+                .single()
+
+            if (tableData?.status === 'occupied') {
+                // If occupied and we don't have a confirmed session link, redirect to scan
+                const isConfirmed = sessionStorage.getItem('orderTypeConfirmed')
+                if (!isConfirmed) {
+                    router.replace(`/customer/scan?table=${tNum}`)
+                    return
+                }
+            }
+        }
+
         // If type provided in URL, respect it
         if (typeParam && ['dine_in', 'take_away', 'home_delivery'].includes(typeParam)) {
             setOrderType(typeParam as any)
-            if (tableParam) setTableInfo(parseInt(tableParam), 'unknown-guid-placeholder')
+            if (tableParam) {
+                const tNum = parseInt(tableParam)
+                setTableInfo(tNum, 'unknown-guid-placeholder')
+                checkTableStatusAndRedirect(tNum)
+            }
             sessionStorage.setItem('orderTypeConfirmed', 'true')
             return
         }
 
-        // If table provided, set table but ASK for mode
+        // If table provided, check its status
         if (tableParam) {
-            setTableInfo(parseInt(tableParam), 'qr-scan')
-            // NOTE: QR scan webhook is handled in /customer/scan page
-            // Do NOT trigger it here to avoid duplicate WhatsApp messages
+            const tNum = parseInt(tableParam)
+            setTableInfo(tNum, 'qr-scan')
+            checkTableStatusAndRedirect(tNum)
         }
 
         // Show modal if not confirmed in session
         const isConfirmed = sessionStorage.getItem('orderTypeConfirmed')
         if (!isConfirmed) {
-            setOrderType(null) // Reset order type to force modal if not confirmed
+            setOrderType(null)
             setShowOrderTypeModal(true)
         } else {
             setShowOrderTypeModal(false)
@@ -130,7 +153,7 @@ function MenuContent() {
         }, 800)
 
         return () => clearTimeout(timer)
-    }, [tableParam, typeParam, setTableInfo, setOrderType])
+    }, [tableParam, typeParam, setTableInfo, setOrderType, router])
 
     // Set initial active category
     // Effect removed to allow 'All Items' selection
@@ -148,6 +171,13 @@ function MenuContent() {
     const filteredItems = useMemo(() => {
         if (!items) return []
         let result = items
+
+        // Apply Global Restaurant Dietary Setting
+        if (restaurant?.dietary_type === 'veg_only') {
+            result = result.filter(item => item.is_veg)
+        } else if (restaurant?.dietary_type === 'non_veg_only') {
+            result = result.filter(item => !item.is_veg)
+        }
 
         if (activeCategory !== 'all') {
             result = result.filter(item => item.category_id === activeCategory)
@@ -217,7 +247,7 @@ function MenuContent() {
                         />
                     </div>
 
-                    {showDietaryToggle && (
+                    {showDietaryToggle && restaurant?.dietary_type === 'both' && (
                         <div className="flex justify-center">
                             <div className="bg-white p-0.5 rounded-full border shadow-sm flex gap-0.5 scale-90 origin-top">
                                 <button
@@ -286,6 +316,7 @@ function MenuContent() {
             {/* Order Type Selection Modal - Narrower and more compact */}
             <Dialog open={showOrderTypeModal} onOpenChange={setShowOrderTypeModal}>
                 <DialogContent className="max-w-[340px] w-[90%] p-0 overflow-hidden border-none shadow-[0_20px_50px_rgba(0,0,0,0.2)] bg-white/95 backdrop-blur-xl rounded-[2.5rem] fixed left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 outline-none group [&>button]:hidden">
+                    <DialogTitle className="sr-only">Select Order Mode</DialogTitle>
                     <div className="p-6 pb-8 flex flex-col items-center gap-6">
                         {/* Header Section */}
                         <div className="relative group/icon">

@@ -6,7 +6,7 @@ export async function getActiveOrders() {
             .from('orders')
             .select('*, customers(*), order_items(*, menu_items(*)), restaurant_tables(*)')
             .eq('restaurant_id', RESTAURANT_ID)
-            .in('status', ['pending', 'confirmed', 'preparing', 'ready'])
+            .in('status', ['pending', 'confirmed', 'preparing', 'ready', 'served'])
             .order('created_at', { ascending: false })
 
         if (error) throw error
@@ -30,11 +30,19 @@ export async function updateOrderStatus(orderId: string, status: string) {
         if (status === 'served' || status === 'cancelled') {
             const { data: order } = await supabase
                 .from('orders')
-                .select('*, customers(*), restaurant_tables(table_number), order_items(*)')
+                .select('*, customers(*), restaurant_tables(id, table_number), order_items(*)')
                 .eq('id', orderId)
                 .single()
 
             if (order) {
+                // ✅ release table status
+                if (order.table_id) {
+                    await supabase
+                        .from('restaurant_tables')
+                        .update({ status: 'available' })
+                        .eq('id', order.table_id)
+                }
+
                 const { triggerPaymentWebhook } = await import('@/lib/webhook')
                 await triggerPaymentWebhook({
                     bill_id: order.bill_id,

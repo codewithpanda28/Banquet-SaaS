@@ -53,6 +53,7 @@ export default function SettingsPage() {
             if (error) throw error
 
             if (data) {
+                if (data.dietary_type) setDietaryType(data.dietary_type)
                 setRestaurant(data)
                 setForm({
                     name: data.name || '',
@@ -98,6 +99,7 @@ export default function SettingsPage() {
                 opening_time: form.opening_time || null,
                 closing_time: form.closing_time || null,
                 upi_id: form.upi_id || null,
+                dietary_type: dietaryType,
             }
 
             const { error } = await supabase
@@ -105,14 +107,17 @@ export default function SettingsPage() {
                 .update(updateData)
                 .eq('id', RESTAURANT_ID)
 
-            if (error) throw error
+            if (error) {
+                console.error('❌ [SETTINGS] DB Error:', error)
+                throw new Error(error.message || 'Database update failed')
+            }
 
             localStorage.setItem('restaurant_dietary_type', dietaryType)
             toast.success('Settings saved successfully')
             fetchRestaurantData()
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error saving settings:', error)
-            toast.error('Failed to save settings')
+            toast.error(error.message || 'Failed to save settings')
         } finally {
             setSaving(false)
         }

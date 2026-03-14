@@ -73,7 +73,17 @@ export default function TableBookingPage() {
 
     const availableTablesForSlot = (date: string, time: string) => {
         const occupied = getOccupiedTableIds(date, time)
-        return tables.filter(t => !occupied.includes(t.id) && t.status !== 'occupied')
+        // If booking is for today, we check physical status too
+        const isSelectedToday = date === format(new Date(), 'yyyy-MM-dd')
+        
+        return tables.filter(t => {
+            const isReservedByBooking = occupied.includes(t.id)
+            // For today's bookings, we also consider if the table is physically occupied right now
+            // This prevents double-booking a table that currently has a long-sitting client
+            const isPhysicallyBusy = isSelectedToday && t.status === 'occupied'
+            
+            return !isReservedByBooking && !isPhysicallyBusy
+        })
     }
 
     async function handleBook() {

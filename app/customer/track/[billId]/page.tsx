@@ -255,7 +255,7 @@ export default function TrackOrderPage() {
                                         <span className="font-bold text-slate-400 text-xs bg-slate-100 px-2 py-1 rounded-md">{item.quantity}x</span>
                                         <span className="font-medium text-slate-700">{item.item_name}</span>
                                     </div>
-                                    <span className="font-mono text-slate-500">₹{item.total.toFixed(0)}</span>
+                                    <span className="font-mono text-slate-500">₹{Number(item.total).toFixed(2)}</span>
                                 </div>
                             ))}
 
@@ -279,7 +279,7 @@ export default function TrackOrderPage() {
                                                         )}
                                                     </div>
                                                 </div>
-                                                <span className="font-mono text-slate-500">₹{item.total.toFixed(0)}</span>
+                                                <span className="font-mono text-slate-500">₹{Number(item.total).toFixed(2)}</span>
                                             </div>
                                         ))}
 

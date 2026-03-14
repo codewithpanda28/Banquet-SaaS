@@ -103,8 +103,7 @@ export default function AdminDashboard() {
                 .from('orders')
                 .select('*', { count: 'exact', head: true })
                 .eq('restaurant_id', RESTAURANT_ID)
-                .neq('status', 'completed')
-                .neq('status', 'cancelled')
+                .in('status', ['pending', 'confirmed', 'preparing', 'ready', 'served'])
 
             // Fetch Total Orders in Range
             const { count: totalOrders } = await supabase
@@ -311,6 +310,15 @@ export default function AdminDashboard() {
             })
 
             toast.success(`Payment marked as ${method.toUpperCase()} & Message Sent 🚀`)
+            
+            // 3. Mark Table as Available if it's a Dine In order
+            if (selectedOrder.table_id) {
+                await supabase
+                    .from('restaurant_tables')
+                    .update({ status: 'available' })
+                    .eq('id', selectedOrder.table_id)
+            }
+
             setIsDetailsOpen(false)
             fetchDashboardData(range) // Refresh data
         } catch (error) {
@@ -538,7 +546,7 @@ export default function AdminDashboard() {
 
                                             {/* Amount */}
                                             <div className="col-span-2 text-right">
-                                                <span className="font-bold text-gray-900">₹{order.total.toFixed(0)}</span>
+                                                <span className="font-bold text-gray-900">₹{Number(order.total).toFixed(2)}</span>
                                             </div>
 
                                             {/* Status Badge */}
@@ -704,7 +712,7 @@ export default function AdminDashboard() {
                                                 <div key={item.id} className="grid grid-cols-12 p-3 items-center hover:bg-gray-50/50 transition-colors">
                                                     <div className="col-span-6 pl-2">
                                                         <p className="text-sm font-semibold text-gray-800">{item.item_name}</p>
-                                                        <p className="text-[10px] text-gray-400 font-medium">₹{(item.total / item.quantity).toFixed(0)} each</p>
+                                                        <p className="text-[10px] text-gray-400 font-medium">₹{(Number(item.total) / Number(item.quantity)).toFixed(2)} each</p>
                                                     </div>
                                                     <div className="col-span-2 flex justify-center">
                                                         <div className="h-6 w-6 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-bold">
@@ -735,7 +743,7 @@ export default function AdminDashboard() {
 
                             {/* Actions Footer - Fixed at Bottom */}
                             <div className="p-6 pt-2 shrink-0 bg-white border-t border-gray-50 z-10">
-                                {selectedOrder.status !== 'completed' && selectedOrder.payment_status !== 'paid' ? (
+                                {selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && selectedOrder.payment_status !== 'paid' ? (
                                     <div className="grid grid-cols-2 gap-3">
                                         <Button
                                             className="h-11 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm"

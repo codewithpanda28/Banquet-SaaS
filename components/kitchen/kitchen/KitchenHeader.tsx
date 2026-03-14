@@ -33,10 +33,17 @@ export default function KitchenHeader() {
                         <span className="text-2xl">👨‍🍳</span>
                     </div>
                     <div>
-                        <h1 className="text-xl font-bold tracking-tight text-foreground">
+                        <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
                             Kitchen Display
+                            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                                <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </span>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Live</span>
+                            </div>
                         </h1>
-                        <p className="text-xs text-muted-foreground">Live Order Management</p>
+                        <p className="text-xs text-muted-foreground">Order Management System</p>
                     </div>
                 </div>
 
@@ -83,17 +90,7 @@ export default function KitchenHeader() {
                         )}
                     </Button>
 
-                    {/* Settings Button */}
-                    <Link href="/kitchen/settings">
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-11 w-11 rounded-xl border-2 border-muted-foreground/20 text-muted-foreground transition-all hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
-                        >
-                            <Settings className="h-5 w-5" />
-                        </Button>
-                    </Link>
-                </div>
+                    </div>
             </div>
         </header>
     )

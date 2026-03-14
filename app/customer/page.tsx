@@ -13,9 +13,8 @@ function CustomerRedirect() {
 
     useEffect(() => {
         const tableId = searchParams?.get('table')
-
         if (tableId) {
-            router.push(`/customer/menu?table=${tableId}`)
+            router.push(`/customer/scan?table=${tableId}`)
         } else {
             router.push('/customer/menu')
         }

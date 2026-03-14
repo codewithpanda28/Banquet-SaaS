@@ -165,6 +165,13 @@ export default function WaiterDashboard() {
             setStep('table')
             toast.success(`Welcome, ${finalStaffName}!`)
 
+            // ✅ Track last login in DB
+            if (finalStaffId) {
+                await supabase.from('staff').update({
+                    last_login_at: new Date().toISOString()
+                }).eq('id', finalStaffId)
+            }
+
             triggerAutomationWebhook('waiter-login', {
                 staff_id: finalStaffId || 'temp',
                 name: finalStaffName,
@@ -229,7 +236,9 @@ export default function WaiterDashboard() {
                 const newTotal = Number(existingOrder.total) + cartTotal
                 await supabase.from('orders').update({
                     total: newTotal,
-                    notes: (existingOrder.notes || '') + `\nAdded by waiter: +₹${cartTotal}`
+                    // Only set waiter_id if it's not already set (preserve original waiter)
+                    waiter_id: existingOrder.waiter_id || staffId || null,
+                    notes: (existingOrder.notes || '') + `\nAdded by waiter ${staffName}: +₹${cartTotal}`
                 }).eq('id', orderId)
                 toast.info(`Adding items to existing Bill #${billId}`)
             } else {
@@ -257,6 +266,7 @@ export default function WaiterDashboard() {
                     table_id: selectedTable.id,
                     customer_id: customerId,
                     bill_id: billId,
+                    waiter_id: staffId || null, // ✅ NEW: Track the waiter
                     status: 'pending',
                     payment_status: 'pending',
                     order_type: 'dine_in',
@@ -276,7 +286,9 @@ export default function WaiterDashboard() {
                 quantity: c.quantity,
                 price: c.price,
                 total: c.price * c.quantity,
-                status: 'pending'
+                status: 'pending',
+                waiter_id: staffId || null,
+                waiter_name: staffName || 'Admin'
             }))
 
             const { error: itemsError } = await supabase.from('order_items').insert(orderItems)
@@ -668,7 +680,7 @@ export default function WaiterDashboard() {
                                                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">₹{item.price} × {item.quantity}</p>
                                                             </div>
                                                             <div className="text-right">
-                                                                <p className="font-black text-gray-900 mb-1">₹{(item.price * item.quantity).toFixed(0)}</p>
+                                                                <p className="font-black text-gray-900 mb-1">₹{(item.price * item.quantity).toFixed(2)}</p>
                                                                 <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                     <button onClick={() => updateQty(item.id, -1)} className="p-1 hover:bg-gray-100 rounded-lg"><Minus className="h-3 w-3" /></button>
                                                                     <button onClick={() => updateQty(item.id, 1)} className="p-1 hover:bg-gray-100 rounded-lg"><Plus className="h-3 w-3" /></button>
@@ -681,7 +693,7 @@ export default function WaiterDashboard() {
                                                 <div className="pt-6 border-t-4 border-dashed border-gray-100 space-y-4">
                                                     <div className="flex justify-between items-end">
                                                         <span className="font-black text-gray-400 uppercase tracking-widest text-xs">Total Amount</span>
-                                                        <span className="text-4xl font-black text-primary tracking-tighter">₹{cartTotal.toFixed(0)}</span>
+                                                        <span className="text-4xl font-black text-primary tracking-tighter">₹{cartTotal.toFixed(2)}</span>
                                                     </div>
                                                     <Button
                                                         className="w-full bg-primary hover:bg-primary/90 text-white font-black h-16 rounded-[1.5rem] shadow-xl shadow-primary/20 text-xl group"
@@ -715,7 +727,7 @@ export default function WaiterDashboard() {
                                 <div className="p-5 bg-gray-50 rounded-[2rem] border-2 border-gray-100 flex justify-between items-center">
                                     <div>
                                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">TOTAL PAYABLE</p>
-                                        <p className="text-3xl font-black text-primary tracking-tighter">₹{cartTotal.toFixed(0)}</p>
+                                        <p className="text-3xl font-black text-primary tracking-tighter">₹{cartTotal.toFixed(2)}</p>
                                     </div>
                                     <div className="text-right">
                                         <p className="text-xs font-black text-gray-900 uppercase">Items: {cartCount}</p>

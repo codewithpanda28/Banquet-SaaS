@@ -35,7 +35,7 @@ function ScanRedirect() {
 
     async function handleTableScan(tableNumber: number) {
         try {
-            // Step 1: Table number se table data fetch karo
+            // Step 1: Fetch table details
             const { data: tableData, error } = await supabase
                 .from('restaurant_tables')
                 .select('*')
@@ -44,48 +44,51 @@ function ScanRedirect() {
                 .single()
 
             if (error || !tableData) {
-                // Table nahi mili — seedha menu pe bhejo
                 router.replace(`/customer/menu?table=${tableNumber}`)
                 return
             }
 
-            // Step 2: Check karo kya table already occupied hai
-            if (tableData.status === 'occupied') {
-                // Table occupied hai — alternate available tables fetch karo
+            // Step 2: Check for active bookings for TODAY that might block a new customer
+            const today = new Date().toISOString().split('T')[0]
+            const { data: bookings } = await supabase
+                .from('table_bookings')
+                .select('*')
+                .eq('table_id', tableData.id)
+                .eq('booking_date', today)
+                .in('status', ['confirmed', 'seated'])
+
+            // Logic: Is there a booking happening NOW (+/- 45 mins)?
+            const currentTime = new Date()
+            const activeBooking = bookings?.find(b => {
+                const [h, m] = b.booking_time.split(':').map(Number)
+                const bookingDate = new Date()
+                bookingDate.setHours(h, m, 0)
+                
+                // Diff in minutes
+                const diff = Math.abs((currentTime.getTime() - bookingDate.getTime()) / 60000)
+                return diff < 45 // 45 min window
+            })
+
+            // If it's occupied or has an active booking, and we are not "verified", show options
+            if (tableData.status === 'occupied' || activeBooking) {
+                // We show the "Occupied/Reserved" screen which allows them to "Join" if they are part of the group
+                setOccupiedTable(tableData)
+                
+                // Fetch others just in case they want a different table
                 const { data: availableTables } = await supabase
                     .from('restaurant_tables')
                     .select('*')
                     .eq('restaurant_id', RESTAURANT_ID)
                     .eq('status', 'available')
                     .eq('is_active', true)
-                    .order('table_number')
+                    .limit(5)
 
-                setOccupiedTable(tableData)
                 setAlternateTables(availableTables || [])
                 setStatus('occupied')
                 return
             }
 
-            // Step 3: Table free hai — OCCUPIED mark karo Supabase mein
-            await supabase
-                .from('restaurant_tables')
-                .update({ status: 'occupied' })
-                .eq('id', tableData.id)
-
-            // Step 4: Table bookings mein bhi "walk-in" entry daalo (today's booking)
-            await supabase.from('table_bookings').insert({
-                restaurant_id: RESTAURANT_ID,
-                table_id: tableData.id,
-                customer_name: 'Walk-in Customer',
-                customer_phone: 'qr-scan',
-                party_size: 1,
-                booking_date: new Date().toISOString().split('T')[0],
-                booking_time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false }),
-                status: 'seated',
-                notes: `Auto-seated via QR scan — Table ${tableNumber}`
-            })
-
-            // Step 5: Menu pe redirect karo
+            // Step 3: Menu pe redirect karo (NO AUTO-OCCUPY as per user request)
             setStatus('redirecting')
             setTimeout(() => {
                 router.replace(`/customer/menu?table=${tableNumber}&type=dine_in`)
@@ -93,7 +96,6 @@ function ScanRedirect() {
 
         } catch (err) {
             console.error('Table scan error:', err)
-            // Error pe bhi menu pe bhejo
             router.replace(`/customer/menu?table=${tableNumber}`)
         }
     }
@@ -158,11 +160,25 @@ function ScanRedirect() {
 
             {/* Message */}
             <h1 className="text-2xl font-black text-gray-900 text-center mb-2">
-                Table {occupiedTable?.table_number} Occupied! 🚫
+                Table {occupiedTable?.table_number} looks busy! 🍽️
             </h1>
-            <p className="text-gray-500 text-center text-sm font-medium mb-8 max-w-xs">
-                Yeh table abhi koi aur use kar raha hai. Neeche se koi free table choose karo.
+            <p className="text-gray-500 text-center text-sm font-medium mb-6 max-w-xs">
+                Yeh table abhi Reserved hai ya Occupied dikh rahi hai.
             </p>
+
+            <div className="w-full max-w-sm flex flex-col gap-3 mb-8">
+                <Button 
+                    className="h-14 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-lg"
+                    onClick={() => router.replace(`/customer/menu?table=${occupiedTable?.table_number}&type=dine_in`)}
+                >
+                    I am with this Group 🤝
+                </Button>
+                <div className="flex items-center gap-2 px-1">
+                    <div className="h-px bg-gray-200 flex-1" />
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">or choose another</span>
+                    <div className="h-px bg-gray-200 flex-1" />
+                </div>
+            </div>
 
             {/* Alternate Tables */}
             {alternateTables.length > 0 ? (

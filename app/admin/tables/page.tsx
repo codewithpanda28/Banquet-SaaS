@@ -386,8 +386,8 @@ export default function TablesPage() {
                                     className={cn(
                                         "w-full font-bold border-2 transition-all",
                                         table.status === 'available'
-                                            ? "border-green-500/30 text-green-600 hover:bg-green-500 hover:text-white hover:border-green-500"
-                                            : "border-red-500/30 text-red-600 hover:bg-red-500 hover:text-white hover:border-red-500"
+                                            ? "border-green-500/30 text-green-600 hover:bg-green-500 hover:text-black hover:border-green-500"
+                                            : "border-red-500/30 text-red-600 hover:bg-red-500 hover:text-black hover:border-red-500"
                                     )}
                                     onClick={() => handleToggleStatus(table.id, table.status)}
                                 >
