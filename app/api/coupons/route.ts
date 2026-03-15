@@ -42,18 +42,29 @@ export async function GET(req: NextRequest) {
         // Filter by usage limit and SMART HIDE private/loyal coupons
         const available = (coupons || []).filter((c: any) => {
             const isUsageOk = c.usage_limit === 0 || c.used_count < c.usage_limit
+            if (!isUsageOk) return false
+
             const isPrivate = c.description?.includes('[PRIVATE]')
             
-            // If it's private, ONLY show it if the phone matches the code suffix
+            // If it's private, ONLY show it if the phone matches the code suffix OR description contains phone
             if (isPrivate) {
-                if (!phone || !c.code.startsWith('VIP-')) return false
-                const codeParts = c.code.split('-')
-                const codeSuffix = codeParts[codeParts.length - 1]
-                return codeSuffix === last4
+                if (!phone) return false
+                
+                // Case A: Standard VIP format (VIP-NAME-1234)
+                if (c.code.startsWith('VIP-')) {
+                    const codeParts = c.code.split('-')
+                    const codeSuffix = codeParts[codeParts.length - 1]
+                    if (codeSuffix === last4) return true
+                }
+
+                // Case B: Full phone match in description
+                if (c.description?.includes(phone)) return true
+
+                return false
             }
 
             // Normal/Public coupons are shown to everyone
-            return isUsageOk
+            return true
         })
 
         console.log('✅ [API/Coupons] Available after smart filter:', available.length)
@@ -114,21 +125,30 @@ export async function POST(req: NextRequest) {
         // Extra Security: Private/Loyal coupon check
         const isPrivate = coupon.description?.includes('[PRIVATE]')
         if (isPrivate) {
-            // If it's a VIP-NAME-PHONE format, verify phone
+            const customerPhone = (body.customerPhone || '').replace(/\s+/g, '') // Remove spaces
+            if (!customerPhone) {
+                return NextResponse.json({ error: 'Please enter your phone number to use this exclusive coupon' })
+            }
+
+            let authorized = false
+
+            // Check Pattern 1: VIP Suffix (VIP-NAME-1234)
             if (coupon.code.startsWith('VIP-')) {
                 const codeParts = coupon.code.split('-')
-                const codePhonePart = codeParts[codeParts.length - 1] // Last digits
-                
-                const customerPhone = body.customerPhone || ''
-                if (!customerPhone) {
-                    return NextResponse.json({ error: 'Please enter your phone number to use this exclusive coupon' })
-                }
+                const codeSuffix = codeParts[codeParts.length - 1]
+                if (customerPhone.endsWith(codeSuffix)) authorized = true
+            }
 
-                const last4OfCustomer = customerPhone.slice(-4)
-                if (codePhonePart !== last4OfCustomer) {
-                    console.log(`❌ [API/Coupons/Validate] Unauthorized loyal coupon use: code digits ${codePhonePart} vs customer ${last4OfCustomer}`)
-                    return NextResponse.json({ error: 'This exclusive coupon belongs to another customer' })
-                }
+            // Check Pattern 2: Phone in Description (for manual loyal coupons)
+            // We clean the description and check if the phone number exists anywhere in it
+            const cleanDesc = (coupon.description || '').replace(/\s+/g, '')
+            if (!authorized && cleanDesc.includes(customerPhone)) {
+                authorized = true
+            }
+
+            if (!authorized) {
+                console.log(`❌ [API/Coupons/Validate] Unauthorized loyal coupon use: ${coupon.code} by ${customerPhone}`)
+                return NextResponse.json({ error: 'This exclusive coupon belongs to another customer' })
             }
         }
 

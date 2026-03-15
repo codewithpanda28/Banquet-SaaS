@@ -140,7 +140,7 @@ export default function LoyaltyHub() {
                 const couponData = {
                     restaurant_id: RESTAURANT_ID,
                     code: couponCode,
-                    description: `[PRIVATE] Exclusive loyalty reward for ${selectedCustomer.name}`,
+                    description: `[PRIVATE] Exclusive loyalty reward for ${selectedCustomer.name} (${selectedCustomer.phone})`,
                     discount_type: 'percentage',
                     discount_value: discountValue,
                     min_order_amount: 0,
@@ -173,6 +173,19 @@ export default function LoyaltyHub() {
                 if (!selectedCoupon) return
                 couponCode = selectedCoupon.code
                 validUntil = new Date(selectedCoupon.valid_until)
+
+                // IMPORTANT: Update existing coupon to link it to this customer's phone
+                // This makes it visible on their private dashboard
+                const { error: updateDescError } = await supabase
+                    .from('coupons')
+                    .update({ 
+                        description: `[PRIVATE] Exclusive loyalty reward for ${selectedCustomer.name} (${selectedCustomer.phone})` 
+                    })
+                    .eq('id', selectedCoupon.id)
+                
+                if (updateDescError) {
+                    console.error('Error linking coupon to customer:', updateDescError)
+                }
             }
 
             const formattedDate = validUntil.toLocaleDateString('en-GB') // DD/MM/YYYY format
