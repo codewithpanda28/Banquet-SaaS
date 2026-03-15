@@ -18,7 +18,8 @@ import {
     ChevronRight,
     DollarSign,
     TrendingUp,
-    Smartphone
+    Smartphone,
+    Zap
 } from 'lucide-react'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 import { startOfDay, endOfDay, subDays, format } from 'date-fns'
@@ -44,7 +45,7 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { cn } from '@/lib/utils'
-import { triggerPaymentWebhook } from '@/lib/webhook'
+import { triggerPaymentWebhook, triggerAutomationWebhook } from '@/lib/webhook'
 
 export default function AdminDashboard() {
     const [stats, setStats] = useState({
@@ -61,6 +62,8 @@ export default function AdminDashboard() {
     const [isDetailsOpen, setIsDetailsOpen] = useState(false)
     const [processingPayment, setProcessingPayment] = useState(false)
     const [range, setRange] = useState<'today' | 'week' | 'month'>('today')
+    const [isFlashSale, setIsFlashSale] = useState(false)
+    const [generatingReport, setGeneratingReport] = useState(false)
 
     // Helper to robustly parse dates primarily from UTC
     const parseDate = (dateString: string) => {
@@ -196,6 +199,83 @@ export default function AdminDashboard() {
         }
     }, [])
 
+    const toggleFlashSale = async () => {
+        try {
+            const nextState = !isFlashSale
+            setIsFlashSale(nextState)
+            
+            const message = nextState 
+                ? "🔥 *Flash Sale Active!* 20% Off on all items for next 2 hours. Start ordering now!" 
+                : "Flash Sale has ended."
+            
+            // Still trigger webhook for internal logs/other integrations
+            await triggerAutomationWebhook('whatsapp-chat', {
+                type: 'flash_sale',
+                active: nextState,
+                phone: '918252472186',
+                message
+            })
+
+            // Direct WhatsApp Trigger
+            const waUrl = `https://wa.me/918252472186?text=${encodeURIComponent(message)}`
+            window.open(waUrl, '_blank')
+
+            toast.success(nextState ? 'Flash Sale Activated! 🚀' : 'Flash Sale Deactivated')
+        } catch (error) {
+            toast.error('Failed to toggle flash sale')
+        }
+    }
+
+    const sendDailyReport = async () => {
+        try {
+            setGeneratingReport(true)
+            const avgTicket = stats.totalOrders > 0 ? (stats.totalRevenue / stats.totalOrders).toFixed(2) : '0'
+            const currentHour = new Array(24).fill(0).map((_, i) => ({h: i, count: stats.peakHours[i]}))
+            const busiestHour = currentHour.reduce((prev, current) => (prev.count > current.count) ? prev : current).h
+            
+            const reportMsg = 
+                `*--- TASTYBYTES EXECUTIVE REPORT ---*\n` +
+                `Date: ${new Date().toLocaleDateString()}\n` +
+                `Time: ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n\n` +
+                
+                `*FINANCIAL SUMMARY*\n` +
+                `- Total Revenue: INR ${stats.totalRevenue.toLocaleString()}\n` +
+                `- Total Orders: ${stats.totalOrders}\n\n` +
+                
+                `*KITCHEN & OPERATIONS*\n` +
+                `- Orders Completed: ${stats.kitchenCounts.completed}\n` +
+                `- Currently Preparing: ${stats.kitchenCounts.preparing}\n` +
+                `- Ready for Service: ${stats.kitchenCounts.ready}\n` +
+                `- Pending Approval: ${stats.kitchenCounts.pending}\n` +
+                `- Cancelled Orders: ${stats.kitchenCounts.cancelled}\n\n` +
+                
+                `*INSIGHTS*\n` +
+                `- Peak Business Hour: ${busiestHour}:00 - ${busiestHour + 1}:00\n\n` +
+                
+                `--------------------------------\n` +
+                `_Sent via Restaurant Admin Dashboard_`
+
+            // Trigger webhook for data consistency
+            await triggerAutomationWebhook('report-daily', {
+                type: 'daily_report',
+                phone: '918252472186',
+                revenue: stats.totalRevenue,
+                orders: stats.totalOrders,
+                message: reportMsg
+            })
+
+            // Direct WhatsApp Trigger
+            const waUrl = `https://wa.me/918252472186?text=${encodeURIComponent(reportMsg)}`
+            window.open(waUrl, '_blank')
+
+            toast.success('Professional Report Generated! 📱')
+        } catch (error) {
+            toast.error('Failed to generate report')
+        } finally {
+            setGeneratingReport(false)
+        }
+    }
+
     useEffect(() => {
         fetchDashboardData(range)
 
@@ -306,7 +386,27 @@ export default function AdminDashboard() {
 
             if (error) throw error
 
-            // Trigger n8n Webhook for Payment Confirmation
+            // 2. Update Customer Loyalty Stats (New)
+            if (selectedOrder.customer_id) {
+                const { data: customer } = await supabase
+                    .from('customers')
+                    .select('total_spent, total_orders')
+                    .eq('id', selectedOrder.customer_id)
+                    .single()
+
+                if (customer) {
+                    await supabase
+                        .from('customers')
+                        .update({
+                            total_spent: (customer.total_spent || 0) + total,
+                            total_orders: (customer.total_orders || 0) + 1,
+                            last_order_at: new Date().toISOString()
+                        })
+                        .eq('id', selectedOrder.customer_id)
+                }
+            }
+
+            // 3. Trigger n8n Webhook for Payment Confirmation
             await triggerPaymentWebhook({
                 bill_id: billId,
                 amount: total,
@@ -332,7 +432,7 @@ export default function AdminDashboard() {
             })
 
             toast.success(`Payment marked as ${method.toUpperCase()} & Message Sent 🚀`)
-            
+
             // 3. Mark Table as Available if it's a Dine In order
             if (selectedOrder.table_id) {
                 await supabase
@@ -401,10 +501,36 @@ export default function AdminDashboard() {
                         onClick={() => setRange('month')}
                         className={cn(
                             "rounded-lg text-xs font-semibold h-8 transition-all",
-                            range === 'month' ? "bg-white border border-gray-100 text-black shadow-sm" : "hover:bg-gray-100 text-gray-500"
+                            range === 'month' ? "bg-white border border-gray-200 text-black shadow-sm" : "hover:bg-gray-100 text-gray-500"
                         )}
                     >
                         Month
+                    </Button>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className={cn(
+                            "rounded-xl font-bold h-10 gap-2 border-2 transition-all",
+                            isFlashSale ? "bg-orange-50 border-orange-500 text-orange-600 shadow-orange-500/10" : "bg-white border-gray-100 text-gray-500"
+                        )}
+                        onClick={toggleFlashSale}
+                    >
+                        <Zap className={cn("h-4 w-4", isFlashSale && "fill-orange-500")} />
+                        {isFlashSale ? "Flash Sale Live" : "Flash Sale"}
+                    </Button>
+
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-xl font-bold h-10 gap-2 border-2 bg-white border-gray-100 text-gray-700 hover:border-blue-500 hover:text-blue-600 transition-all"
+                        onClick={sendDailyReport}
+                        disabled={generatingReport}
+                    >
+                        {generatingReport ? <div className="h-4 w-4 animate-spin border-2 border-blue-600 border-t-transparent rounded-full" /> : <Smartphone className="h-4 w-4" />}
+                        Send Report
                     </Button>
                 </div>
             </div>

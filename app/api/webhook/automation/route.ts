@@ -12,6 +12,8 @@ const WHATSAPP_ACTIONS = [
     'waiter-order',    // Waiter ne order place kiya
     'order-served',    // Order serve ho gaya
     'booking-create',  // Table booking confirm hui
+    'whatsapp-chat',    // Manual messages & flash sales
+    'report-daily',    // Sales reports
 ]
 
 export async function POST(req: Request) {

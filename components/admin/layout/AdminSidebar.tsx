@@ -27,7 +27,8 @@ import {
     Bike,
     Zap,
     BarChart3,
-    ChefHat
+    ChefHat,
+    Crown
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -38,6 +39,7 @@ const menuItems = [
     { icon: Armchair, label: 'Tables', href: '/admin/tables' },
     { icon: ConciergeBell, label: 'Waiter Activity', href: '/admin/waiters' },
     { icon: Users, label: 'Customers', href: '/admin/customers' },
+    { icon: Crown, label: 'Loyalty Hub', href: '/admin/loyalty' },
     { icon: TicketPercent, label: 'Coupons', href: '/admin/coupons' },
     { icon: FileBarChart, label: 'Reports', href: '/admin/reports' },
     { icon: Monitor, label: 'App Previews', href: '/admin/preview' },

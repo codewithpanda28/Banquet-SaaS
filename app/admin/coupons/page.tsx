@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, Percent, DollarSign, Calendar, TrendingUp, Edit, Trash2, Copy, Tag, Clock } from 'lucide-react'
+import { Plus, Percent, DollarSign, Calendar, TrendingUp, Edit, Trash2, Copy, Tag, Clock, Crown } from 'lucide-react'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 import { Coupon } from '@/types'
 import { toast } from 'sonner'
@@ -33,6 +33,8 @@ export default function CouponsPage() {
         valid_from: '',
         valid_until: '',
     })
+
+    const [isLoyalMode, setIsLoyalMode] = useState(false)
 
     useEffect(() => {
         fetchCoupons()
@@ -62,7 +64,6 @@ export default function CouponsPage() {
             setCoupons(data || [])
         } catch (error: any) {
             console.error('Error fetching coupons FULL:', JSON.stringify(error, null, 2))
-            console.error('Error object:', error)
             toast.error('Failed to load coupons')
         } finally {
             setLoading(false)
@@ -76,10 +77,16 @@ export default function CouponsPage() {
                 return
             }
 
+            // Automatically add [PRIVATE] for loyal mode if not already there
+            let finalDescription = couponForm.description;
+            if (isLoyalMode && !finalDescription.startsWith('[PRIVATE]')) {
+                finalDescription = `[PRIVATE] ${finalDescription}`.trim();
+            }
+
             const couponData = {
                 restaurant_id: RESTAURANT_ID,
                 code: couponForm.code.toUpperCase(),
-                description: couponForm.description,
+                description: finalDescription,
                 discount_type: couponForm.discount_type,
                 discount_value: parseFloat(couponForm.discount_value),
                 min_order_amount: parseFloat(couponForm.min_order_amount) || 0,
@@ -88,7 +95,7 @@ export default function CouponsPage() {
                 valid_from: couponForm.valid_from || new Date().toISOString(),
                 valid_until: new Date(couponForm.valid_until).toISOString(),
                 is_active: true,
-                used_count: 0,
+                used_count: editingCoupon ? editingCoupon.used_count : 0,
             }
 
             if (editingCoupon) {
@@ -105,7 +112,7 @@ export default function CouponsPage() {
                     .insert(couponData)
 
                 if (error) throw error
-                toast.success('Coupon created successfully')
+                toast.success(isLoyalMode ? 'Loyal Coupon created! 👑' : 'Coupon created successfully')
             }
 
             setDialogOpen(false)
@@ -211,13 +218,24 @@ export default function CouponsPage() {
                 title="Offers & Coupons"
                 description="Create exciting deals for your customers"
             >
-                <Button onClick={() => {
-                    resetForm()
-                    setDialogOpen(true)
-                }} className="bg-primary hover:bg-primary/90 text-white font-bold shadow-lg shadow-primary/20">
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create New Coupon
-                </Button>
+                <div className="flex gap-3">
+                    <Button onClick={() => {
+                        setIsLoyalMode(false)
+                        resetForm()
+                        setDialogOpen(true)
+                    }} className="bg-primary hover:bg-primary/90 text-white font-bold shadow-lg shadow-primary/20">
+                        <Plus className="mr-2 h-4 w-4" />
+                        Create Normal Coupon
+                    </Button>
+                    <Button onClick={() => {
+                        setIsLoyalMode(true)
+                        resetForm()
+                        setDialogOpen(true)
+                    }} className="bg-amber-500 hover:bg-amber-600 text-white font-bold shadow-lg shadow-amber-500/20">
+                        <Crown className="mr-2 h-4 w-4" />
+                        Create Loyal Coupon
+                    </Button>
+                </div>
             </PageHeader>
 
             {/* Stats */}
@@ -258,9 +276,7 @@ export default function CouponsPage() {
                         </div>
                     </CardContent>
                 </Card>
-            </div>
-
-            {/* Coupons List */}
+            </div>            {/* Coupons List */}
             <div className="space-y-4">
                 {coupons.length === 0 ? (
                     <div className="glass-panel p-12 text-center rounded-3xl border-dashed">
@@ -270,76 +286,105 @@ export default function CouponsPage() {
                     </div>
                 ) : (
                     <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-                        {coupons.map((coupon) => (
-                            <div
-                                key={coupon.id}
-                                className={cn(
-                                    "glass-card p-0 rounded-2xl border border-white/5 overflow-hidden group relative transition-all duration-300",
-                                    !coupon.is_active || isExpired(coupon.valid_until) ? "opacity-70 grayscale" : "hover:border-primary/40 hover:-translate-y-1 hover:shadow-xl"
-                                )}
-                            >
-                                {/* Dashed Separator Effect */}
-                                <div className="absolute left-0 top-1/2 -ml-2 w-4 h-4 rounded-full bg-background z-20" />
-                                <div className="absolute right-0 top-1/2 -mr-2 w-4 h-4 rounded-full bg-background z-20" />
-                                <div className="absolute left-[2px] right-[2px] top-1/2 border-t-2 border-dashed border-white/10 z-10" />
+                        {coupons.map((coupon) => {
+                            const isLoyalGift = coupon.description?.includes('[PRIVATE]');
+                            const cleanDescription = coupon.description?.replace('[PRIVATE]', '').trim();
+                            const active = coupon.is_active && !isExpired(coupon.valid_until);
 
-                                {/* Top Section: Value & Code */}
-                                <div className="p-6 pb-8 bg-gradient-to-b from-primary/10 to-transparent flex flex-col items-center justify-center text-center">
-                                    <div className="mb-2">
-                                        {coupon.discount_type === 'percentage' ? (
-                                            <span className="text-5xl font-black text-foreground">{coupon.discount_value}%<span className="text-lg font-bold text-muted-foreground ml-1">OFF</span></span>
-                                        ) : (
-                                            <span className="text-5xl font-black text-foreground">₹{coupon.discount_value}<span className="text-lg font-bold text-muted-foreground ml-1">OFF</span></span>
-                                        )}
-                                    </div>
-                                    <div className="bg-background/80 backdrop-blur-md px-6 py-2 rounded-xl border-2 border-dashed border-primary/30 flex items-center gap-2 cursor-pointer hover:border-primary transition-colors group/code" onClick={() => copyCode(coupon.code)}>
-                                        <span className="text-xl font-black uppercase tracking-widest text-primary">{coupon.code}</span>
-                                        <Copy className="h-4 w-4 text-muted-foreground group-hover/code:text-primary transition-colors" />
-                                    </div>
-                                </div>
-
-                                {/* Bottom Section: Details & Actions */}
-                                <div className="p-6 pt-8 bg-card/30">
-                                    <p className="text-sm font-medium text-center text-muted-foreground line-clamp-2 min-h-[40px] mb-4">
-                                        {coupon.description || 'No additional description'}
-                                    </p>
-
-                                    <div className="space-y-2 mb-6">
-                                        <div className="flex justify-between text-xs">
-                                            <span className="text-muted-foreground">Min Order</span>
-                                            <span className="font-bold">₹{coupon.min_order_amount}</span>
+                            return (
+                                <div
+                                    key={coupon.id}
+                                    className={cn(
+                                        "glass-card p-0 rounded-2xl border border-white/5 overflow-hidden group relative transition-all duration-300",
+                                        !coupon.is_active || isExpired(coupon.valid_until) ? "opacity-70 grayscale" : "hover:border-primary/40 hover:-translate-y-1 hover:shadow-xl",
+                                        isLoyalGift && active && "border-amber-400/30"
+                                    )}
+                                >
+                                    {/* Loyal Gift Badge */}
+                                    {isLoyalGift && (
+                                        <div className="absolute top-3 right-3 z-30">
+                                            <Badge className="bg-amber-500 hover:bg-amber-600 text-white border-0 text-[10px] font-black tracking-widest flex items-center gap-1 shadow-lg shadow-amber-500/20 px-2">
+                                                <Crown size={10} className="fill-white" />
+                                                LOYAL REWARD
+                                            </Badge>
                                         </div>
-                                        <div className="flex justify-between text-xs">
-                                            <span className="text-muted-foreground">Max Discount</span>
-                                            <span className="font-bold">{coupon.max_discount ? `₹${coupon.max_discount}` : 'No Limit'}</span>
+                                    )}
+
+                                    {/* Dashed Separator Effect */}
+                                    <div className="absolute left-0 top-1/2 -ml-2 w-4 h-4 rounded-full bg-background z-20" />
+                                    <div className="absolute right-0 top-1/2 -mr-2 w-4 h-4 rounded-full bg-background z-20" />
+                                    <div className="absolute left-[2px] right-[2px] top-1/2 border-t-2 border-dashed border-white/10 z-10" />
+
+                                    {/* Top Section: Value & Code */}
+                                    <div className={cn(
+                                        "p-6 pb-8 flex flex-col items-center justify-center text-center",
+                                        isLoyalGift ? "bg-gradient-to-b from-amber-500/10 to-transparent" : "bg-gradient-to-b from-primary/10 to-transparent"
+                                    )}>
+                                        <div className="mb-2">
+                                            {coupon.discount_type === 'percentage' ? (
+                                                <span className={cn("text-5xl font-black", isLoyalGift ? "text-amber-500" : "text-foreground")}>
+                                                    {coupon.discount_value}%<span className="text-lg font-bold text-muted-foreground ml-1">OFF</span>
+                                                </span>
+                                            ) : (
+                                                <span className={cn("text-5xl font-black", isLoyalGift ? "text-amber-500" : "text-foreground")}>
+                                                    ₹{coupon.discount_value}<span className="text-lg font-bold text-muted-foreground ml-1">OFF</span>
+                                                </span>
+                                            )}
                                         </div>
-                                        <div className="flex justify-between text-xs">
-                                            <span className="text-muted-foreground">Valid Until</span>
-                                            <span className={cn("font-bold flex items-center gap-1", isExpired(coupon.valid_until) ? "text-destructive" : "text-foreground")}>
-                                                <Calendar className="h-3 w-3" />
-                                                {format(new Date(coupon.valid_until), 'dd MMM yyyy')}
+                                        <div className={cn(
+                                            "bg-background/80 backdrop-blur-md px-6 py-2 rounded-xl border-2 border-dashed transition-colors group/code flex items-center gap-2 cursor-pointer",
+                                            isLoyalGift ? "border-amber-500/30 hover:border-amber-500" : "border-primary/30 hover:border-primary"
+                                        )} onClick={() => copyCode(coupon.code)}>
+                                            <span className={cn("text-xl font-black uppercase tracking-widest", isLoyalGift ? "text-amber-500" : "text-primary")}>
+                                                {coupon.code}
                                             </span>
+                                            <Copy className="h-4 w-4 text-muted-foreground group-hover/code:text-primary transition-colors" />
                                         </div>
                                     </div>
 
-                                    <div className="flex items-center gap-2">
-                                        <Button
-                                            variant={coupon.is_active ? "outline" : "default"}
-                                            className={cn("flex-1 font-bold", coupon.is_active ? "border-primary/20 hover:bg-primary/5" : "bg-primary")}
-                                            onClick={() => handleToggleStatus(coupon)}
-                                        >
-                                            {coupon.is_active ? 'Deactivate' : 'Activate'}
-                                        </Button>
-                                        <Button size="icon" variant="secondary" className="bg-secondary/50" onClick={() => openEditCoupon(coupon)}>
-                                            <Edit className="h-4 w-4" />
-                                        </Button>
-                                        <Button size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => handleDeleteCoupon(coupon.id)}>
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
+                                    {/* Bottom Section: Details & Actions */}
+                                    <div className="p-6 pt-8 bg-card/30">
+                                        <p className="text-sm font-medium text-center text-muted-foreground line-clamp-2 min-h-[40px] mb-4">
+                                            {cleanDescription || 'No additional description'}
+                                        </p>
+
+                                        <div className="space-y-2 mb-6">
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-muted-foreground">Min Order</span>
+                                                <span className="font-bold">₹{coupon.min_order_amount}</span>
+                                            </div>
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-muted-foreground">Max Discount</span>
+                                                <span className="font-bold">{coupon.max_discount ? `₹${coupon.max_discount}` : 'No Limit'}</span>
+                                            </div>
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-muted-foreground">Valid Until</span>
+                                                <span className={cn("font-bold flex items-center gap-1", isExpired(coupon.valid_until) ? "text-destructive" : "text-foreground")}>
+                                                    <Calendar className="h-3 w-3" />
+                                                    {format(new Date(coupon.valid_until), 'dd MMM yyyy')}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            <Button
+                                                variant={coupon.is_active ? "outline" : "default"}
+                                                className={cn("flex-1 font-bold", coupon.is_active ? (isLoyalGift ? "border-amber-500/20 hover:bg-amber-500/5 text-amber-600" : "border-primary/20 hover:bg-primary/5") : (isLoyalGift ? "bg-amber-500 hover:bg-amber-600" : "bg-primary"))}
+                                                onClick={() => handleToggleStatus(coupon)}
+                                            >
+                                                {coupon.is_active ? 'Deactivate' : 'Activate'}
+                                            </Button>
+                                            <Button size="icon" variant="secondary" className="bg-secondary/50" onClick={() => openEditCoupon(coupon)}>
+                                                <Edit className="h-4 w-4" />
+                                            </Button>
+                                            <Button size="icon" variant="ghost" className="text-destructive hover:bg-destructive/10" onClick={() => handleDeleteCoupon(coupon.id)}>
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
@@ -349,10 +394,12 @@ export default function CouponsPage() {
                 <DialogContent className="glass-panel border border-white/10 bg-background/95 backdrop-blur-xl sm:rounded-3xl max-w-2xl">
                     <DialogHeader>
                         <DialogTitle className="text-xl font-bold">
-                            {editingCoupon ? 'Update Coupon' : 'Create New Coupon'}
+                            {editingCoupon 
+                                ? `Update ${isLoyalMode ? 'Loyal' : 'Normal'} Coupon` 
+                                : `Create ${isLoyalMode ? 'Loyal' : 'Normal'} Coupon`}
                         </DialogTitle>
                         <DialogDescription>
-                            Configure discount rules and validity
+                            Configure {isLoyalMode ? 'exclusive VIP' : 'general marketing'} discount rules
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-6 py-4">
@@ -472,8 +519,11 @@ export default function CouponsPage() {
                         <Button variant="ghost" onClick={() => setDialogOpen(false)}>
                             Cancel
                         </Button>
-                        <Button onClick={handleSaveCoupon} className="bg-primary font-bold shadow-lg shadow-primary/20 px-8">
-                            {editingCoupon ? 'Save Changes' : 'Create Coupon'}
+                        <Button onClick={handleSaveCoupon} className={cn(
+                            "font-bold shadow-lg px-8",
+                            isLoyalMode ? "bg-amber-500 shadow-amber-500/20 hover:bg-amber-600" : "bg-primary shadow-primary/20 hover:bg-primary/90"
+                        )}>
+                            {editingCoupon ? 'Save Changes' : `Create ${isLoyalMode ? 'Loyal' : 'Normal'} Coupon`}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
