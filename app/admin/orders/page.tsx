@@ -66,8 +66,8 @@ export default function OrdersPage() {
                             toast.success('New Order Received! 🔔')
                         }
 
-                        // Reduced delay for "Live" feel
-                        setTimeout(() => fetchOrders(false), 1000)
+                        // Instant fetch for "Live" feel
+                        fetchOrders(false)
 
                         if (selectedOrder && (payload.new as any)?.id === selectedOrder.id) {
                             handleViewOrder(selectedOrder.id)
@@ -83,7 +83,7 @@ export default function OrdersPage() {
                     },
                     (payload: any) => {
                         console.log('🔄 [ADMIN ORDERS] Item change:', payload.eventType)
-                        setTimeout(() => fetchOrders(false), 1000)
+                        fetchOrders(false)
                         
                         if (selectedOrder && (payload.new as any)?.order_id === selectedOrder.id) {
                             handleViewOrder(selectedOrder.id)

@@ -297,8 +297,8 @@ export default function AdminDashboard() {
                         toast.success('New Order Received! 🔔')
                     }
 
-                    // Reduced delay for "Live" feel
-                    setTimeout(() => fetchDashboardData(range), 1000)
+                    // Instant fetch for "Live" feel
+                    fetchDashboardData(range)
 
                     if (selectedOrder && (payload.new as any)?.id === selectedOrder.id) {
                         refreshSelectedOrder(selectedOrder.id)

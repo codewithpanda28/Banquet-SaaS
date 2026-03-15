@@ -148,14 +148,15 @@ export default function CheckoutPage() {
 
         try {
             // 1. Handle Customer - Manual upsert (check then insert/update)
-            console.log('💾 [Step 1/5] Saving customer...', { name, phone, address, rid })
+            const cleanPhone = phone.replace(/\D/g, '').slice(-10)
+            console.log('💾 [Step 1/5] Saving customer...', { name, phone, cleanPhone, address, rid })
 
-            // First, check if customer exists
+            // First, check if customer exists using cleaned phone for robustness
             const { data: existingCustomer } = await supabase
                 .from('customers')
                 .select('id, name, phone, address')
-                .eq('phone', phone)
                 .eq('restaurant_id', rid)
+                .or(`phone.eq.${phone},phone.eq.${cleanPhone}`)
                 .maybeSingle()
 
             let customerId: string
@@ -245,29 +246,35 @@ export default function CheckoutPage() {
                     params.append('join', joinExisting.toString())
                 }
 
-                console.log('🔍 [Step 2.5] Checking active order via API...', params.toString())
-                const res = await fetch(`/api/orders/active?${params.toString()}`)
+                console.log('🔍 [Checkout] Checking active order (bypass cache)...')
+                
+                const res = await fetch(`/api/orders/active?${params.toString()}&t=${Date.now()}`, {
+                    cache: 'no-store',
+                    headers: {
+                        'Pragma': 'no-cache',
+                        'Cache-Control': 'no-cache'
+                    }
+                })
 
                 if (res.ok) {
                     const { order } = await res.json()
-                    // Merge into ANY unpaid order (except cancelled)
-                    // This includes served orders - customer can keep ordering on same bill
-                    if (order && order.payment_status !== 'paid' && order.status !== 'cancelled') {
-                        console.log('✅ Found active (unpaid) order via API:', order)
+                    
+                    if (order) {
+                        console.log('✅ [Checkout] Found active bill to merge:', order.bill_id)
                         existingOrderId = order.id
                         existingBillId = order.bill_id
                         existingTotal = order.total
                         existingSubtotal = order.subtotal || 0
-                        existingStatus = order.status  // Store existing status
+                        existingStatus = order.status
                     } else {
-                        console.log('🆕 No unpaid order found. Creating new bill.')
+                        console.log('🆕 [Checkout] No mergeable bill found. Will create new.')
                     }
                 } else {
-                    console.warn('⚠️ API check failed, status:', res.status)
+                    const errRes = await res.json().catch(() => ({}))
+                    console.error('⚠️ [Checkout] API check failed:', res.status, errRes)
                 }
             } catch (err) {
-                console.error('❌ Error checking active order via API:', err)
-                // Fallback: Proceed as new order
+                console.error('❌ [Checkout] Active order check crash:', err)
             }
 
             let orderId = existingOrderId

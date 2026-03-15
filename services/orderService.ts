@@ -74,8 +74,9 @@ export async function updateOrderStatus(orderId: string, status: string) {
                 .single()
 
             if (order) {
-                // ✅ release table status
-                if (order.table_id) {
+                // ✅ Release table status ONLY on cancellation. 
+                // For 'served', table remains occupied until payment is collected in Admin Dashboard.
+                if (order.table_id && status === 'cancelled') {
                     await supabase
                         .from('restaurant_tables')
                         .update({ status: 'available' })

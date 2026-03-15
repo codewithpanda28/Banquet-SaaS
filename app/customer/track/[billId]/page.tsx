@@ -12,17 +12,16 @@ import { ORDER_STATUS_SOUND } from '@/constants/sounds'
 import { supabase } from '@/lib/supabase'
 
 const STATUS_STEPS = [
-    { id: 'confirmed', label: 'Order Confirmed', description: 'We\'ve received your order!', icon: CheckCircle2, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-    { id: 'preparing', label: 'Cooking with Love', description: 'Chefs are working their magic.', icon: ChefHat, color: 'text-orange-500', bg: 'bg-orange-500/10' },
-    { id: 'ready', label: 'Ready to Serve', description: 'Plating up your delicious meal.', icon: Utensils, color: 'text-purple-500', bg: 'bg-purple-500/10' },
-    { id: 'served', label: 'Bon Appétit!', description: 'Enjoy your meal.', icon: PartyPopper, color: 'text-green-500', bg: 'bg-green-500/10' },
+    { id: 'confirmed', label: 'Order Received', description: 'Kitchen has received your order.', icon: CheckCircle2, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+    { id: 'preparing', label: 'Preparing Food', description: 'Chefs are cooking your delicious meal.', icon: ChefHat, color: 'text-orange-500', bg: 'bg-orange-500/10' },
+    { id: 'ready', label: 'Ready to Serve', description: 'Your food is ready. Enjoy your meal!', icon: Utensils, color: 'text-green-500', bg: 'bg-green-500/10' },
 ]
 
 export default function TrackOrderPage() {
     const params = useParams()
     const router = useRouter()
     const billId = params.billId as string
-    const { order, items, loading } = useOrder(billId)
+    const { order, items, loading, error } = useOrder(billId)
     const [expandDetail, setExpandDetail] = useState(false)
     const [showConfetti, setShowConfetti] = useState(false)
 
@@ -45,7 +44,7 @@ export default function TrackOrderPage() {
         }
     }, [order?.status, playConfirmed, playPreparing, playReady, playServed, playCancelled])
 
-    if (loading || !order) {
+    if (loading) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 gap-6">
                 <div className="relative">
@@ -55,6 +54,28 @@ export default function TrackOrderPage() {
                     </div>
                 </div>
                 <p className="text-slate-400 font-medium animate-pulse tracking-wide uppercase text-xs">Loading Order...</p>
+            </div>
+        )
+    }
+
+    if (error || !order) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-8 text-center space-y-8">
+                <div className="w-32 h-32 bg-orange-100 rounded-full flex items-center justify-center">
+                    <Utensils className="w-16 h-16 text-orange-500 opacity-50" />
+                </div>
+                <div>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">Order Not Found</h1>
+                    <p className="text-slate-500 mt-3 font-medium text-lg max-w-xs mx-auto">
+                        {error || "We couldn't find the order you are looking for."}
+                    </p>
+                </div>
+                <Button
+                    onClick={() => router.push('/customer/menu')}
+                    className="rounded-full px-10 h-14 bg-slate-900 hover:bg-black text-white font-bold shadow-xl transition-transform active:scale-95"
+                >
+                    Order Something Else
+                </Button>
             </div>
         )
     }
@@ -81,15 +102,12 @@ export default function TrackOrderPage() {
         )
     }
 
-    const currentStepIndex = STATUS_STEPS.findIndex(step =>
-        order.status === step.id ||
-        (order.status === 'completed' && step.id === 'served') ||
-        (order.status === 'served' && step.id === 'ready')
-    )
+    let currentStepIndex = 0;
+    if (order.status === 'preparing') currentStepIndex = 1;
+    if (['ready', 'served', 'completed'].includes(order.status)) currentStepIndex = 2;
 
-    const activeStep = STATUS_STEPS[currentStepIndex] || STATUS_STEPS[0]
-    const isCompleted = order.status === 'completed' || order.status === 'served'
-
+    const activeStep = STATUS_STEPS[currentStepIndex]
+    const isCompleted = ['served', 'completed'].includes(order.status)
     return (
         <div className="min-h-screen bg-slate-50/50 pb-36 relative overflow-hidden font-sans">
             {/* Background Decorations */}

@@ -84,30 +84,45 @@ export default function WaiterDashboard() {
         console.log('🔍 Verifying staff with passcode:', passcode)
 
         try {
-            const { data, error } = await supabase
+            const { data: staffList, error } = await supabase
                 .from('staff')
                 .select('*')
                 .eq('passcode', passcode)
                 .eq('restaurant_id', RESTAURANT_ID)
-                .maybeSingle()
 
             if (error) {
                 console.error('❌ DB Error:', error)
                 toast.error('Database Connection Error')
-            } else if (!data) {
+                return
+            }
+
+            if (!staffList || staffList.length === 0) {
                 // Allows new staff members to proceed to name step for registration
                 setStaffId('')
                 setStaffName('')
                 setStep('name')
-                toast.info('New Passcode! Please enter your name to register.')
+                toast.info('New Passcode! Please register your name.')
+            } else if (staffList.length === 1) {
+                // Exactly one person uses this PIN - log them in directly
+                const savedStaff = staffList[0]
+                setStaffId(savedStaff.id)
+                setStaffName(savedStaff.name || '')
+                setStep('table')
+                toast.success(`Welcome back, ${savedStaff.name}`)
+                
+                // Track last login
+                await supabase.from('staff').update({ 
+                    last_login_at: new Date().toISOString() 
+                }).eq('id', savedStaff.id)
             } else {
-                setStaffId(data.id)
-                setStaffName(data.name || '')
+                // Shared PIN - must ask who is using it
+                setStaffId('')
+                setStaffName('')
                 setStep('name')
-                toast.success(`Access Granted: ${data.name}`)
+                toast.info('Passcode shared! Please enter your name.')
             }
         } catch (err) {
-            console.error('💥 Crash:', err)
+            console.error('💥 Login Error:', err)
             toast.error('Login system error')
         } finally {
             setVerifying(false)
@@ -125,20 +140,19 @@ export default function WaiterDashboard() {
             let finalStaffId = staffId
             let finalStaffName = staffName
 
-            // Check if staff already exists with this passcode
+            // Identify staff by BOTH passcode AND name to prevent overwriting someone else
             const { data: existingStaff } = await supabase
                 .from('staff')
                 .select('*')
                 .eq('passcode', passcode)
+                .eq('name', staffName.trim())
                 .eq('restaurant_id', RESTAURANT_ID)
                 .maybeSingle()
 
             if (existingStaff) {
                 finalStaffId = existingStaff.id
-                // Update name if different
-                if (existingStaff.name !== staffName) {
-                    await supabase.from('staff').update({ name: staffName }).eq('id', existingStaff.id)
-                }
+                finalStaffName = existingStaff.name
+                // NO OVERWRITE: We just use the existing matching record
             } else {
                 // Create NEW staff member
                 const { data: newStaff, error: insertErr } = await supabase.from('staff').insert({
@@ -223,12 +237,15 @@ export default function WaiterDashboard() {
             if (customerName.trim() || customerPhone.trim()) {
                 console.log('👤 [Waiter] Resolving customer:', { name: customerName, phone: customerPhone })
                 
+                // Clean phone number: take last 10 digits
+                const cleanedPhone = customerPhone.replace(/\D/g, '').slice(-10)
+                
                 // Try to find by phone if provided
-                if (customerPhone.trim()) {
+                if (cleanedPhone) {
                     const { data: existing, error: findError } = await supabase
                         .from('customers')
                         .select('id')
-                        .eq('phone', customerPhone.trim())
+                        .eq('phone', cleanedPhone)
                         .eq('restaurant_id', RESTAURANT_ID)
                         .maybeSingle()
 
@@ -248,7 +265,7 @@ export default function WaiterDashboard() {
                         .insert({
                             restaurant_id: RESTAURANT_ID,
                             name: customerName.trim() || 'Guest',
-                            phone: customerPhone.trim() || null
+                            phone: customerPhone.replace(/\D/g, '').slice(-10) || null
                         })
                         .select('id')
                         .single()
@@ -274,13 +291,17 @@ export default function WaiterDashboard() {
             const params = new URLSearchParams()
             params.append('restaurantId', RESTAURANT_ID)
             params.append('tableId', selectedTable.id)
+            params.append('tableNumber', selectedTable.table_number.toString())
+            params.append('join', 'true') // ALWAYS try to join the existing bill on this table
             
             if (customerId) {
                 params.append('customerId', customerId)
-                params.append('join', 'false') // Request strict matching
             }
             
-            const activeRes = await fetch(`/api/orders/active?${params.toString()}`)
+            // Add cache busting
+            params.append('t', Date.now().toString())
+            
+            const activeRes = await fetch(`/api/orders/active?${params.toString()}`, { cache: 'no-store' })
             const activeData = await activeRes.json()
             
             if (activeData.error) {
@@ -410,7 +431,7 @@ export default function WaiterDashboard() {
                         <div className="h-20 w-20 bg-primary/10 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-sm border border-primary/20">
                             <Clock className="h-10 w-10 text-primary" />
                         </div>
-                        <h2 className="text-4xl font-black text-gray-900 tracking-tight">Staff Login</h2>
+                        <h2 className="text-4xl font-bold text-gray-900 tracking-tight">Staff Login</h2>
                         <p className="text-gray-500 font-medium">Enter your 4-digit passcode to start</p>
                     </div>
 
@@ -420,7 +441,7 @@ export default function WaiterDashboard() {
                                 <div
                                     key={i}
                                     className={cn(
-                                        "h-16 w-16 rounded-2xl border-4 flex items-center justify-center text-3xl font-black transition-all duration-300",
+                                        "h-16 w-16 rounded-2xl border-2 flex items-center justify-center text-3xl font-bold transition-all duration-300",
                                         passcode[i] ? "border-primary bg-primary/5 text-primary scale-110 shadow-lg shadow-primary/10" : "border-gray-200 bg-white text-gray-300"
                                     )}
                                 >
@@ -433,26 +454,26 @@ export default function WaiterDashboard() {
                             {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
                                 <button
                                     key={num}
-                                    className="h-20 rounded-[1.5rem] text-2xl font-black bg-white hover:bg-gray-100 border-2 border-gray-200 shadow-sm transition-all active:scale-95 flex items-center justify-center"
+                                    className="h-20 rounded-[1.5rem] text-2xl font-bold bg-white hover:bg-gray-100 border border-gray-200 shadow-sm transition-all active:scale-95 flex items-center justify-center"
                                     onClick={() => passcode.length < 4 && setPasscode(p => p + num)}
                                 >
                                     {num}
                                 </button>
                             ))}
                             <button
-                                className="h-20 rounded-[1.5rem] text-gray-400 font-bold text-lg hover:bg-gray-50 flex items-center justify-center"
+                                className="h-20 rounded-[1.5rem] text-gray-400 font-medium text-lg hover:bg-gray-50 flex items-center justify-center"
                                 onClick={() => setPasscode('')}
                             >
                                 Clear
                             </button>
                             <button
-                                className="h-20 rounded-[1.5rem] text-2xl font-black bg-white hover:bg-gray-100 border-2 border-gray-200 shadow-sm flex items-center justify-center"
+                                className="h-20 rounded-[1.5rem] text-2xl font-bold bg-white hover:bg-gray-100 border border-gray-200 shadow-sm flex items-center justify-center"
                                 onClick={() => passcode.length < 4 && setPasscode(p => p + '0')}
                             >
                                 0
                             </button>
                             <button
-                                className="h-20 rounded-[1.5rem] bg-primary hover:bg-primary/90 text-white font-black text-xl shadow-lg shadow-primary/20 flex items-center justify-center disabled:opacity-50"
+                                className="h-20 rounded-[1.5rem] bg-primary hover:bg-primary/90 text-white font-bold text-xl shadow-lg shadow-primary/20 flex items-center justify-center disabled:opacity-50"
                                 onClick={handleVerifyStaff}
                                 disabled={passcode.length < 4 || verifying}
                             >
@@ -466,7 +487,7 @@ export default function WaiterDashboard() {
                                     setStep('table')
                                     toast.success('Testing Mode Activated')
                                 }}
-                                className="text-[10px] font-black text-gray-400 hover:text-primary transition-colors underline underline-offset-8 tracking-widest uppercase"
+                                className="text-[10px] font-bold text-gray-400 hover:text-primary transition-colors underline underline-offset-8 tracking-widest uppercase"
                             >
                                 Skip Login for Testing (Guest Mode)
                             </button>
@@ -481,7 +502,7 @@ export default function WaiterDashboard() {
                         <div className="h-20 w-20 bg-primary/10 rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-sm border border-primary/20">
                             <User className="h-10 w-10 text-primary" />
                         </div>
-                        <h2 className="text-4xl font-black text-gray-900 tracking-tight">Who are you?</h2>
+                        <h2 className="text-4xl font-bold text-gray-900 tracking-tight">Who are you?</h2>
                         <p className="text-gray-500 font-medium">Enter your name to start booking orders</p>
                     </div>
 
@@ -490,12 +511,12 @@ export default function WaiterDashboard() {
                             value={staffName}
                             onChange={(e) => setStaffName(e.target.value)}
                             placeholder="Your Name (e.g. Rahul)"
-                            className="h-16 text-xl font-black text-center rounded-[1.5rem] border-4 border-gray-100 focus:border-primary transition-all shadow-sm"
+                            className="h-16 text-xl font-bold text-center rounded-[1.5rem] border-2 border-gray-100 focus:border-primary transition-all shadow-sm"
                             autoFocus
                             onKeyDown={(e) => e.key === 'Enter' && handleConfirmName()}
                         />
                         <Button
-                            className="w-full h-16 rounded-[1.5rem] bg-primary hover:bg-primary/90 text-white font-black text-xl shadow-lg shadow-primary/20"
+                            className="w-full h-16 rounded-[1.5rem] bg-primary hover:bg-primary/90 text-white font-bold text-xl shadow-lg shadow-primary/20"
                             onClick={handleConfirmName}
                             disabled={verifying}
                         >
@@ -503,7 +524,7 @@ export default function WaiterDashboard() {
                         </Button>
                         <button
                             onClick={() => { setStep('login'); setPasscode('') }}
-                            className="w-full text-sm text-gray-400 font-black hover:text-primary transition-colors mt-4"
+                            className="w-full text-sm text-gray-400 font-bold hover:text-primary transition-colors mt-4"
                         >
                             BACK TO LOGIN
                         </button>
@@ -515,7 +536,7 @@ export default function WaiterDashboard() {
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
                     <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
                         <div>
-                            <h1 className="text-3xl font-black text-gray-900 flex items-center gap-3">
+                            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
                                 <span className="bg-primary text-white p-2 rounded-xl h-10 w-10 flex items-center justify-center text-sm">W</span>
                                 Waiter Dashboard
                             </h1>
@@ -525,19 +546,19 @@ export default function WaiterDashboard() {
                         <div className="flex items-center gap-3">
                             {staffName && (
                                 <div className="px-4 py-2 bg-primary/5 rounded-2xl flex items-center gap-3 border border-primary/10">
-                                    <div className="h-8 w-8 rounded-full bg-primary text-white flex items-center justify-center border-2 border-white shadow-sm font-black text-xs uppercase">
+                                    <div className="h-8 w-8 rounded-full bg-primary text-white flex items-center justify-center border-2 border-white shadow-sm font-bold text-xs uppercase">
                                         {staffName.charAt(0)}
                                     </div>
                                     <div className="text-left">
-                                        <p className="text-[10px] font-black text-gray-400 uppercase leading-none mb-1">STAFF ON DUTY</p>
-                                        <p className="text-sm font-black text-gray-900 leading-none">{staffName}</p>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase leading-none mb-1">STAFF ON DUTY</p>
+                                        <p className="text-sm font-bold text-gray-900 leading-none">{staffName}</p>
                                     </div>
                                     <button onClick={() => { setStep('login'); setStaffName(''); setPasscode('') }} className="ml-2 hover:bg-red-50 p-1.5 rounded-lg text-red-400 transition-colors">
                                         <LogOut className="h-4 w-4" />
                                     </button>
                                 </div>
                             )}
-                            <Button variant="outline" size="icon" className="h-12 w-12 rounded-2xl border-2" onClick={fetchAll} disabled={loading}>
+                            <Button variant="outline" size="icon" className="h-12 w-12 rounded-2xl border" onClick={fetchAll} disabled={loading}>
                                 <RefreshCcw className={cn("h-5 w-5", loading && "animate-spin")} />
                             </Button>
                         </div>
@@ -553,33 +574,33 @@ export default function WaiterDashboard() {
                                     { label: 'Reserved', count: tables.filter(t => t.status === 'reserved').length, color: 'from-red-400 to-red-600', text: 'text-red-600', bg: 'bg-red-50/50', icon: Clock },
                                     { label: 'Total Tables', count: tables.length, color: 'from-blue-400 to-blue-600', text: 'text-blue-600', bg: 'bg-blue-50/50', icon: Armchair },
                                 ].map(stat => (
-                                    <div key={stat.label} className={cn('p-6 rounded-[2rem] border-2 border-transparent transition-all shadow-sm', stat.bg)}>
+                                    <div key={stat.label} className={cn('p-6 rounded-[2rem] border border-transparent transition-all shadow-sm', stat.bg)}>
                                         <div className="flex items-center justify-between mb-4">
                                             <div className={cn('p-3 rounded-2xl text-white bg-gradient-to-br shadow-lg', stat.color)}>
                                                 <stat.icon className="h-5 w-5" />
                                             </div>
-                                            <span className={cn('text-3xl font-black', stat.text)}>{stat.count}</span>
+                                            <span className={cn('text-3xl font-bold', stat.text)}>{stat.count}</span>
                                         </div>
-                                        <p className="text-sm font-black text-gray-400 uppercase tracking-widest">{stat.label}</p>
+                                        <p className="text-sm font-semibold text-gray-400 uppercase tracking-widest">{stat.label}</p>
                                     </div>
                                 ))}
                             </div>
 
                             <div className="space-y-6">
                                 <div className="flex items-center justify-between px-2">
-                                    <h3 className="text-xl font-black text-gray-900 flex items-center gap-3">
+                                    <h3 className="text-xl font-bold text-gray-900 flex items-center gap-3">
                                         <Armchair className="h-6 w-6 text-primary" />
                                         Select a Table
                                     </h3>
-                                    <Badge variant="outline" className="rounded-full px-4 py-1 font-black text-[10px] uppercase tracking-wider text-gray-500 border-2">
+                                    <Badge variant="outline" className="rounded-full px-4 py-1 font-semibold text-[10px] uppercase tracking-wider text-gray-500 border-2">
                                         REST-ID: {RESTAURANT_ID.slice(0, 6)}...
                                     </Badge>
                                 </div>
 
                                 {tables.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center p-20 bg-white rounded-[3rem] border-4 border-dashed border-gray-100">
+                                    <div className="flex flex-col items-center justify-center p-20 bg-white rounded-[3rem] border-2 border-dashed border-gray-100">
                                         <Armchair className="h-20 w-20 text-gray-200 mb-6" />
-                                        <p className="text-xl font-black text-gray-400">No tables active right now</p>
+                                        <p className="text-xl font-bold text-gray-400">No tables active right now</p>
                                         <p className="text-sm text-gray-400 mt-2 font-medium">Please add tables in Admin &gt; Table Management.</p>
                                     </div>
                                 ) : (
@@ -590,7 +611,7 @@ export default function WaiterDashboard() {
                                                 onClick={() => (table.status === 'available' || table.status === 'occupied') && handleSelectTable(table)}
                                                 disabled={table.status === 'reserved'}
                                                 className={cn(
-                                                    'relative rounded-[2.5rem] p-6 text-left transition-all duration-500 group border-4',
+                                                    'relative rounded-[2.5rem] p-6 text-left transition-all duration-500 group border-2',
                                                     (table.status === 'available') ? 'bg-white border-transparent shadow-md hover:shadow-xl hover:shadow-primary/10 hover:-translate-y-2' :
                                                         (table.status === 'occupied') ? 'bg-orange-50/30 border-orange-100 hover:shadow-lg hover:-translate-y-1' :
                                                             'bg-gray-50 border-gray-100 cursor-not-allowed grayscale'
@@ -601,16 +622,16 @@ export default function WaiterDashboard() {
                                                         table.status === 'occupied' ? 'bg-orange-500 shadow-lg shadow-orange-500/50' : 'bg-red-500'
                                                 )} />
 
-                                                <div className="text-5xl font-black text-gray-900 mb-2 mt-4 tracking-tighter">
+                                                <div className="text-4xl font-bold text-gray-900 mb-2 mt-4 tracking-tighter">
                                                     {table.table_number.toString().padStart(2, '0')}
                                                 </div>
-                                                <div className="text-sm font-black text-gray-400 uppercase tracking-widest mb-6">{table.table_name}</div>
+                                                <div className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-6">{table.table_name}</div>
 
                                                 <div className="flex items-center justify-between pt-6 border-t border-gray-100/50">
-                                                    <div className="flex items-center gap-2 text-xs font-black text-gray-500">
+                                                    <div className="flex items-center gap-2 text-xs font-semibold text-gray-500">
                                                         <User className="h-4 w-4" /> {table.capacity} SEATS
                                                     </div>
-                                                    <div className={cn('text-[10px] font-black uppercase px-3 py-1 rounded-full',
+                                                    <div className={cn('text-[10px] font-bold uppercase px-3 py-1 rounded-full',
                                                         table.status === 'available' ? 'bg-green-100 text-green-700' :
                                                             table.status === 'occupied' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'
                                                     )}>
@@ -630,15 +651,15 @@ export default function WaiterDashboard() {
                             <div className="lg:col-span-2 space-y-6">
                                 <div className="flex items-center justify-between bg-white p-6 rounded-[2.5rem] shadow-sm border border-gray-100">
                                     <div className="flex items-center gap-6">
-                                        <div className="h-16 w-16 bg-primary text-white rounded-[1.25rem] flex items-center justify-center text-3xl font-black shadow-lg shadow-primary/20">
+                                        <div className="h-16 w-16 bg-primary text-white rounded-[1.25rem] flex items-center justify-center text-3xl font-bold shadow-lg shadow-primary/20">
                                             {selectedTable.table_number}
                                         </div>
                                         <div>
-                                            <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">TABLE VIEW</p>
-                                            <p className="text-xl font-black text-gray-900 leading-none">{selectedTable.table_name}</p>
+                                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">TABLE VIEW</p>
+                                            <p className="text-xl font-bold text-gray-900 leading-none">{selectedTable.table_name}</p>
                                         </div>
                                     </div>
-                                    <Button variant="outline" className="rounded-2xl h-12 px-6 font-black text-xs uppercase" onClick={() => { setStep('table'); setSelectedTable(null); setCart([]) }}>
+                                    <Button variant="outline" className="rounded-2xl h-12 px-6 font-semibold text-xs uppercase" onClick={() => { setStep('table'); setSelectedTable(null); setCart([]) }}>
                                         Change Table
                                     </Button>
                                 </div>
@@ -656,7 +677,7 @@ export default function WaiterDashboard() {
                                     <div className="flex gap-2 p-2 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-x-auto no-scrollbar">
                                         <button
                                             onClick={() => setSelectedCat('all')}
-                                            className={cn('px-6 h-10 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap',
+                                            className={cn('px-6 h-10 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap',
                                                 selectedCat === 'all' ? 'bg-primary text-white shadow-md' : 'text-gray-400 hover:bg-gray-50'
                                             )}
                                         >All</button>
@@ -664,7 +685,7 @@ export default function WaiterDashboard() {
                                             <button
                                                 key={cat.id}
                                                 onClick={() => setSelectedCat(cat.id)}
-                                                className={cn('px-6 h-10 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap',
+                                                className={cn('px-6 h-10 rounded-xl text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap',
                                                     selectedCat === cat.id ? 'bg-primary text-white shadow-md' : 'text-gray-400 hover:bg-gray-50'
                                                 )}
                                             >{cat.name}</button>
@@ -689,9 +710,9 @@ export default function WaiterDashboard() {
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex items-center gap-2 mb-1">
                                                         <div className={cn('h-2.5 w-2.5 rounded-full border-2', item.is_veg ? 'border-green-600 bg-green-500' : 'border-red-600 bg-red-500')} />
-                                                        <p className="font-black text-gray-900 truncate">{item.name}</p>
+                                                        <p className="font-bold text-gray-900 truncate">{item.name}</p>
                                                     </div>
-                                                    <span className="font-black text-primary text-lg">₹{item.price}</span>
+                                                    <span className="font-bold text-primary text-lg">₹{item.price}</span>
                                                 </div>
 
                                                 {inCart ? (
@@ -699,7 +720,7 @@ export default function WaiterDashboard() {
                                                         <Button size="icon" variant="ghost" className="h-10 w-10 rounded-xl hover:bg-primary/10" onClick={() => updateQty(item.id, -1)}>
                                                             <Minus className="h-4 w-4" />
                                                         </Button>
-                                                        <span className="w-8 text-center font-black text-lg">{inCart.quantity}</span>
+                                                        <span className="w-8 text-center font-bold text-lg">{inCart.quantity}</span>
                                                         <Button size="icon" className="h-10 w-10 rounded-xl bg-primary text-white shadow-md shadow-primary/30" onClick={() => updateQty(item.id, 1)}>
                                                             <Plus className="h-4 w-4" />
                                                         </Button>
@@ -718,10 +739,10 @@ export default function WaiterDashboard() {
                             <div className="lg:col-span-1">
                                 <Card className="sticky top-6 border-0 shadow-2xl shadow-gray-200/50 rounded-[2.5rem] overflow-hidden">
                                     <div className="bg-primary p-6 text-white">
-                                        <CardTitle className="flex items-center gap-3 text-2xl font-black italic">
+                                        <CardTitle className="flex items-center gap-3 text-2xl font-bold italic">
                                             <ShoppingCart className="h-8 w-8" />
                                             CURRENT CART
-                                            {cartCount > 0 && <span className="ml-auto bg-white/20 px-3 py-1 rounded-full text-xs font-black">{cartCount}</span>}
+                                            {cartCount > 0 && <span className="ml-auto bg-white/20 px-3 py-1 rounded-full text-xs font-semibold">{cartCount}</span>}
                                         </CardTitle>
                                     </div>
                                     <CardContent className="p-6">
@@ -739,11 +760,11 @@ export default function WaiterDashboard() {
                                                     {cart.map(item => (
                                                         <div key={item.id} className="flex items-center gap-3 group">
                                                             <div className="flex-1 min-w-0">
-                                                                <p className="text-sm font-black text-gray-900 truncate">{item.name}</p>
-                                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">₹{item.price} × {item.quantity}</p>
+                                                                <p className="text-sm font-bold text-gray-900 truncate">{item.name}</p>
+                                                                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">₹{item.price} × {item.quantity}</p>
                                                             </div>
                                                             <div className="text-right">
-                                                                <p className="font-black text-gray-900 mb-1">₹{(item.price * item.quantity).toFixed(2)}</p>
+                                                                <p className="font-bold text-gray-900 mb-1">₹{(item.price * item.quantity).toFixed(2)}</p>
                                                                 <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                     <button onClick={() => updateQty(item.id, -1)} className="p-1 hover:bg-gray-100 rounded-lg"><Minus className="h-3 w-3" /></button>
                                                                     <button onClick={() => updateQty(item.id, 1)} className="p-1 hover:bg-gray-100 rounded-lg"><Plus className="h-3 w-3" /></button>
@@ -755,11 +776,11 @@ export default function WaiterDashboard() {
 
                                                 <div className="pt-6 border-t-4 border-dashed border-gray-100 space-y-4">
                                                     <div className="flex justify-between items-end">
-                                                        <span className="font-black text-gray-400 uppercase tracking-widest text-xs">Total Amount</span>
-                                                        <span className="text-4xl font-black text-primary tracking-tighter">₹{cartTotal.toFixed(2)}</span>
+                                                        <span className="font-semibold text-gray-400 uppercase tracking-widest text-xs">Total Amount</span>
+                                                        <span className="text-4xl font-bold text-primary tracking-tighter">₹{cartTotal.toFixed(2)}</span>
                                                     </div>
                                                     <Button
-                                                        className="w-full bg-primary hover:bg-primary/90 text-white font-black h-16 rounded-[1.5rem] shadow-xl shadow-primary/20 text-xl group"
+                                                        className="w-full bg-primary hover:bg-primary/90 text-white font-bold h-16 rounded-[1.5rem] shadow-xl shadow-primary/20 text-xl group"
                                                         onClick={() => setIsConfirmOpen(true)}
                                                     >
                                                         SEND TO KITCHEN
@@ -776,31 +797,31 @@ export default function WaiterDashboard() {
 
                     {/* Confirm Dialog */}
                     <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
-                        <DialogContent className="sm:max-w-md rounded-[3rem] p-0 overflow-hidden border-0 shadow-2xl flex flex-col max-h-[90vh]">
+                        <DialogContent className="sm:max-w-md rounded-[3rem] p-0 overflow-hidden border-0 shadow-2xl flex flex-col max-h-[90vh] [&>button:last-child]:text-slate-400 [&>button:last-child]:hover:text-white [&>button:last-child]:transition-colors">
                             {/* Sticky Header */}
                             <div className="bg-slate-900 p-8 text-white relative shrink-0">
-                                <Badge className="absolute top-8 right-8 bg-primary/20 text-primary border-0 font-black px-4 py-1">T{selectedTable?.table_number}</Badge>
+                                <Badge className="absolute top-8 right-8 bg-primary/20 text-primary border-0 font-semibold px-4 py-1">T{selectedTable?.table_number}</Badge>
                                 <ChefHat className="h-12 w-12 text-primary mb-6" />
-                                <DialogTitle className="text-3xl font-black tracking-tight mb-2">Almost Done!</DialogTitle>
+                                <DialogTitle className="text-3xl font-bold tracking-tight mb-2">Almost Done!</DialogTitle>
                                 <p className="text-slate-400 font-medium">Review the order before sending to kitchen</p>
                             </div>
 
                             {/* Scrollable Body */}
                             <div className="p-8 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
-                                <div className="p-5 bg-gray-50 rounded-[2rem] border-2 border-gray-100 flex justify-between items-center">
+                                <div className="p-5 bg-gray-50 rounded-[2rem] border border-gray-100 flex justify-between items-center">
                                     <div>
-                                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">TOTAL PAYABLE</p>
-                                        <p className="text-3xl font-black text-primary tracking-tighter">₹{cartTotal.toFixed(2)}</p>
+                                        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1">TOTAL PAYABLE</p>
+                                        <p className="text-3xl font-bold text-primary tracking-tighter">₹{cartTotal.toFixed(2)}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-xs font-black text-gray-900 uppercase">Items: {cartCount}</p>
-                                        <p className="text-[10px] font-bold text-gray-400">Bill ID: AUTO</p>
+                                        <p className="text-xs font-semibold text-gray-900 uppercase">Items: {cartCount}</p>
+                                        <p className="text-[10px] font-medium text-gray-400">Bill ID: AUTO</p>
                                     </div>
                                 </div>
 
                                 <div className="space-y-4">
                                     <div className="space-y-2">
-                                        <Label className="text-[10px] font-black uppercase text-gray-400 tracking-widest px-1">Selected Waiter</Label>
+                                        <Label className="text-[10px] font-semibold uppercase text-gray-400 tracking-widest px-1">Selected Waiter</Label>
                                         <Select
                                             value={staffId || 'guest'}
                                             onValueChange={(id) => {
@@ -809,25 +830,25 @@ export default function WaiterDashboard() {
                                                 if (s) setStaffName(s.name);
                                             }}
                                         >
-                                            <SelectTrigger className="h-14 bg-white border-2 border-gray-100 rounded-2xl font-bold">
+                                            <SelectTrigger className="h-14 bg-white border border-gray-100 rounded-2xl font-semibold">
                                                 <SelectValue placeholder="Select Waiter" />
                                             </SelectTrigger>
-                                            <SelectContent className="rounded-2xl border-2">
+                                            <SelectContent className="rounded-2xl border">
                                                 {staffList.map(staff => (
-                                                    <SelectItem key={staff.id} value={staff.id} className="font-bold">{staff.name}</SelectItem>
+                                                    <SelectItem key={staff.id} value={staff.id} className="font-semibold">{staff.name}</SelectItem>
                                                 ))}
-                                                <SelectItem value="guest" className="font-bold text-gray-400 outline-dashed">Guest Waiter</SelectItem>
+                                                <SelectItem value="guest" className="font-semibold text-gray-400 outline-dashed">Guest Waiter</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="space-y-2">
-                                            <Label className="text-[10px] font-black uppercase text-gray-400 tracking-widest px-1">Cust. Name</Label>
-                                            <Input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Optional" className="h-14 rounded-2xl border-2 font-bold" />
+                                            <Label className="text-[10px] font-semibold uppercase text-gray-400 tracking-widest px-1">Cust. Name</Label>
+                                            <Input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Optional" className="h-14 rounded-2xl border font-semibold" />
                                         </div>
                                         <div className="space-y-2">
-                                            <Label className="text-[10px] font-black uppercase text-gray-400 tracking-widest px-1">Phone No.</Label>
-                                            <Input value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} placeholder="Optional" className="h-14 rounded-2xl border-2 font-bold" />
+                                            <Label className="text-[10px] font-semibold uppercase text-gray-400 tracking-widest px-1">Phone No.</Label>
+                                            <Input value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} placeholder="Optional" className="h-14 rounded-2xl border font-semibold" />
                                         </div>
                                     </div>
                                 </div>
@@ -836,13 +857,13 @@ export default function WaiterDashboard() {
                             {/* Sticky Footer Actions */}
                             <div className="p-8 pt-4 border-t border-gray-100 flex flex-col gap-3 shrink-0 bg-white">
                                 <Button
-                                    className="w-full h-16 rounded-[1.5rem] bg-primary hover:bg-primary/90 text-white font-black text-lg shadow-xl shadow-primary/20"
+                                    className="w-full h-16 rounded-[1.5rem] bg-primary hover:bg-primary/90 text-white font-bold text-lg shadow-xl shadow-primary/20"
                                     onClick={placeOrder}
                                     disabled={isPlacing}
                                 >
                                     {isPlacing ? 'PLACING...' : 'CONFIRM & PRINT KOT'}
                                 </Button>
-                                <Button variant="ghost" className="w-full font-black text-gray-400 uppercase tracking-widest text-[10px]" onClick={() => setIsConfirmOpen(false)}>Go Back</Button>
+                                <Button variant="ghost" className="w-full font-bold text-gray-400 uppercase tracking-widest text-[10px]" onClick={() => setIsConfirmOpen(false)}>Go Back</Button>
                             </div>
                         </DialogContent>
                     </Dialog>

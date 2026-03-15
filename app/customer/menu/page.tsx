@@ -61,13 +61,28 @@ function MenuContent() {
     const checkSessionStatus = async () => {
         if (!customerPhone) return
 
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Safe customer lookup
+        const { data: customerData } = await supabase
+            .from('customers')
+            .select('id')
+            .eq('phone', customerPhone)
+            .maybeSingle()
+
+        if (!customerData) return
+
         const { data } = await supabase
             .from('orders')
-            .select('status, payment_status, customers!inner(phone)')
-            .eq('customers.phone', customerPhone)
+            .select('id, status, payment_status')
+            .eq('customer_id', customerData.id)
+            .gt('created_at', today.toISOString())
             .order('created_at', { ascending: false })
             .limit(1)
             .maybeSingle()
+
+        console.log("🧐 [Menu] Session Check:", { phone: customerPhone, lastOrder: data?.id, payment: data?.payment_status })
 
         // ONLY reset if payment is completed (paid status)
         // Don't reset just because order is served/completed - customer might order again

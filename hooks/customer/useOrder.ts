@@ -29,14 +29,25 @@ export function useOrder(billId: string) {
             restaurant_tables (table_number)
           `)
                     .eq('bill_id', billId)
-                    .single()
+                    .maybeSingle()
 
-                if (error) throw error
+                if (error) {
+                    console.error('❌ [useOrder] Supabase Error:', error)
+                    throw new Error(error.message || 'Error fetching order from database')
+                }
+
+                if (!data) {
+                    console.warn(`⚠️ [useOrder] No order found for billId: ${billId}`)
+                    setError('Order not found. Please check your link.')
+                    return
+                }
+
                 setOrder(data)
                 setItems(data.order_items || [])
+                setError(null)
             } catch (err: any) {
-                console.error('Error fetching order:', err)
-                setError(err.message)
+                console.error('❌ [useOrder] Fetch Exception:', err?.message || err)
+                setError(err.message || 'Could not load your order details')
             } finally {
                 if (!silent) setLoading(false)
             }

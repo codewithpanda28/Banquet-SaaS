@@ -50,7 +50,7 @@ export function useRealtime() {
             fetchTimer = setTimeout(async () => {
                 const orders = await getActiveOrders()
                 setOrders(orders)
-            }, 500); // 500ms debounce
+            }, 50); // 50ms fast debounce
         }
 
         fetchOrders()
