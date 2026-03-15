@@ -53,6 +53,7 @@ export default function AdminDashboard() {
         totalOrders: 0,
         totalCustomers: 0,
         peakHours: [] as number[],
+        kitchenCounts: { pending: 0, preparing: 0, ready: 0, cancelled: 0, completed: 0 }
     })
     const [recentOrders, setRecentOrders] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
@@ -119,21 +120,41 @@ export default function AdminDashboard() {
                 .select('*', { count: 'exact', head: true })
                 .eq('restaurant_id', RESTAURANT_ID)
 
+            // Fetch Detailed Counts for Kitchen Activity
+            const { data: statusCounts } = await supabase
+                .from('orders')
+                .select('status')
+                .eq('restaurant_id', RESTAURANT_ID)
+                .in('status', ['pending', 'preparing', 'ready', 'cancelled', 'completed'])
+
+            const counts = {
+                pending: statusCounts?.filter(o => o.status === 'pending').length || 0,
+                preparing: statusCounts?.filter(o => o.status === 'preparing').length || 0,
+                ready: statusCounts?.filter(o => o.status === 'ready').length || 0,
+                cancelled: statusCounts?.filter(o => o.status === 'cancelled').length || 0,
+                completed: statusCounts?.filter(o => o.status === 'completed').length || 0
+            }
+
             setStats(prev => ({
                 ...prev,
                 totalRevenue,
                 activeOrders: activeOrders || 0,
                 totalOrders: totalOrders || 0,
                 totalCustomers: totalCustomers || 0,
+                kitchenCounts: counts
             }))
 
-            // Fetch Recent Orders
-            const { data: recent } = await supabase
+            // Fetch Recent Orders - Simplified select for maximum robustness
+            const { data: recent, error: recentError } = await supabase
                 .from('orders')
-                .select('*, customers(name, phone), order_items(*)')
+                .select('*, customers (name, phone), order_items(*)')
                 .eq('restaurant_id', RESTAURANT_ID)
                 .order('created_at', { ascending: false })
-                .limit(5)
+                .limit(10)
+
+            if (recentError) {
+                console.error('❌ [ADMIN HOME] Error fetching recent orders:', recentError)
+            }
 
             setRecentOrders(recent || [])
 
@@ -179,25 +200,26 @@ export default function AdminDashboard() {
         fetchDashboardData(range)
 
         // Real-time subscription for orders
-        const channel = supabase
-            .channel('admin-dashboard-overview')
+        const channel = supabase.channel('admin-home-realtime')
             .on(
                 'postgres_changes',
                 {
                     event: '*',
                     schema: 'public',
                     table: 'orders',
-                    filter: `restaurant_id=eq.${RESTAURANT_ID}`
                 },
-                (payload) => {
-                    console.log('🔄 [ADMIN] Order update detected:', payload)
+                (payload: any) => {
+                    console.log('🔄 [ADMIN HOME] Order change:', payload.eventType)
+                    const targetOrder = payload.new || payload.old
+                    if (targetOrder && targetOrder.restaurant_id && targetOrder.restaurant_id !== RESTAURANT_ID) return
+
                     if (payload.eventType === 'INSERT') {
-                        toast.info('New Order Received! 🔔')
+                        toast.success('New Order Received! 🔔')
                     }
 
-                    fetchDashboardData(range)
+                    // Reduced delay for "Live" feel
+                    setTimeout(() => fetchDashboardData(range), 1000)
 
-                    // Live update selected order if it matches
                     if (selectedOrder && (payload.new as any)?.id === selectedOrder.id) {
                         refreshSelectedOrder(selectedOrder.id)
                     }
@@ -534,12 +556,16 @@ export default function AdminDashboard() {
                                                 <div className="flex items-center gap-3">
                                                     <Avatar className="h-8 w-8 border border-gray-100 hidden sm:block">
                                                         <AvatarFallback className={cn("text-[10px] font-bold", i % 2 === 0 ? "bg-blue-50 text-blue-600" : "bg-purple-50 text-purple-600")}>
-                                                            {order.customers?.name?.substring(0, 2).toUpperCase() || 'CU'}
+                                                            {(Array.isArray(order.customers) ? order.customers[0]?.name : order.customers?.name)?.substring(0, 2).toUpperCase() || 'CU'}
                                                         </AvatarFallback>
                                                     </Avatar>
                                                     <div className="flex flex-col min-w-0">
-                                                        <span className="font-medium truncate text-gray-900">{order.customers?.name || 'Walk-in'}</span>
-                                                        <span className="text-[10px] text-gray-500 truncate">{order.customers?.phone || 'No Phone'}</span>
+                                                        <span className="font-medium truncate text-gray-900">
+                                                            {(Array.isArray(order.customers) ? order.customers[0]?.name : order.customers?.name) || 'Walk-in'}
+                                                        </span>
+                                                        <span className="text-[10px] text-gray-500 truncate">
+                                                            {(Array.isArray(order.customers) ? order.customers[0]?.phone : order.customers?.phone) || 'No Phone'}
+                                                        </span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -582,26 +608,28 @@ export default function AdminDashboard() {
                             <CardDescription className="text-xs text-gray-500">Current order prep status</CardDescription>
                         </CardHeader>
                         <CardContent className="relative z-10 px-6 pt-6">
-                            <div className="space-y-6">
+                            <div className="space-y-5">
                                 {[
-                                    { label: 'Pending', count: stats.activeOrders, color: 'bg-yellow-500', icon: Clock },
-                                    { label: 'Preparing', count: Math.floor(stats.activeOrders * 0.4), color: 'bg-orange-500', icon: UtensilsCrossed },
-                                    { label: 'Ready', count: Math.floor(stats.activeOrders * 0.6), color: 'bg-green-500', icon: CheckCircle2 },
+                                    { label: 'New Orders', count: stats.kitchenCounts.pending, color: 'bg-yellow-500', icon: Clock },
+                                    { label: 'Preparing', count: stats.kitchenCounts.preparing, color: 'bg-orange-500', icon: UtensilsCrossed },
+                                    { label: 'Ready', count: stats.kitchenCounts.ready, color: 'bg-green-500', icon: CheckCircle2 },
+                                    { label: 'Cancelled', count: stats.kitchenCounts.cancelled, color: 'bg-red-500', icon: XCircle },
+                                    { label: 'Completed', count: stats.kitchenCounts.completed, color: 'bg-blue-600', icon: ShoppingBag },
                                 ].map((step, idx) => (
-                                    <div key={idx} className="space-y-2 group">
+                                    <div key={idx} className="space-y-1.5 group">
                                         <div className="flex items-center justify-between text-sm font-medium">
                                             <div className="flex items-center gap-2">
                                                 <div className={cn("p-1.5 rounded-md text-white shadow-sm transition-transform group-hover:scale-110", step.color)}>
                                                     <step.icon className="h-3.5 w-3.5" />
                                                 </div>
-                                                <span className="text-gray-700">{step.label}</span>
+                                                <span className="text-gray-700 text-xs font-bold uppercase tracking-tight">{step.label}</span>
                                             </div>
-                                            <span className="font-bold text-gray-900">{step.count}</span>
+                                            <span className="font-black text-gray-900">{step.count}</span>
                                         </div>
-                                        <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                                        <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
                                             <div
                                                 className={cn("h-full rounded-full transition-all duration-1000", step.color)}
-                                                style={{ width: `${(step.count / (Math.max(stats.activeOrders, 1))) * 100}%` }}
+                                                style={{ width: `${(step.count / (Math.max(stats.kitchenCounts.pending + stats.kitchenCounts.preparing + stats.kitchenCounts.ready + stats.kitchenCounts.cancelled + stats.kitchenCounts.completed, 1))) * 100}%` }}
                                             />
                                         </div>
                                     </div>

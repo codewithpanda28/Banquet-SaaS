@@ -218,55 +218,116 @@ export default function WaiterDashboard() {
         if (!selectedTable || cart.length === 0) return
         setIsPlacing(true)
         try {
-            const { data: existingOrder } = await supabase
-                .from('orders')
-                .select('*')
-                .eq('table_id', selectedTable.id)
-                .eq('restaurant_id', RESTAURANT_ID)
-                .eq('payment_status', 'pending')
-                .in('status', ['pending', 'confirmed', 'preparing', 'ready', 'served'])
-                .maybeSingle()
+            // 1. Resolve Customer ID first if name OR phone provided
+            let customerId: string | null = null
+            if (customerName.trim() || customerPhone.trim()) {
+                console.log('👤 [Waiter] Resolving customer:', { name: customerName, phone: customerPhone })
+                
+                // Try to find by phone if provided
+                if (customerPhone.trim()) {
+                    const { data: existing, error: findError } = await supabase
+                        .from('customers')
+                        .select('id')
+                        .eq('phone', customerPhone.trim())
+                        .eq('restaurant_id', RESTAURANT_ID)
+                        .maybeSingle()
+
+                    if (findError) {
+                        console.error('❌ [Waiter] Error finding customer:', findError)
+                    } else if (existing) {
+                        console.log('✅ [Waiter] Found existing customer:', existing.id)
+                        customerId = existing.id
+                    }
+                }
+
+                // If not found or only name provided, create a new customer record
+                if (!customerId) {
+                    console.log('🆕 [Waiter] Creating new customer record...')
+                    const { data: newCust, error: createError } = await supabase
+                        .from('customers')
+                        .insert({
+                            restaurant_id: RESTAURANT_ID,
+                            name: customerName.trim() || 'Guest',
+                            phone: customerPhone.trim() || null
+                        })
+                        .select('id')
+                        .single()
+
+                    if (createError) {
+                        console.error('❌ [Waiter] Error creating customer:', createError)
+                        toast.error(`Customer creation failed: ${createError.message}`)
+                        // If creation fails, we SHOULD NOT proceed with customer-specific logic
+                        // But let's let it fall back to walk-in if necessary, or throw.
+                        // Throwing is safer to avoid merging into wrong bill.
+                        throw new Error(`Could not create customer: ${createError.message}`)
+                    } else if (newCust) {
+                        console.log('✅ [Waiter] New customer created:', newCust.id)
+                        customerId = newCust.id
+                    }
+                }
+            } else {
+                console.log('👤 [Waiter] No customer details provided, proceeding as Walk-in.')
+            }
+
+            // 2. Check for existing active order using Secure API (Robust & bypasses RLS)
+            console.log('🔍 [Waiter] Checking for active order on Table:', selectedTable.table_number, 'Customer ID:', customerId)
+            const params = new URLSearchParams()
+            params.append('restaurantId', RESTAURANT_ID)
+            params.append('tableId', selectedTable.id)
+            
+            if (customerId) {
+                params.append('customerId', customerId)
+                params.append('join', 'false') // Request strict matching
+            }
+            
+            const activeRes = await fetch(`/api/orders/active?${params.toString()}`)
+            const activeData = await activeRes.json()
+            
+            if (activeData.error) {
+                console.error('❌ [Waiter] API Error:', activeData.error)
+                throw new Error(activeData.error)
+            }
+            
+            const existingOrder = activeData.order
 
             let orderId = ''
             let billId = ''
 
             if (existingOrder) {
+                console.log('✅ Found existing order:', existingOrder.bill_id)
                 orderId = existingOrder.id
                 billId = existingOrder.bill_id
                 const newTotal = Number(existingOrder.total) + cartTotal
+                
+                // Update existing order - Reset status to pending if it was already prepared/served
+                // so the kitchen gets notified for the new items
+                const statusUpdate = (existingOrder.status === 'served' || existingOrder.status === 'ready' || existingOrder.status === 'completed') 
+                    ? 'pending' 
+                    : existingOrder.status
+
                 await supabase.from('orders').update({
                     total: newTotal,
-                    // Only set waiter_id if it's not already set (preserve original waiter)
+                    customer_id: existingOrder.customer_id || customerId,
                     waiter_id: existingOrder.waiter_id || staffId || null,
-                    notes: (existingOrder.notes || '') + `\nAdded by waiter ${staffName}: +₹${cartTotal}`
+                    status: statusUpdate,
+                    payment_status: 'pending',
+                    notes: (existingOrder.notes || '') + `\n[${staffName}] added +₹${cartTotal}`,
+                    updated_at: new Date().toISOString()
                 }).eq('id', orderId)
+                
                 toast.info(`Adding items to existing Bill #${billId}`)
             } else {
+                console.log('🆕 Creating new order for Table:', selectedTable.table_number)
                 const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
                 const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
                 billId = `BILL${dateStr}${random}`
 
-                let customerId: string | null = null
-                if (customerName.trim() && customerPhone) {
-                    const { data: existing } = await supabase
-                        .from('customers').select('id').eq('phone', customerPhone).eq('restaurant_id', RESTAURANT_ID).maybeSingle()
-
-                    if (existing) {
-                        customerId = existing.id
-                    } else {
-                        const { data: newCust } = await supabase.from('customers').insert({
-                            restaurant_id: RESTAURANT_ID, name: customerName, phone: customerPhone
-                        }).select('id').single()
-                        customerId = newCust?.id || null
-                    }
-                }
-
-                const { data: order, error } = await supabase.from('orders').insert({
+                const { data: order, error: orderError } = await supabase.from('orders').insert({
                     restaurant_id: RESTAURANT_ID,
                     table_id: selectedTable.id,
                     customer_id: customerId,
                     bill_id: billId,
-                    waiter_id: staffId || null, // ✅ NEW: Track the waiter
+                    waiter_id: staffId || null,
                     status: 'pending',
                     payment_status: 'pending',
                     order_type: 'dine_in',
@@ -274,8 +335,10 @@ export default function WaiterDashboard() {
                     notes: `Waiter order - Table ${selectedTable.table_number}`
                 }).select('id').single()
 
-                if (error) throw error
+                if (orderError) throw orderError
                 orderId = order.id
+                
+                // Update table status
                 await supabase.from('restaurant_tables').update({ status: 'occupied' }).eq('id', selectedTable.id)
             }
 

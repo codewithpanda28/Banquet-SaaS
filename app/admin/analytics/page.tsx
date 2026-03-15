@@ -34,10 +34,10 @@ export default function AnalyticsPage() {
 
         const [{ data: ordersData }] = await Promise.all([
             supabase.from('orders')
-                .select('*, order_items(*)')
+                .select('*, customers(name, phone), order_items(*)')
                 .eq('restaurant_id', RESTAURANT_ID)
                 .gte('created_at', start)
-                .order('created_at')
+                .order('created_at', { ascending: false })
         ])
 
         setOrders(ordersData || [])
@@ -237,7 +237,7 @@ export default function AnalyticsPage() {
                                     dataKey="value"
                                 >
                                     {sourceData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} cornerRadius={10} />
+                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                     ))}
                                 </Pie>
                                 <Tooltip />
@@ -349,8 +349,8 @@ export default function AnalyticsPage() {
                             <div key={i} className="flex gap-3 items-center border-b border-white/5 pb-3">
                                 <div className={cn("h-2 w-2 rounded-full", o.status === 'completed' ? 'bg-emerald-400' : 'bg-orange-400')} />
                                 <div className="flex-1">
-                                    <p className="text-xs font-bold">{o.customer_name || 'Guest'}</p>
-                                    <p className="text-[9px] text-gray-500">₹{o.total} · {o.platform || 'Dine-in'}</p>
+                                    <p className="text-xs font-bold">{(o.customers?.name || o.customer_name) || 'Guest'}</p>
+                                    <p className="text-[9px] text-gray-500">₹{o.total} · {o.order_type || 'Dine-in'}</p>
                                 </div>
                                 <span className="text-[9px] text-gray-600 font-mono">{format(new Date(o.created_at), 'HH:mm')}</span>
                             </div>

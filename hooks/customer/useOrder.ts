@@ -58,16 +58,38 @@ export function useOrder(billId: string) {
                     filter: `bill_id=eq.${billId}`,
                 },
                 (payload) => {
-                    console.log('🔴 [REALTIME] Order updated:', payload)
+                    console.log('⚡ [CUSTOMER REALTIME] Order updated:', payload.eventType)
                     fetchOrder(true) // Silent update
                 }
             )
-            .subscribe()
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'order_items'
+                    // We don't filter order_items here because we re-fetch everything from order anyway
+                },
+                (payload: any) => {
+                    // Only refresh if it belongs to our bill
+                    // Since we can't easily filter by bill_id on order_items table in Postgres Filter 
+                    // without a join (which Realtime doesn't support for filters), 
+                    // we just re-fetch. It's safe.
+                    fetchOrder(true)
+                }
+            )
+            .subscribe((status) => {
+                console.log(`📡 [CUSTOMER REALTIME] Status: ${status}`)
+                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                    // Fallback to polling strictly if realtime fails
+                    console.warn('Realtime connection issues. Falling back to high-frequency polling.')
+                }
+            })
 
-        // FALLBACK: Silent polling every 5 seconds
+        // FALLBACK: Silent polling every 10 seconds (as safety net)
         pollingInterval = setInterval(() => {
             fetchOrder(true) // Silent update
-        }, 5000)
+        }, 10000)
 
         return () => {
             if (channel) supabase.removeChannel(channel)

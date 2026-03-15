@@ -51,7 +51,6 @@ const automationItems = [
     { icon: Package, label: 'Inventory', href: '/admin/inventory', color: 'text-orange-500' },
     { icon: Bike, label: 'Zomato/Swiggy', href: '/admin/delivery', color: 'text-red-500' },
     { icon: Zap, label: 'AI Upsell', href: '/admin/upsell', color: 'text-yellow-500' },
-    { icon: BarChart3, label: 'Live Analytics', href: '/admin/analytics', color: 'text-cyan-500' },
     { icon: ChefHat, label: 'Kitchen Dashboard', href: '/kitchen', color: 'text-orange-600' },
 ]
 

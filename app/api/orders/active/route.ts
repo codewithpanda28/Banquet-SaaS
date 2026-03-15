@@ -14,40 +14,40 @@ export async function GET(request: Request) {
         const tableId = searchParams.get('tableId')
         const customerId = searchParams.get('customerId')
         const tableNumber = searchParams.get('tableNumber')
-        const joinMode = searchParams.get('join') // 'true' or 'false'
 
-        if (!restaurantId) return NextResponse.json({ error: 'Missing restaurantId' }, { status: 400 })
+        const rid = restaurantId === 'null' ? null : restaurantId
+        const tid = (tableId === 'null' || !tableId) ? null : tableId
+        const cid = (customerId === 'null' || !customerId) ? null : customerId
+        const tnum = (tableNumber === 'null' || !tableNumber) ? null : tableNumber
 
-        // Build query
+        if (!rid) return NextResponse.json({ error: 'Missing restaurantId' }, { status: 400 })
+
+        // Build base query
         let query = supabaseAdmin
             .from('orders')
             .select('id, bill_id, total, subtotal, status, payment_status, table_id, customer_id')
-            .eq('restaurant_id', restaurantId)
+            .eq('restaurant_id', rid)
             .eq('payment_status', 'pending')
             .neq('status', 'cancelled')
             .order('created_at', { ascending: false })
-            .limit(1)
 
-        // Modern Logic:
-        if (joinMode === 'false' && customerId) {
-            // SEPARATE ORDER: Must match BOTH table AND customer
-            if (tableId && tableId !== 'null') query = query.eq('table_id', tableId)
-            else if (tableNumber && tableNumber !== 'null') query = query.eq('table_number', parseInt(tableNumber))
-            
-            query = query.eq('customer_id', customerId)
+        if (cid) {
+            // STRICT MATCH: If customer info is provided, we ONLY match their specific order
+            // This prevents merging different customers on the same table.
+            query = query.eq('customer_id', cid)
         } else {
-            // JOIN MODE (default or true): Match by table primarily
-            if (tableId && tableId !== 'null') {
-                query = query.eq('table_id', tableId)
-            } else if (tableNumber && tableNumber !== 'null' && !isNaN(parseInt(tableNumber))) {
-                query = query.eq('table_number', parseInt(tableNumber))
-            } else if (customerId && customerId !== 'null') {
-                query = query.eq('customer_id', customerId)
+            // LOOSE MATCH (Walk-in): Match by table primarily
+            // If no customer details are provided, we assume additions to the latest table order.
+            if (tid) {
+                query = query.eq('table_id', tid)
+            } else if (tnum && !isNaN(parseInt(tnum))) {
+                query = query.eq('table_number', parseInt(tnum))
             } else {
                 return NextResponse.json({ order: null })
             }
         }
 
+        // We use maybeSingle to get at most one active order
         const { data, error } = await query.maybeSingle()
 
         if (error) {

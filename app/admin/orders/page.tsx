@@ -49,37 +49,52 @@ export default function OrdersPage() {
 
         // Realtime Subscription
 
-        const channel = supabase.channel('admin-orders-realtime')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'orders',
-                filter: `restaurant_id=eq.${RESTAURANT_ID}`
-            }, (payload) => {
-                console.log('Order change received:', payload)
-                if (payload.eventType === 'INSERT') {
-                    toast.success('New Order Received! 🔔')
-                    // Provide a slight delay to ensure triggering client has finished transaction if any
-                    setTimeout(() => fetchOrders(false), 1000)
-                } else {
-                    fetchOrders(false)
-                }
-            })
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'order_items'
-                // Note: order_items might not have restaurant_id directly on them depending on schema, usually they link to order_id
-                // So we listen to all, or rely on Order updates mostly. keeping it broad for safety but could add filter if schema supports it
-            }, () => {
-                fetchOrders(false)
-            })
-            .subscribe((status, err) => {
+            const channel = supabase.channel('admin-orders-realtime')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*',
+                        schema: 'public',
+                        table: 'orders',
+                    },
+                    (payload: any) => {
+                        console.log('🔄 [ADMIN ORDERS] Order change:', payload.eventType)
+                        const targetOrder = payload.new || payload.old
+                        if (targetOrder && targetOrder.restaurant_id && targetOrder.restaurant_id !== RESTAURANT_ID) return
+
+                        if (payload.eventType === 'INSERT') {
+                            toast.success('New Order Received! 🔔')
+                        }
+
+                        // Reduced delay for "Live" feel
+                        setTimeout(() => fetchOrders(false), 1000)
+
+                        if (selectedOrder && (payload.new as any)?.id === selectedOrder.id) {
+                            handleViewOrder(selectedOrder.id)
+                        }
+                    }
+                )
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*',
+                        schema: 'public',
+                        table: 'order_items',
+                    },
+                    (payload: any) => {
+                        console.log('🔄 [ADMIN ORDERS] Item change:', payload.eventType)
+                        setTimeout(() => fetchOrders(false), 1000)
+                        
+                        if (selectedOrder && (payload.new as any)?.order_id === selectedOrder.id) {
+                            handleViewOrder(selectedOrder.id)
+                        }
+                    }
+                )
+                .subscribe((status) => {
                 console.log('Admin Realtime Status:', status)
                 if (status === 'SUBSCRIBED') {
                     toast.success('Live Updates Active 🟢', { id: 'realtime-status', duration: 2000 })
                 }
-                if (err) console.error('Subscription Error:', err)
             })
 
         // Polling fallback every 30s
@@ -101,13 +116,13 @@ export default function OrdersPage() {
             const { data, error } = await supabase
                 .from('orders')
                 .select(`
-          *,
-          customers (id, name, phone, email, address),
-          restaurant_tables (table_number)
-        `)
+                    *,
+                    customers!customer_id (id, name, phone, email, address),
+                    restaurant_tables!table_id (table_number)
+                `)
                 .eq('restaurant_id', RESTAURANT_ID)
                 .order('created_at', { ascending: false })
-                .limit(50)
+                .limit(100)
 
             if (error) throw error
             setOrders(data || [])
@@ -136,11 +151,14 @@ export default function OrdersPage() {
         }
 
         if (searchTerm) {
-            filtered = filtered.filter((o: any) =>
-                o.bill_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (o.customer?.phone || o.customers?.phone)?.includes(searchTerm) ||
-                (o.customer?.name || o.customers?.name)?.toLowerCase().includes(searchTerm.toLowerCase())
-            )
+            filtered = filtered.filter((o: any) => {
+                const customer = Array.isArray(o.customers) ? o.customers[0] : o.customers
+                return (
+                    o.bill_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    (customer?.phone || o.customer_phone)?.includes(searchTerm) ||
+                    (customer?.name || o.customer_name)?.toLowerCase().includes(searchTerm.toLowerCase())
+                )
+            })
         }
 
         setFilteredOrders(filtered)
@@ -393,8 +411,8 @@ export default function OrdersPage() {
                                 <SelectContent className="bg-white border-gray-200 text-black">
                                     <SelectItem value="all">All Types</SelectItem>
                                     <SelectItem value="dine_in">🍽️ Dine In</SelectItem>
-                                    <SelectItem value="takeaway">🥡 Takeaway</SelectItem>
-                                    <SelectItem value="delivery">🚚 Delivery</SelectItem>
+                                    <SelectItem value="take_away">🥡 Takeaway</SelectItem>
+                                    <SelectItem value="home_delivery">🚚 Delivery</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -449,7 +467,9 @@ export default function OrdersPage() {
                                         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-gray-500">
                                             <div className="flex items-center gap-2">
                                                 <User className="h-4 w-4 text-green-600" />
-                                                <span className="font-medium text-gray-900">{order.customers?.name || order.customer_name || 'Walk-in'}</span>
+                                                <span className="font-medium text-gray-900">
+                                                    {(Array.isArray(order.customers) ? order.customers[0]?.name : order.customers?.name) || order.customer_name || 'Walk-in'}
+                                                </span>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <Clock className="h-4 w-4 text-green-600" />
@@ -458,7 +478,7 @@ export default function OrdersPage() {
                                             {order.restaurant_tables && (
                                                 <div className="flex items-center gap-2">
                                                     <MapPin className="h-4 w-4 text-green-600" />
-                                                    <span>Table {order.restaurant_tables.table_number}</span>
+                                                    <span>Table {(Array.isArray(order.restaurant_tables) ? order.restaurant_tables[0]?.table_number : order.restaurant_tables.table_number)}</span>
                                                 </div>
                                             )}
                                         </div>
