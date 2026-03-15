@@ -36,12 +36,27 @@ export async function GET(req: NextRequest) {
 
         console.log('✅ [API/Coupons] Raw coupons found:', coupons?.length || 0)
 
-        // Filter by usage limit (0 = unlimited)
-        const available = (coupons || []).filter((c: any) =>
-            c.usage_limit === 0 || c.used_count < c.usage_limit
-        )
+        const phone = searchParams.get('phone') || ''
+        const last4 = phone.slice(-4)
 
-        console.log('✅ [API/Coupons] Available after usage filter:', available.length)
+        // Filter by usage limit and SMART HIDE private/loyal coupons
+        const available = (coupons || []).filter((c: any) => {
+            const isUsageOk = c.usage_limit === 0 || c.used_count < c.usage_limit
+            const isPrivate = c.description?.includes('[PRIVATE]')
+            
+            // If it's private, ONLY show it if the phone matches the code suffix
+            if (isPrivate) {
+                if (!phone || !c.code.startsWith('VIP-')) return false
+                const codeParts = c.code.split('-')
+                const codeSuffix = codeParts[codeParts.length - 1]
+                return codeSuffix === last4
+            }
+
+            // Normal/Public coupons are shown to everyone
+            return isUsageOk
+        })
+
+        console.log('✅ [API/Coupons] Available after smart filter:', available.length)
         return NextResponse.json({ coupons: available })
     } catch (err: any) {
         console.error('❌ [API/Coupons] Unexpected error:', err)
@@ -94,6 +109,27 @@ export async function POST(req: NextRequest) {
         // Min order amount check
         if (cartTotal !== undefined && cartTotal < coupon.min_order_amount) {
             return NextResponse.json({ error: `Minimum order amount ₹${coupon.min_order_amount} required` })
+        }
+
+        // Extra Security: Private/Loyal coupon check
+        const isPrivate = coupon.description?.includes('[PRIVATE]')
+        if (isPrivate) {
+            // If it's a VIP-NAME-PHONE format, verify phone
+            if (coupon.code.startsWith('VIP-')) {
+                const codeParts = coupon.code.split('-')
+                const codePhonePart = codeParts[codeParts.length - 1] // Last digits
+                
+                const customerPhone = body.customerPhone || ''
+                if (!customerPhone) {
+                    return NextResponse.json({ error: 'Please enter your phone number to use this exclusive coupon' })
+                }
+
+                const last4OfCustomer = customerPhone.slice(-4)
+                if (codePhonePart !== last4OfCustomer) {
+                    console.log(`❌ [API/Coupons/Validate] Unauthorized loyal coupon use: code digits ${codePhonePart} vs customer ${last4OfCustomer}`)
+                    return NextResponse.json({ error: 'This exclusive coupon belongs to another customer' })
+                }
+            }
         }
 
         console.log('✅ [API/Coupons/Validate] Valid! Returning coupon:', coupon.code)

@@ -95,7 +95,12 @@ export default function CheckoutPage() {
             const res = await fetch('/api/coupons', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: trimmedCode, cartTotal: subtotal, restaurantId: rid })
+                body: JSON.stringify({ 
+                    code: trimmedCode, 
+                    cartTotal: subtotal, 
+                    restaurantId: rid,
+                    customerPhone: phone // Send phone for private coupon verification
+                })
             })
             const result = await res.json()
             console.log('🎟️ [Checkout] Validate result:', result)
@@ -666,7 +671,8 @@ export default function CheckoutPage() {
                                                 const rid = process.env.NEXT_PUBLIC_RESTAURANT_ID
                                                 console.log('🎟️ [Checkout] Fetching available coupons for rid:', rid)
                                                 try {
-                                                    const res = await fetch(`/api/coupons?restaurantId=${rid || ''}`)
+                                                    // Pass phone if available to show private/loyal coupons
+                                                    const res = await fetch(`/api/coupons?restaurantId=${rid || ''}&phone=${phone || ''}`)
                                                     const json = await res.json()
                                                     console.log('✅ [Checkout] Coupons API response:', json)
                                                     if (json.error) {
@@ -725,7 +731,12 @@ export default function CheckoutPage() {
                                                                             const res = await fetch('/api/coupons', {
                                                                                 method: 'POST',
                                                                                 headers: { 'Content-Type': 'application/json' },
-                                                                                body: JSON.stringify({ code: deal.code, cartTotal: subtotal, restaurantId: rid })
+                                                                                body: JSON.stringify({ 
+                                                                                    code: deal.code, 
+                                                                                    cartTotal: subtotal, 
+                                                                                    restaurantId: rid,
+                                                                                    customerPhone: phone 
+                                                                                })
                                                                             })
                                                                             const result = await res.json()
                                                                             if (result.coupon) {
