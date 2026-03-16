@@ -19,8 +19,12 @@ import {
     DollarSign,
     TrendingUp,
     Smartphone,
-    Zap
+    Zap,
+    Search
 } from 'lucide-react'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 import { startOfDay, endOfDay, subDays, format } from 'date-fns'
 import {
@@ -64,6 +68,27 @@ export default function AdminDashboard() {
     const [range, setRange] = useState<'today' | 'week' | 'month'>('today')
     const [isFlashSale, setIsFlashSale] = useState(false)
     const [generatingReport, setGeneratingReport] = useState(false)
+    
+    // Flash Sale Broadcast States
+    const [isFlashSaleDialogOpen, setIsFlashSaleDialogOpen] = useState(false)
+    const [allCustomers, setAllCustomers] = useState<any[]>([])
+    const [selectedPhones, setSelectedPhones] = useState<string[]>([])
+    const [customerSearchQuery, setCustomerSearchQuery] = useState('')
+    const [isSendingFlashSale, setIsSendingFlashSale] = useState(false)
+
+    // Filtered customers for flash sale dialog
+    const filteredCustomersForFlashSale = allCustomers.filter(c => 
+        (c.name?.toLowerCase().includes(customerSearchQuery.toLowerCase()) || 
+         c.phone?.includes(customerSearchQuery))
+    )
+
+    const toggleSelectAll = () => {
+        if (allCustomers.length > 0 && selectedPhones.length === filteredCustomersForFlashSale.length) {
+            setSelectedPhones([])
+        } else {
+            setSelectedPhones(filteredCustomersForFlashSale.map(c => c.phone).filter(Boolean))
+        }
+    }
 
     // Helper to robustly parse dates primarily from UTC
     const parseDate = (dateString: string) => {
@@ -199,30 +224,73 @@ export default function AdminDashboard() {
         }
     }, [])
 
-    const toggleFlashSale = async () => {
+    const fetchCustomersForFlashSale = useCallback(async () => {
         try {
+            const { data, error } = await supabase
+                .from('customers')
+                .select('id, name, phone')
+                .eq('restaurant_id', RESTAURANT_ID)
+                .order('name', { ascending: true })
+            
+            if (error) throw error
+            setAllCustomers(data || [])
+        } catch (error) {
+            console.error('Error fetching customers:', error)
+        }
+    }, [])
+
+    useEffect(() => {
+        if (isFlashSaleDialogOpen && allCustomers.length === 0) {
+            fetchCustomersForFlashSale()
+        }
+    }, [isFlashSaleDialogOpen, allCustomers.length, fetchCustomersForFlashSale])
+
+    const handleSendFlashSale = async () => {
+        if (selectedPhones.length === 0) {
+            toast.error("Please select at least one customer")
+            return
+        }
+
+        try {
+            setIsSendingFlashSale(true)
             const nextState = !isFlashSale
-            setIsFlashSale(nextState)
             
             const message = nextState 
                 ? "🔥 *Flash Sale Active!* 20% Off on all items for next 2 hours. Start ordering now!" 
                 : "Flash Sale has ended."
             
-            // Still trigger webhook for internal logs/other integrations
-            await triggerAutomationWebhook('whatsapp-chat', {
-                type: 'flash_sale',
-                active: nextState,
-                phone: '918252472186',
-                message
+            // Trigger all webhooks in parallel for speed
+            const broadcastPromises = selectedPhones.map(async (phone) => {
+                let formattedPhone = phone.replace(/[^0-9]/g, '')
+                if (formattedPhone.length === 10) {
+                    formattedPhone = '91' + formattedPhone
+                }
+
+                return triggerAutomationWebhook('whatsapp-chat', {
+                    type: 'flash_sale',
+                    active: nextState,
+                    phone: formattedPhone,
+                    message
+                })
             })
 
-            // Direct WhatsApp Trigger
-            const waUrl = `https://wa.me/918252472186?text=${encodeURIComponent(message)}`
-            window.open(waUrl, '_blank')
+            const results = await Promise.all(broadcastPromises)
+            const successCount = results.filter(r => r && (r.success || !r.error)).length
 
-            toast.success(nextState ? 'Flash Sale Activated! 🚀' : 'Flash Sale Deactivated')
+            // Also update local state
+            setIsFlashSale(nextState)
+            
+            toast.success(nextState 
+                ? `Flash Sale Activated & Sent to ${successCount} customers! 🚀` 
+                : `Flash Sale Deactivated & Notified ${successCount} customers`
+            )
+            setIsFlashSaleDialogOpen(false)
+            setSelectedPhones([])
         } catch (error) {
-            toast.error('Failed to toggle flash sale')
+            console.error('Flash sale error:', error)
+            toast.error('Failed to process flash sale broadcast')
+        } finally {
+            setIsSendingFlashSale(false)
         }
     }
 
@@ -516,7 +584,7 @@ export default function AdminDashboard() {
                             "rounded-xl font-bold h-10 gap-2 border-2 transition-all",
                             isFlashSale ? "bg-orange-50 border-orange-500 text-orange-600 shadow-orange-500/10" : "bg-white border-gray-100 text-gray-500"
                         )}
-                        onClick={toggleFlashSale}
+                        onClick={() => setIsFlashSaleDialogOpen(true)}
                     >
                         <Zap className={cn("h-4 w-4", isFlashSale && "fill-orange-500")} />
                         {isFlashSale ? "Flash Sale Live" : "Flash Sale"}
@@ -923,6 +991,126 @@ export default function AdminDashboard() {
                             </div>
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Flash Sale Broadcast Dialog */}
+            <Dialog open={isFlashSaleDialogOpen} onOpenChange={setIsFlashSaleDialogOpen}>
+                <DialogContent className="max-w-2xl bg-white rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
+                    <DialogHeader className="p-8 pb-4 bg-orange-50/50">
+                        <DialogTitle className="text-2xl font-black text-orange-600 flex items-center gap-2">
+                            <Zap className="fill-orange-500" /> Flash Sale Broadcast
+                        </DialogTitle>
+                        <DialogDescription className="font-medium text-orange-700/70">
+                            Select customers to notify about the flash sale.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="p-8 pt-4 space-y-6">
+                        {/* Search and Select All */}
+                        <div className="flex items-center gap-4">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                <Input
+                                    placeholder="Search customers by name or phone..."
+                                    className="pl-10 h-10 rounded-xl border-gray-100 bg-gray-50/50 focus:ring-orange-500"
+                                    value={customerSearchQuery}
+                                    onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                                />
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={toggleSelectAll}
+                                className="rounded-xl border-gray-100 text-gray-600 font-bold h-10"
+                            >
+                                {selectedPhones.length === filteredCustomersForFlashSale.length && allCustomers.length > 0 ? "Deselect All" : "Select All"}
+                            </Button>
+                        </div>
+
+                        {/* Customer List */}
+                        <ScrollArea className="h-[350px] rounded-2xl border border-gray-100 p-2 bg-gray-50/30">
+                            <div className="space-y-1">
+                                {allCustomers.length === 0 ? (
+                                    <div className="h-full flex items-center justify-center py-20 text-gray-400 font-medium">
+                                        No customers found.
+                                    </div>
+                                ) : (
+                                    filteredCustomersForFlashSale.map((customer) => (
+                                        <div
+                                            key={customer.id}
+                                            className="flex items-center justify-between p-3 rounded-xl hover:bg-white hover:shadow-sm transition-all group cursor-pointer border border-transparent hover:border-orange-100"
+                                            onClick={() => {
+                                                const phone = customer.phone
+                                                if (!phone) return
+                                                setSelectedPhones(prev => 
+                                                    prev.includes(phone) 
+                                                    ? prev.filter(p => p !== phone) 
+                                                    : [...prev, phone]
+                                                )
+                                            }}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <Checkbox
+                                                    checked={selectedPhones.includes(customer.phone)}
+                                                    onCheckedChange={(checked) => {
+                                                        const phone = customer.phone
+                                                        if (!phone) return
+                                                        if (checked) {
+                                                            setSelectedPhones(prev => prev.includes(phone) ? prev : [...prev, phone])
+                                                        } else {
+                                                            setSelectedPhones(prev => prev.filter(p => p !== phone))
+                                                        }
+                                                    }}
+                                                    className="border-gray-300 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
+                                                    onClick={(e) => e.stopPropagation()} // Prevent double trigger with div
+                                                />
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold text-gray-900 group-hover:text-orange-600 transition-colors">{customer.name || 'Unknown User'}</span>
+                                                    <span className="text-xs text-gray-500 font-medium">{customer.phone}</span>
+                                                </div>
+                                            </div>
+                                            {selectedPhones.includes(customer.phone) && (
+                                                <Badge className="bg-orange-100 text-orange-600 hover:bg-orange-100 border-none font-bold text-[10px]">
+                                                    Selected
+                                                </Badge>
+                                            )}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </ScrollArea>
+
+                        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                            <div className="text-sm font-bold text-gray-500">
+                                {selectedPhones.length} Customers Selected
+                            </div>
+                            <div className="flex gap-3">
+                                <Button variant="ghost" onClick={() => setIsFlashSaleDialogOpen(false)} className="rounded-xl font-bold h-11 px-6">
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={handleSendFlashSale}
+                                    disabled={isSendingFlashSale || selectedPhones.length === 0}
+                                    className={cn(
+                                        "rounded-xl font-bold h-11 px-8 shadow-lg transition-all",
+                                        isFlashSale 
+                                            ? "bg-gray-900 hover:bg-gray-800 text-white shadow-gray-200" 
+                                            : "bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/20"
+                                    )}
+                                >
+                                    {isSendingFlashSale ? (
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-4 w-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                                            Broadcasting...
+                                        </div>
+                                    ) : (
+                                        isFlashSale ? "Deactivate & Notify" : "Activate & Send"
+                                    )}
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>
