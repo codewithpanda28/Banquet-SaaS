@@ -13,32 +13,13 @@ export function useRealtime() {
     // Play premium notification sound
     const playNotificationSound = () => {
         if (!isSoundEnabled) return
-
-        const audioContext = new AudioContext()
-
-        // Create a more pleasant notification sound
-        const playTone = (frequency: number, duration: number, delay: number) => {
-            setTimeout(() => {
-                const oscillator = audioContext.createOscillator()
-                const gainNode = audioContext.createGain()
-
-                oscillator.connect(gainNode)
-                gainNode.connect(audioContext.destination)
-
-                oscillator.frequency.value = frequency
-                oscillator.type = 'sine'
-
-                gainNode.gain.setValueAtTime(0.15, audioContext.currentTime)
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration)
-
-                oscillator.start(audioContext.currentTime)
-                oscillator.stop(audioContext.currentTime + duration)
-            }, delay)
+        try {
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3')
+            audio.volume = 0.5
+            audio.play().catch(e => console.log('🔊 Audio blocked by browser policy'))
+        } catch (err) {
+            console.log('🔊 Audio fail:', err)
         }
-
-        // Pleasant two-tone notification
-        playTone(800, 0.15, 0)
-        playTone(1000, 0.2, 150)
     }
 
     useEffect(() => {
@@ -68,17 +49,21 @@ export function useRealtime() {
                 async (payload: any) => {
                     if (payload.new.restaurant_id !== RESTAURANT_ID) return
 
-                    // Fetch full order to show in toast
-                    const fullOrders = await getActiveOrders()
-                    const newOrder = fullOrders.find(o => o.id === payload.new.id)
-
-                    if (newOrder) {
-                        addOrder(newOrder)
-                        playNotificationSound()
+                    // Fetch full order for Toast info
+                    const fullOrders = await getActiveOrders();
+                    const targetOrder = fullOrders.find(o => o.id === payload.new.id);
+                    
+                    // ONLY show toast for these statuses (BRAND NEW logic)
+                    const APPROVED_STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'served'];
+                    const isStrictlyApproved = APPROVED_STATUSES.includes(payload.new.status);
+                    
+                    if (isStrictlyApproved && targetOrder) {
+                        addOrder(targetOrder);
+                        playNotificationSound();
                         toast.success('🔔 New Order!', {
-                            description: `${newOrder.bill_id} - Table ${newOrder.table_number || 'N/A'}`,
+                            description: `${targetOrder.bill_id} - Table ${targetOrder.restaurant_tables?.table_number || 'N/A'}`,
                             duration: 5000,
-                        })
+                        });
                     }
                 }
             )
@@ -90,30 +75,29 @@ export function useRealtime() {
                     table: 'orders',
                 },
                 async (payload: any) => {
-                    if (payload.new.restaurant_id !== RESTAURANT_ID) return
+                    if (payload.new.restaurant_id !== RESTAURANT_ID) return;
 
-                    // Check if items were added (total increased or updated_at changed significantly)
-                    // We also check if it's not just a status change to 'served/completed'
-                    const isExtraItems =
-                        (payload.new.total > (payload.old?.total || 0)) ||
-                        (payload.new.status === payload.old?.status && payload.new.total === payload.old?.total); // Message might have changed or items updated
+                    const APPROVED_STATUSES = ['pending', 'confirmed', 'preparing', 'ready', 'served'];
+                    const isStrictlyApproved = APPROVED_STATUSES.includes(payload.new.status);
+                    const wasJustApproved = payload.old?.status === 'pending_confirmation' && payload.new.status === 'pending';
 
-                    // Refresh data
-                    fetchOrders()
+                    // Always sync data for update
+                    fetchOrders();
 
-                    // If it's an update to an existing order that's not just a status change
-                    if (payload.new.status !== 'served' && payload.new.status !== 'completed' && payload.new.status !== 'cancelled') {
-                        // Play sound and toast only if total changed or specifically marked as updated
-                        if (payload.new.total > (payload.old?.total || 0)) {
-                            // Find the existing order in store to get table number
-                            const existingOrder = useKitchenStore.getState().orders.find(o => o.id === payload.new.id)
+                    // NO NOTIFICATION if unapproved or cancelled
+                    if (!isStrictlyApproved) return;
 
-                            playNotificationSound()
-                            toast.info('➕ Order Updated: New Items!', {
-                                description: `${existingOrder?.restaurant_tables?.table_number ? `Table ${existingOrder.restaurant_tables.table_number}` : 'Delivery/Takeaway'} (Bill: ${payload.new.bill_id})`,
-                                duration: 8000,
-                            })
-                        }
+                    const totalIncreased = payload.new.total > (payload.old?.total || 0);
+
+                    if (wasJustApproved || totalIncreased) {
+                        // Find matching order in state
+                        const existingOrder = useKitchenStore.getState().orders.find(o => o.id === payload.new.id);
+                        playNotificationSound();
+                        
+                        toast.info(wasJustApproved ? '✅ Order Approved!' : '➕ Items Added!', {
+                            description: `${existingOrder?.restaurant_tables?.table_number ? `Table ${existingOrder.restaurant_tables.table_number}` : 'Delivery/Takeaway'} (Bill: ${payload.new.bill_id})`,
+                            duration: 8000,
+                        });
                     }
                 }
             )
@@ -125,22 +109,23 @@ export function useRealtime() {
                     table: 'order_items',
                 },
                 async (payload: any) => {
-                    // Check if this item belongs to an existing order being tracked
-                    const currentOrders = useKitchenStore.getState().orders
-                    const targetOrder = currentOrders.find(o => o.id === payload.new.order_id)
+                    const currentOrders = useKitchenStore.getState().orders;
+                    const targetOrder = currentOrders.find(o => o.id === payload.new.order_id);
 
-                    if (targetOrder) {
-                        // This is a new item added to an EXISTING order
-                        // If the order is already in "preparing" or "ready", notify specifically
-                        playNotificationSound()
+                    // WORKABLE whitelisted parent status
+                    const WORKABLE = ['pending', 'confirmed', 'preparing', 'ready', 'served'];
+                    const isOrderWorkable = targetOrder && WORKABLE.includes(targetOrder.status);
+
+                    if (isOrderWorkable) {
+                        playNotificationSound();
                         toast.error('🔥 EXTRA ITEM ADDED!', {
-                            description: `${payload.new.item_name} added to ${targetOrder.restaurant_tables?.table_number ? `Table ${targetOrder.restaurant_tables.table_number}` : 'Order'}`,
-                            duration: 10000,
+                            description: `${payload.new.item_name} added to Table ${targetOrder.restaurant_tables?.table_number || 'N/A'}`,
+                            duration: 12000,
                             style: { background: '#ef4444', color: '#fff', border: 'none' }
-                        })
+                        });
                     }
 
-                    fetchOrders()
+                    fetchOrders();
                 }
             )
             .on(
@@ -158,8 +143,11 @@ export function useRealtime() {
                 setConnectionStatus(status === 'SUBSCRIBED')
             })
 
-        // Polling backup (30 seconds)
-        const interval = setInterval(fetchOrders, 30000)
+        // ULTRA-RESPONSIVE POLLING BACKUP (1.5 seconds)
+        const interval = setInterval(() => {
+            console.log('🥘 [Kitchen] Heartbeat Sync:', new Date().toLocaleTimeString());
+            fetchOrders();
+        }, 1500);
 
         return () => {
             if (fetchTimer) clearTimeout(fetchTimer)

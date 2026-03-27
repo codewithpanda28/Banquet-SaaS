@@ -25,24 +25,26 @@ export default function TrackOrderPage() {
     const [expandDetail, setExpandDetail] = useState(false)
     const [showConfetti, setShowConfetti] = useState(false)
 
-    // Sounds
-    const [playConfirmed] = useSound(ORDER_STATUS_SOUND.confirmed)
-    const [playPreparing] = useSound(ORDER_STATUS_SOUND.preparing)
-    const [playReady] = useSound(ORDER_STATUS_SOUND.ready)
-    const [playServed] = useSound(ORDER_STATUS_SOUND.served)
-    const [playCancelled] = useSound(ORDER_STATUS_SOUND.cancelled)
+    // Sounds Helper
+    const playStatusSound = (url: string) => {
+        try {
+            const audio = new Audio(url)
+            audio.play().catch(() => {})
+        } catch (e) {}
+    }
 
     useEffect(() => {
         if (order?.status) {
+            console.log('💎 [Customer Tracking] Status Match:', order.status)
             switch (order.status) {
-                case 'confirmed': playConfirmed(); break;
-                case 'preparing': playPreparing(); break;
-                case 'ready': playReady(); break;
-                case 'served': playServed(); setShowConfetti(true); break;
-                case 'cancelled': playCancelled(); break;
+                case 'confirmed': playStatusSound('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'); break; 
+                case 'preparing': playStatusSound('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'); break;
+                case 'ready': playStatusSound('https://assets.mixkit.co/active_storage/sfx/1063/1063-preview.mp3'); break; // Crisper Hotel Bell
+                case 'served': playStatusSound('https://assets.mixkit.co/active_storage/sfx/1063/1063-preview.mp3'); setShowConfetti(true); break;
+                case 'cancelled': playStatusSound('https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3'); break; // Error Buzz
             }
         }
-    }, [order?.status, playConfirmed, playPreparing, playReady, playServed, playCancelled])
+    }, [order?.status])
 
     if (loading) {
         return (

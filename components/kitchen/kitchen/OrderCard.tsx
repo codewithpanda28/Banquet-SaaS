@@ -164,8 +164,15 @@ export default function OrderCard({ order, onViewDetails }: OrderCardProps) {
                                     </Badge>
                                 )}
                             </div>
-                            <div className="font-mono text-xs text-slate-500 font-semibold">
-                                #{order.bill_id}
+                            <div className="flex flex-col">
+                                <span className="font-mono text-xs text-slate-500 font-semibold">
+                                    #{order.bill_id}
+                                </span>
+                                {order.notes && (
+                                    <span className="text-[10px] font-black text-slate-400 leading-none mt-0.5">
+                                        {order.notes.includes('Approved') ? order.notes : null}
+                                    </span>
+                                )}
                             </div>
                         </div>
                     </div>

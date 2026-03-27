@@ -21,7 +21,7 @@ export async function getActiveOrders() {
                 restaurant_tables!table_id(id, table_number)
             `)
             .eq('restaurant_id', rid)
-            .in('status', ['pending', 'confirmed', 'preparing', 'ready', 'served'])
+            .in('status', ['pending_confirmation', 'pending', 'confirmed', 'preparing', 'ready', 'served'])
             .order('created_at', { ascending: false });
 
         if (error) {
@@ -38,7 +38,7 @@ export async function getActiveOrders() {
                 .from('orders')
                 .select('*, order_items(*)')
                 .eq('restaurant_id', rid)
-                .in('status', ['pending', 'confirmed', 'preparing', 'ready', 'served'])
+                .in('status', ['pending_confirmation', 'pending', 'confirmed', 'preparing', 'ready', 'served'])
                 .order('created_at', { ascending: false });
                 
             if (fallbackError) {

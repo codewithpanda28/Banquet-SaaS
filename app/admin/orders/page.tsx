@@ -43,62 +43,91 @@ export default function OrdersPage() {
     const [orderTypeFilter, setOrderTypeFilter] = useState<string>('all')
     const [activeTab, setActiveTab] = useState('active')
     const [processingPayment, setProcessingPayment] = useState(false)
+    const [selectedApproval, setSelectedApproval] = useState<any>(null)
+    const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false)
+    const [isProcessingApproval, setIsProcessingApproval] = useState(false)
 
     useEffect(() => {
         fetchOrders()
 
         // Realtime Subscription
 
-            const channel = supabase.channel('admin-orders-realtime')
-                .on(
-                    'postgres_changes',
-                    {
-                        event: '*',
-                        schema: 'public',
-                        table: 'orders',
-                    },
-                    (payload: any) => {
-                        console.log('🔄 [ADMIN ORDERS] Order change:', payload.eventType)
-                        const targetOrder = payload.new || payload.old
-                        if (targetOrder && targetOrder.restaurant_id && targetOrder.restaurant_id !== RESTAURANT_ID) return
+        const channel = supabase.channel('admin-orders-live')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'orders',
+                },
+                async (payload: any) => {
+                    console.log('🔄 [REALTIME] Orders update:', payload.eventType, payload.new?.status)
+                    const targetOrder = payload.new || payload.old
+                    if (!targetOrder || (targetOrder.restaurant_id && targetOrder.restaurant_id !== RESTAURANT_ID)) return
 
-                        if (payload.eventType === 'INSERT') {
-                            toast.success('New Order Received! 🔔')
+                    if (payload.eventType === 'INSERT' && targetOrder.status === 'pending_confirmation') {
+                        // Fetch full details and show popup
+                        const { data: fullOrder } = await supabase
+                            .from('orders')
+                            .select('*, customers(name, phone), order_items(*), restaurant_tables(table_number)')
+                            .eq('id', targetOrder.id)
+                            .single()
+
+                        if (fullOrder) {
+                            setSelectedApproval(fullOrder)
+                            setIsApprovalDialogOpen(true)
                         }
 
-                        // Instant fetch for "Live" feel
-                        fetchOrders(false)
+                        toast.error('NEW ORDER WAITING FOR CONFIRMATION! 🔔', {
+                            duration: 10000,
+                            position: 'top-center'
+                        })
+                    }
 
-                        if (selectedOrder && (payload.new as any)?.id === selectedOrder.id) {
-                            handleViewOrder(selectedOrder.id)
+                    if (payload.eventType === 'UPDATE') {
+                        // IF ORDER WAS HANDLED ELSEWHERE, CLOSE MODAL
+                        if (targetOrder.status !== 'pending_confirmation') {
+                            setSelectedApproval((prev: any) => {
+                                if (prev?.id === targetOrder.id) {
+                                    setIsApprovalDialogOpen(false)
+                                    return null
+                                }
+                                return prev
+                            })
                         }
                     }
-                )
-                .on(
-                    'postgres_changes',
-                    {
-                        event: '*',
-                        schema: 'public',
-                        table: 'order_items',
-                    },
-                    (payload: any) => {
-                        console.log('🔄 [ADMIN ORDERS] Item change:', payload.eventType)
-                        fetchOrders(false)
-                        
-                        if (selectedOrder && (payload.new as any)?.order_id === selectedOrder.id) {
-                            handleViewOrder(selectedOrder.id)
-                        }
+
+                    // Instant fetch for "Live" feel
+                    fetchOrders(false)
+
+                    if (selectedOrder && (payload.new as any)?.id === selectedOrder.id) {
+                        handleViewOrder(selectedOrder.id)
                     }
-                )
-                .subscribe((status) => {
-                console.log('Admin Realtime Status:', status)
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'order_items',
+                },
+                (payload: any) => {
+                    fetchOrders(false)
+                    if (selectedOrder && (payload.new as any)?.order_id === selectedOrder.id) {
+                        handleViewOrder(selectedOrder.id)
+                    }
+                }
+            )
+            .subscribe((status) => {
+                console.log('📡 [REALTIME] Orders Page Status:', status)
                 if (status === 'SUBSCRIBED') {
-                    toast.success('Live Updates Active 🟢', { id: 'realtime-status', duration: 2000 })
+                    // toast.success('Live Updates Active 🟢', { id: 'realtime-status', duration: 2000 })
                 }
             })
 
-        // Polling fallback every 30s
-        const interval = setInterval(() => fetchOrders(false), 30000)
+        // ULTRA-RESPONSIVE POLLING FALLBACK (2s)
+        const interval = setInterval(() => fetchOrders(false), 2000)
 
         return () => {
             supabase.removeChannel(channel)
@@ -126,6 +155,24 @@ export default function OrdersPage() {
 
             if (error) throw error
             setOrders(data || [])
+
+            // AUTO-OPEN POPUP FOR PENDING APPROVALS
+            const firstPending = data?.find(o => o.status === 'pending_confirmation')
+            if (firstPending && !selectedOrder && !isApprovalDialogOpen) {
+                // Fetch full details and show popup
+                (async () => {
+                    const { data: fullOrder } = await supabase
+                        .from('orders')
+                        .select('*, customers(name, phone), order_items(*), restaurant_tables(table_number)')
+                        .eq('id', firstPending.id)
+                        .single()
+
+                    if (fullOrder) {
+                        setSelectedApproval(fullOrder)
+                        setIsApprovalDialogOpen(true)
+                    }
+                })()
+            }
         } catch (error) {
             console.error('Error fetching orders:', error)
         } finally {
@@ -138,7 +185,7 @@ export default function OrdersPage() {
 
         if (activeTab === 'active') {
             filtered = filtered.filter((o) =>
-                ['pending', 'confirmed', 'preparing', 'ready', 'served'].includes(o.status)
+                ['pending_confirmation', 'pending', 'confirmed', 'preparing', 'ready', 'served'].includes(o.status)
             )
         } else if (activeTab === 'completed') {
             filtered = filtered.filter((o) => o.status === 'completed')
@@ -183,6 +230,42 @@ export default function OrdersPage() {
             console.error('❌ [ORDERS PAGE] Error fetching order details:', error)
             toast.error('Failed to load order details')
         }
+    }
+
+    async function handleUpdateStatus(orderId: string, newStatus: string, notes?: string) {
+        try {
+            setIsProcessingApproval(true)
+            const updatePayload: any = {
+                status: newStatus,
+                updated_at: new Date().toISOString()
+            }
+            if (notes) updatePayload.notes = notes
+
+            const { error } = await supabase
+                .from('orders')
+                .update(updatePayload)
+                .eq('id', orderId)
+
+            if (error) throw error
+
+            toast.success(`Order status updated to ${newStatus.toUpperCase()}`)
+            setSelectedOrder(null)
+            setIsApprovalDialogOpen(false)
+            fetchOrders()
+        } catch (error) {
+            console.error('Error updating status:', error)
+            toast.error('Failed to update status')
+        } finally {
+            setIsProcessingApproval(false)
+        }
+    }
+
+    async function handleAcceptOrder(orderId: string) {
+        await handleUpdateStatus(orderId, 'pending', 'Approved by Admin')
+    }
+
+    async function handleRejectOrder(orderId: string) {
+        await handleUpdateStatus(orderId, 'cancelled', 'Rejected by Admin')
     }
 
     function handlePrintOrder(order: any) {
@@ -326,7 +409,7 @@ export default function OrdersPage() {
             })
 
             toast.success(`Payment marked as ${method.toUpperCase()} & Message Sent 🚀`)
-            
+
             // 3. Mark Table as Available and Clear Bookings if it's a Dine In order
             if (selectedOrder.table_id) {
                 // Set table back to available
@@ -357,6 +440,7 @@ export default function OrdersPage() {
 
     const getStatusBadge = (status: string) => {
         const styles: Record<string, string> = {
+            pending_confirmation: 'bg-red-500/10 text-red-600 border-red-200/50 dark:text-red-400 animate-pulse',
             pending: 'bg-yellow-500/10 text-yellow-600 border-yellow-200/50 dark:text-yellow-400',
             confirmed: 'bg-blue-500/10 text-blue-600 border-blue-200/50 dark:text-blue-400',
             preparing: 'bg-orange-500/10 text-orange-600 border-orange-200/50 dark:text-orange-400',
@@ -434,7 +518,7 @@ export default function OrdersPage() {
                 <div className="flex justify-center mb-6">
                     <TabsList className="bg-gray-100 p-1 rounded-full border border-gray-200">
                         <TabsTrigger value="active" className="rounded-full px-6 data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm transition-all text-gray-500 font-medium">
-                            Active Orders <Badge className="ml-2 bg-green-100 text-green-700 hover:bg-green-200 border-0">{orders.filter((o) => ['pending', 'confirmed', 'preparing', 'ready', 'served'].includes(o.status)).length}</Badge>
+                            Active Orders <Badge className="ml-2 bg-green-100 text-green-700 hover:bg-green-200 border-0">{orders.filter((o) => ['pending_confirmation', 'pending', 'confirmed', 'preparing', 'ready', 'served'].includes(o.status)).length}</Badge>
                         </TabsTrigger>
                         <TabsTrigger value="completed" className="rounded-full px-6 data-[state=active]:bg-white data-[state=active]:text-green-700 data-[state=active]:shadow-sm transition-all text-gray-500 font-medium">
                             Completed <span className="ml-2 opacity-70 text-xs bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full">{orders.filter((o) => o.status === 'completed').length}</span>
@@ -465,6 +549,11 @@ export default function OrdersPage() {
                                     <div className="flex-1 space-y-3">
                                         <div className="flex items-center gap-3">
                                             <h3 className="text-2xl font-black tracking-tight text-gray-900">{order.bill_id}</h3>
+                                            {order.status === 'pending_confirmation' && (
+                                                <Badge className="bg-red-600 text-white animate-bounce text-[10px] font-black">
+                                                    NEW ACTION REQUIRED
+                                                </Badge>
+                                            )}
                                             {getStatusBadge(order.status)}
                                             <Badge variant="secondary" className="bg-gray-100 text-gray-700 border-0">
                                                 {order.order_type === 'dine_in' && <Utensils className="h-3 w-3 mr-1" />}
@@ -672,26 +761,115 @@ export default function OrdersPage() {
                                         Payment Completed {selectedOrder.payment_method ? `via ${selectedOrder.payment_method.toUpperCase()}` : ''}
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <Button
-                                            className="h-11 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm"
-                                            onClick={() => handlePayment('cash')}
-                                            disabled={processingPayment}
-                                        >
-                                            <DollarSign className="mr-2 h-4 w-4" /> Collect Cash
-                                        </Button>
-                                        <Button
-                                            className="h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm"
-                                            onClick={() => handlePayment('upi')}
-                                            disabled={processingPayment}
-                                        >
-                                            <Smartphone className="mr-2 h-4 w-4" /> Collect UPI
-                                        </Button>
+                                    <div className="flex flex-col gap-3">
+                                        {selectedOrder.status === 'pending_confirmation' ? (
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <Button
+                                                    className="h-11 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm"
+                                                    onClick={() => handleAcceptOrder(selectedOrder.id)}
+                                                    disabled={processingPayment}
+                                                >
+                                                    <CheckCircle2 className="mr-2 h-4 w-4" /> Accept Order
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    className="h-11 rounded-xl border-red-200 text-red-600 hover:bg-red-50 font-bold shadow-sm"
+                                                    onClick={() => handleRejectOrder(selectedOrder.id)}
+                                                    disabled={processingPayment}
+                                                >
+                                                    <XCircle className="mr-2 h-4 w-4" /> Reject Order
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <Button
+                                                    className="h-11 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm"
+                                                    onClick={() => handlePayment('cash')}
+                                                    disabled={processingPayment}
+                                                >
+                                                    <DollarSign className="mr-2 h-4 w-4" /> Collect Cash
+                                                </Button>
+                                                <Button
+                                                    className="h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm"
+                                                    onClick={() => handlePayment('upi')}
+                                                    disabled={processingPayment}
+                                                >
+                                                    <Smartphone className="mr-2 h-4 w-4" /> Collect UPI
+                                                </Button>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {/* NEW: Automatic Approval Popup */}
+            <Dialog open={isApprovalDialogOpen} onOpenChange={setIsApprovalDialogOpen}>
+                <DialogContent className="sm:max-w-[500px] border-none p-0 overflow-hidden shadow-2xl rounded-[2rem]">
+                    <div className="bg-red-600 p-8 text-white">
+                        <div className="flex justify-between items-start mb-4">
+                            <div className="bg-white/20 p-3 rounded-2xl">
+                                <ShoppingBag className="h-6 w-6" />
+                            </div>
+                            <Badge className="bg-white/20 text-white border-0 font-bold px-3 py-1 uppercase tracking-wider">#{selectedApproval?.bill_id}</Badge>
+                        </div>
+                        <DialogTitle className="text-3xl font-black mb-2">New Order Alert!</DialogTitle>
+                        <p className="text-red-100 font-medium opacity-90">Please confirm this order to send it to the kitchen.</p>
+                    </div>
+
+                    <div className="p-8 space-y-6">
+                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                            <div>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Customer</p>
+                                <p className="font-bold text-gray-900">{selectedApproval?.customers?.name || 'Walk-in'}</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Table</p>
+                                <p className="font-bold text-gray-900">T{selectedApproval?.restaurant_tables?.table_number || 'N/A'}</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">Items</p>
+                            <div className="max-h-[200px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                {selectedApproval?.order_items?.map((item: any) => (
+                                    <div key={item.id} className="flex justify-between items-center p-3 bg-white border border-gray-100 rounded-xl">
+                                        <div className="flex items-center gap-3">
+                                            <span className="h-6 w-6 bg-red-50 text-red-600 rounded-full flex items-center justify-center text-[10px] font-black">{item.quantity}</span>
+                                            <span className="text-sm font-bold text-gray-800">{item.item_name}</span>
+                                        </div>
+                                        <span className="text-sm font-black text-gray-900">₹{item.total?.toFixed(2)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                            <span className="text-lg font-black text-gray-900">Grand Total</span>
+                            <span className="text-2xl font-black text-red-600">₹{selectedApproval?.total?.toFixed(2)}</span>
+                        </div>
+                    </div>
+
+                    <div className="p-8 pt-0 grid grid-cols-2 gap-4">
+                        <Button
+                            className="h-14 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-black text-lg shadow-lg shadow-green-600/20"
+                            onClick={() => handleAcceptOrder(selectedApproval.id)}
+                            disabled={isProcessingApproval}
+                        >
+                            {isProcessingApproval ? '...' : 'ACCEPT'}
+                        </Button>
+                        <Button
+                            variant="outline"
+                            className="h-14 rounded-2xl border-gray-200 text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 font-bold"
+                            onClick={() => handleRejectOrder(selectedApproval.id)}
+                            disabled={isProcessingApproval}
+                        >
+                            REJECT
+                        </Button>
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

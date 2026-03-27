@@ -26,7 +26,7 @@ export async function GET(request: Request) {
         if (join === 'false') {
             return NextResponse.json({ order: null })
         }
-        
+
         const rid = restaurantId === 'null' ? null : restaurantId
         const tid = (tableId === 'null' || !tableId) ? null : tableId
         const cid = (customerId === 'null' || !customerId) ? null : customerId

@@ -293,13 +293,13 @@ export default function CheckoutPage() {
                         // However, we might need to store the discount value.
                         // Let's increment discount if any.
                         discount: (discount || 0), // This might need to check existing discount, but schema doesn't seem to fetch it above easily.
-                        // Status logic: Move served/completed orders back to pending for new items
-                        // Keep preparing/ready orders in same status (kitchen is actively working)
-                        status: (existingStatus === 'served' || existingStatus === 'completed')
-                            ? 'pending'  // New items added to completed order - restart kitchen flow
-                            : (existingStatus === 'pending' || existingStatus === 'confirmed')
-                                ? 'pending'  // Keep pending
-                                : existingStatus,  // Keep preparing/ready as-is
+                        // SMART STATUS LOGIC: 
+                        // A. If NOT yet approved (pending_confirmation) -> Stay pending_confirmation
+                        // B. If ALREADY APPROVED (confirmed, preparing, etc) -> GO DIRECT (Skip Admin)
+                        // C. If previous items were 'served', move back to 'confirmed' to alert kitchen
+                        status: (existingStatus === 'pending_confirmation' || existingStatus === 'completed' || existingStatus === 'cancelled')
+                            ? 'pending_confirmation'  // New or Not Yet Approved session
+                            : (existingStatus === 'served' ? 'confirmed' : existingStatus), // Approved session -> Direct to Kitchen
                         payment_status: 'pending',
                         updated_at: new Date().toISOString()
                     })
@@ -321,7 +321,7 @@ export default function CheckoutPage() {
                     customer_id: customerId,
                     table_id: resolvedTableId,
                     order_type: orderType || 'dine_in',
-                    status: 'pending',
+                    status: 'pending_confirmation',
                     payment_status: 'pending',
                     payment_method: paymentMethod,
                     subtotal: parseFloat(subtotal.toString()) || 0,

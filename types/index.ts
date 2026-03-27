@@ -1,5 +1,5 @@
 export type OrderType = 'dine_in' | 'take_away' | 'home_delivery';
-export type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'ready' | 'served' | 'completed' | 'cancelled';
+export type OrderStatus = 'pending_confirmation' | 'pending' | 'confirmed' | 'preparing' | 'ready' | 'served' | 'completed' | 'cancelled';
 export type PaymentStatus = 'pending' | 'paid';
 export type PaymentMethod = 'cash' | 'upi';
 export type TableStatus = 'available' | 'occupied' | 'reserved';
@@ -113,6 +113,7 @@ export interface Order {
     restaurant_tables?: {
         table_number: number;
     };
+    notes?: string | null;
 }
 
 export interface OrderItem {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import {
     Activity,
@@ -58,7 +58,7 @@ export default function AdminDashboard() {
         totalOrders: 0,
         totalCustomers: 0,
         peakHours: [] as number[],
-        kitchenCounts: { pending: 0, preparing: 0, ready: 0, cancelled: 0, completed: 0 }
+        kitchenCounts: { pending_confirmation: 0, pending: 0, preparing: 0, ready: 0, cancelled: 0, completed: 0 }
     })
     const [recentOrders, setRecentOrders] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
@@ -68,7 +68,10 @@ export default function AdminDashboard() {
     const [range, setRange] = useState<'today' | 'week' | 'month'>('today')
     const [isFlashSale, setIsFlashSale] = useState(false)
     const [generatingReport, setGeneratingReport] = useState(false)
-    
+    const [selectedApproval, setSelectedApproval] = useState<any>(null)
+    const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false)
+    const [isProcessingApproval, setIsProcessingApproval] = useState(false)
+
     // Flash Sale Broadcast States
     const [isFlashSaleDialogOpen, setIsFlashSaleDialogOpen] = useState(false)
     const [allCustomers, setAllCustomers] = useState<any[]>([])
@@ -77,9 +80,9 @@ export default function AdminDashboard() {
     const [isSendingFlashSale, setIsSendingFlashSale] = useState(false)
 
     // Filtered customers for flash sale dialog
-    const filteredCustomersForFlashSale = allCustomers.filter(c => 
-        (c.name?.toLowerCase().includes(customerSearchQuery.toLowerCase()) || 
-         c.phone?.includes(customerSearchQuery))
+    const filteredCustomersForFlashSale = allCustomers.filter(c =>
+    (c.name?.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
+        c.phone?.includes(customerSearchQuery))
     )
 
     const toggleSelectAll = () => {
@@ -91,6 +94,17 @@ export default function AdminDashboard() {
     }
 
     // Helper to robustly parse dates primarily from UTC
+    // --- GLOBAL ALERT SYSTEM ---
+    const playNotificationSound = useCallback(() => {
+        try {
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3')
+            audio.volume = 0.5
+            audio.play().catch(e => console.log('🔊 Audio blocked by browser policy'))
+        } catch (err) {
+            console.log('🔊 Audio fail:', err)
+        }
+    }, [])
+
     const parseDate = (dateString: string) => {
         if (!dateString) return new Date()
         // If string comprises T but no Z or +, append Z to force UTC parsing
@@ -132,7 +146,7 @@ export default function AdminDashboard() {
                 .from('orders')
                 .select('*', { count: 'exact', head: true })
                 .eq('restaurant_id', RESTAURANT_ID)
-                .in('status', ['pending', 'confirmed', 'preparing', 'ready', 'served'])
+                .in('status', ['pending_confirmation', 'pending', 'confirmed', 'preparing', 'ready', 'served'])
 
             // Fetch Total Orders in Range
             const { count: totalOrders } = await supabase
@@ -153,9 +167,10 @@ export default function AdminDashboard() {
                 .from('orders')
                 .select('status')
                 .eq('restaurant_id', RESTAURANT_ID)
-                .in('status', ['pending', 'preparing', 'ready', 'cancelled', 'completed'])
+                .in('status', ['pending_confirmation', 'pending', 'preparing', 'ready', 'cancelled', 'completed'])
 
             const counts = {
+                pending_confirmation: statusCounts?.filter(o => o.status === 'pending_confirmation').length || 0,
                 pending: statusCounts?.filter(o => o.status === 'pending').length || 0,
                 preparing: statusCounts?.filter(o => o.status === 'preparing').length || 0,
                 ready: statusCounts?.filter(o => o.status === 'ready').length || 0,
@@ -171,6 +186,48 @@ export default function AdminDashboard() {
                 totalCustomers: totalCustomers || 0,
                 kitchenCounts: counts
             }))
+
+            // --- AUTO-POPUP LOGIC (RELIABLE SYNC) ---
+            const currentSelectedObj = selectedApprovalRef.current
+            const currentIsOpen = isApprovalOpenRef.current
+
+            if (counts.pending_confirmation > 0 && !selectedOrder && !currentIsOpen) {
+                // Fetch first pending confirmation order details
+                const { data: pendingOrder } = await supabase
+                    .from('orders')
+                    .select('*, customers(name, phone), order_items(*), restaurant_tables(table_number)')
+                    .eq('restaurant_id', RESTAURANT_ID)
+                    .eq('status', 'pending_confirmation')
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .single()
+
+                if (pendingOrder) {
+                    console.log('📢 [Admin] Found pending order, opening popup:', pendingOrder.bill_id)
+                    setSelectedApproval(pendingOrder)
+                    setIsApprovalDialogOpen(true)
+                    playNotificationSound() // Also play sound on polling discovery
+                }
+            } else if (counts.pending_confirmation === 0 && currentIsOpen) {
+                // No more pending orders - close any open approval dialog automagically
+                console.log('🧹 [Admin] No more pending orders, closing popup.')
+                setIsApprovalDialogOpen(false)
+                setSelectedApproval(null)
+            } else if (currentIsOpen && currentSelectedObj) {
+                // If popup is open, check if THE SPECIFIC ORDER is still pending
+                const { data: fresh } = await supabase
+                    .from('orders')
+                    .select('status')
+                    .eq('id', currentSelectedObj.id)
+                    .maybeSingle();
+                
+                if (fresh && fresh.status !== 'pending_confirmation') {
+                    console.log('🧹 [Admin] Current order handled elsewhere, closing popup.')
+                    setIsApprovalDialogOpen(false)
+                    setSelectedApproval(null)
+                }
+            }
+            // --------------------------------
 
             // Fetch Recent Orders - Simplified select for maximum robustness
             const { data: recent, error: recentError } = await supabase
@@ -224,6 +281,31 @@ export default function AdminDashboard() {
         }
     }, [])
 
+    const handleApproveOrder = async (orderId: string, accept: boolean) => {
+        try {
+            setIsProcessingApproval(true)
+            const { error } = await supabase
+                .from('orders')
+                .update({
+                    status: accept ? 'pending' : 'cancelled',
+                    notes: accept ? 'Approved by Admin' : 'Rejected by Admin',
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', orderId)
+
+            if (error) throw error
+
+            toast.success(accept ? 'Order Accepted!' : 'Order Rejected')
+            setIsApprovalDialogOpen(false)
+            fetchDashboardData(range)
+        } catch (error) {
+            console.error('Approval error:', error)
+            toast.error('Failed to update order')
+        } finally {
+            setIsProcessingApproval(false)
+        }
+    }
+
     const fetchCustomersForFlashSale = useCallback(async () => {
         try {
             const { data, error } = await supabase
@@ -231,7 +313,7 @@ export default function AdminDashboard() {
                 .select('id, name, phone')
                 .eq('restaurant_id', RESTAURANT_ID)
                 .order('name', { ascending: true })
-            
+
             if (error) throw error
             setAllCustomers(data || [])
         } catch (error) {
@@ -254,11 +336,11 @@ export default function AdminDashboard() {
         try {
             setIsSendingFlashSale(true)
             const nextState = !isFlashSale
-            
-            const message = nextState 
-                ? "🔥 *Flash Sale Active!* 20% Off on all items for next 2 hours. Start ordering now!" 
+
+            const message = nextState
+                ? "🔥 *Flash Sale Active!* 20% Off on all items for next 2 hours. Start ordering now!"
                 : "Flash Sale has ended."
-            
+
             // Trigger all webhooks in parallel for speed
             const broadcastPromises = selectedPhones.map(async (phone) => {
                 let formattedPhone = phone.replace(/[^0-9]/g, '')
@@ -279,9 +361,9 @@ export default function AdminDashboard() {
 
             // Also update local state
             setIsFlashSale(nextState)
-            
-            toast.success(nextState 
-                ? `Flash Sale Activated & Sent to ${successCount} customers! 🚀` 
+
+            toast.success(nextState
+                ? `Flash Sale Activated & Sent to ${successCount} customers! 🚀`
                 : `Flash Sale Deactivated & Notified ${successCount} customers`
             )
             setIsFlashSaleDialogOpen(false)
@@ -298,28 +380,29 @@ export default function AdminDashboard() {
         try {
             setGeneratingReport(true)
             const avgTicket = stats.totalOrders > 0 ? (stats.totalRevenue / stats.totalOrders).toFixed(2) : '0'
-            const currentHour = new Array(24).fill(0).map((_, i) => ({h: i, count: stats.peakHours[i]}))
+            const currentHour = new Array(24).fill(0).map((_, i) => ({ h: i, count: stats.peakHours[i] }))
             const busiestHour = currentHour.reduce((prev, current) => (prev.count > current.count) ? prev : current).h
-            
-            const reportMsg = 
+
+            const reportMsg =
                 `*--- TASTYBYTES EXECUTIVE REPORT ---*\n` +
                 `Date: ${new Date().toLocaleDateString()}\n` +
                 `Time: ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n\n` +
-                
+
                 `*FINANCIAL SUMMARY*\n` +
                 `- Total Revenue: INR ${stats.totalRevenue.toLocaleString()}\n` +
                 `- Total Orders: ${stats.totalOrders}\n\n` +
-                
+
                 `*KITCHEN & OPERATIONS*\n` +
                 `- Orders Completed: ${stats.kitchenCounts.completed}\n` +
                 `- Currently Preparing: ${stats.kitchenCounts.preparing}\n` +
                 `- Ready for Service: ${stats.kitchenCounts.ready}\n` +
-                `- Pending Approval: ${stats.kitchenCounts.pending}\n` +
+                `- Pending Kitchen: ${stats.kitchenCounts.pending}\n` +
+                `- Waiting Approval: ${stats.kitchenCounts.pending_confirmation}\n` +
                 `- Cancelled Orders: ${stats.kitchenCounts.cancelled}\n\n` +
-                
+
                 `*INSIGHTS*\n` +
                 `- Peak Business Hour: ${busiestHour}:00 - ${busiestHour + 1}:00\n\n` +
-                
+
                 `--------------------------------\n` +
                 `_Sent via Restaurant Admin Dashboard_`
 
@@ -344,11 +427,31 @@ export default function AdminDashboard() {
         }
     }
 
-    useEffect(() => {
-        fetchDashboardData(range)
+    // --- BULLETPROOF REAL-TIME SYNC ---
+    const fetchRef = useRef(fetchDashboardData)
+    const refreshRef = useRef(refreshSelectedOrder)
+    const rangeRef = useRef(range)
+    const selOrderRef = useRef(selectedOrder)
+    const isApprovalOpenRef = useRef(isApprovalDialogOpen)
+    const selectedApprovalRef = useRef(selectedApproval)
 
-        // Real-time subscription for orders
-        const channel = supabase.channel('admin-home-realtime')
+    // Sync refs to avoid stale closures in stable effects
+    useEffect(() => {
+        fetchRef.current = fetchDashboardData
+        refreshRef.current = refreshSelectedOrder
+        rangeRef.current = range
+        selOrderRef.current = selectedOrder
+        isApprovalOpenRef.current = isApprovalDialogOpen
+        selectedApprovalRef.current = selectedApproval
+    }, [fetchDashboardData, refreshSelectedOrder, range, selectedOrder, isApprovalDialogOpen, selectedApproval])
+
+    useEffect(() => {
+        // Initial Fetch
+        fetchRef.current(rangeRef.current)
+
+        console.log('📡 [LIVE] Initializing Stable Real-time Channel...')
+        
+        const channel = supabase.channel('staff-unified-sync')
             .on(
                 'postgres_changes',
                 {
@@ -356,21 +459,57 @@ export default function AdminDashboard() {
                     schema: 'public',
                     table: 'orders',
                 },
-                (payload: any) => {
-                    console.log('🔄 [ADMIN HOME] Order change:', payload.eventType)
+                async (payload: any) => {
+                    console.log('🔄 [LIVE] Order Event:', payload.eventType, payload.new?.status)
                     const targetOrder = payload.new || payload.old
-                    if (targetOrder && targetOrder.restaurant_id && targetOrder.restaurant_id !== RESTAURANT_ID) return
+                    if (!targetOrder) return
+                    
+                    // Resilient Restaurant ID Check
+                    const orderRid = (targetOrder.restaurant_id || '').toString().toLowerCase()
+                    const myRid = RESTAURANT_ID.toString().toLowerCase()
+                    if (orderRid && orderRid !== myRid) return
 
-                    if (payload.eventType === 'INSERT') {
-                        toast.success('New Order Received! 🔔')
+                    // A. Handle Brand New Orders (INSERT)
+                    if (payload.eventType === 'INSERT' && targetOrder.status === 'pending_confirmation') {
+                        console.log('🔥 [LIVE] NEW ORDER RECEIVED! Triggering Alert...')
+                        playNotificationSound()
+
+                        // Fetch full data to show details
+                        const { data: full } = await supabase
+                            .from('orders')
+                            .select('*, customers(name, phone), order_items(*), restaurant_tables(table_number)')
+                            .eq('id', targetOrder.id)
+                            .single()
+                        
+                        if (full) {
+                            setSelectedApproval(full)
+                            toast.error('NEW ORDER RECEIVED! 🔔', { duration: 15000 })
+                            setIsApprovalDialogOpen(true)
+                        }
                     }
 
-                    // Instant fetch for "Live" feel
-                    fetchDashboardData(range)
+                    // B. Handle Cross-Dashboard Sync (UPDATE)
+                    if (payload.eventType === 'UPDATE') {
+                        // If order handled elsewhere, close popup
+                        if (targetOrder.status && targetOrder.status !== 'pending_confirmation') {
+                            setSelectedApproval((prev: any) => {
+                                if (prev?.id === targetOrder.id) {
+                                    console.log('🧹 [LIVE] Closing handled modal')
+                                    setIsApprovalDialogOpen(false)
+                                    return null
+                                }
+                                return prev
+                            })
+                        }
 
-                    if (selectedOrder && (payload.new as any)?.id === selectedOrder.id) {
-                        refreshSelectedOrder(selectedOrder.id)
+                        // Update current view if relevant
+                        if (selOrderRef.current?.id === targetOrder.id) {
+                            refreshRef.current(targetOrder.id)
+                        }
                     }
+
+                    // Always Refresh stats for live feeling
+                    fetchRef.current(rangeRef.current)
                 }
             )
             .on(
@@ -380,23 +519,26 @@ export default function AdminDashboard() {
                     schema: 'public',
                     table: 'order_items',
                 },
-                (payload) => {
-                    fetchDashboardData(range)
-                    if (selectedOrder) {
-                        refreshSelectedOrder(selectedOrder.id)
+                () => {
+                    fetchRef.current(rangeRef.current)
+                    if (selOrderRef.current) {
+                        refreshRef.current(selOrderRef.current.id)
                     }
                 }
             )
             .subscribe((status) => {
-                if (status === 'SUBSCRIBED') {
-                    // console.log('🟢 Realtime Connected')
-                }
+                console.log('📡 [LIVE] Real-time Status:', status)
             })
 
+        // ULTRA-RESPONSIVE POLLING FALLBACK (2s)
+        const interval = setInterval(() => fetchRef.current(rangeRef.current), 2000)
+
         return () => {
+            console.log('📡 [LIVE] Cleaning up channel...')
             supabase.removeChannel(channel)
+            clearInterval(interval)
         }
-    }, [range, fetchDashboardData, selectedOrder, refreshSelectedOrder])
+    }, []) // STABLE EMPTY DEP ARRAY - Uses Refs to always access latest logic
 
     const handleOrderClick = (order: any) => {
         // Ensure we have full details when clicking (recentOrders might rely on partial fetch if we change optimizations later, but for now safe)
@@ -776,9 +918,11 @@ export default function AdminDashboard() {
                                                         "uppercase text-[10px] font-bold tracking-wider border-none px-2 py-0.5 shadow-sm",
                                                         order.status === 'completed'
                                                             ? "bg-green-100 text-green-700 group-hover:bg-green-200"
-                                                            : order.status === 'pending'
-                                                                ? "bg-yellow-100 text-yellow-700 group-hover:bg-yellow-200"
-                                                                : "bg-blue-100 text-blue-700 group-hover:bg-blue-200"
+                                                            : order.status === 'pending_confirmation'
+                                                                ? "bg-red-100 text-red-700 animate-pulse group-hover:bg-red-200"
+                                                                : order.status === 'pending'
+                                                                    ? "bg-yellow-100 text-yellow-700 group-hover:bg-yellow-200"
+                                                                    : "bg-blue-100 text-blue-700 group-hover:bg-blue-200"
                                                     )}
                                                 >
                                                     {order.status}
@@ -1043,10 +1187,10 @@ export default function AdminDashboard() {
                                             onClick={() => {
                                                 const phone = customer.phone
                                                 if (!phone) return
-                                                setSelectedPhones(prev => 
-                                                    prev.includes(phone) 
-                                                    ? prev.filter(p => p !== phone) 
-                                                    : [...prev, phone]
+                                                setSelectedPhones(prev =>
+                                                    prev.includes(phone)
+                                                        ? prev.filter(p => p !== phone)
+                                                        : [...prev, phone]
                                                 )
                                             }}
                                         >
@@ -1094,8 +1238,8 @@ export default function AdminDashboard() {
                                     disabled={isSendingFlashSale || selectedPhones.length === 0}
                                     className={cn(
                                         "rounded-xl font-bold h-11 px-8 shadow-lg transition-all",
-                                        isFlashSale 
-                                            ? "bg-gray-900 hover:bg-gray-800 text-white shadow-gray-200" 
+                                        isFlashSale
+                                            ? "bg-gray-900 hover:bg-gray-800 text-white shadow-gray-200"
                                             : "bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/20"
                                     )}
                                 >
@@ -1110,6 +1254,86 @@ export default function AdminDashboard() {
                                 </Button>
                             </div>
                         </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* NEW: Automatic Approval Popup */}
+            <Dialog open={isApprovalDialogOpen} onOpenChange={setIsApprovalDialogOpen}>
+                <DialogContent className="sm:max-w-[500px] border-none p-0 overflow-hidden shadow-2xl rounded-[2rem]">
+                    <div className="bg-red-600 p-8 text-white">
+                        <div className="flex justify-between items-start mb-6">
+                            <div className="space-y-3">
+                                <div className="bg-white/20 p-3 rounded-2xl w-fit">
+                                    <ShoppingBag className="h-6 w-6" />
+                                </div>
+                                <DialogTitle className="text-3xl font-black">
+                                    {selectedApproval?.order_items?.some((i: any) => i.status !== 'pending') ? "Merge New Items?" : "New Order Alert!"}
+                                </DialogTitle>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                                <Badge className="bg-white/20 text-white border-0 font-bold px-3 py-1 uppercase tracking-wider">#{selectedApproval?.bill_id}</Badge>
+                                {selectedApproval?.order_items?.some((i: any) => i.status !== 'pending') && (
+                                    <Badge className="bg-yellow-400 text-black border-0 font-black px-2 py-0.5 text-[9px] uppercase tracking-widest animate-pulse">Bill Update</Badge>
+                                )}
+                            </div>
+                        </div>
+                        <p className="text-red-100 font-bold opacity-90 italic">
+                            {selectedApproval?.order_items?.some((i: any) => i.status !== 'pending') 
+                                ? "This customer is already dining. These new items will be merged into their active bill."
+                                : "A new customer has placed an order. Review and send to the kitchen."}
+                        </p>
+                    </div>
+
+                    <div className="p-8 space-y-6">
+                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                            <div>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Customer</p>
+                                <p className="font-bold text-gray-900">{selectedApproval?.customers?.name || 'Walk-in'}</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Table</p>
+                                <p className="font-bold text-gray-900">T{selectedApproval?.restaurant_tables?.table_number || 'N/A'}</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">Items</p>
+                            <div className="max-h-[200px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                {selectedApproval?.order_items?.map((item: any) => (
+                                    <div key={item.id} className="flex justify-between items-center p-3 bg-white border border-gray-100 rounded-xl">
+                                        <div className="flex items-center gap-3">
+                                            <span className="h-6 w-6 bg-red-50 text-red-600 rounded-full flex items-center justify-center text-[10px] font-black">{item.quantity}</span>
+                                            <span className="text-sm font-bold text-gray-800">{item.item_name}</span>
+                                        </div>
+                                        <span className="text-sm font-black text-gray-900">₹{item.total?.toFixed(2)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                            <span className="text-lg font-black text-gray-900">Grand Total</span>
+                            <span className="text-2xl font-black text-red-600">₹{selectedApproval?.total?.toFixed(2)}</span>
+                        </div>
+                    </div>
+
+                    <div className="p-8 pt-0 grid grid-cols-2 gap-4">
+                        <Button
+                            className="h-14 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-black text-lg shadow-lg shadow-green-600/20"
+                            onClick={() => handleApproveOrder(selectedApproval.id, true)}
+                            disabled={isProcessingApproval}
+                        >
+                            {isProcessingApproval ? '...' : 'ACCEPT'}
+                        </Button>
+                        <Button
+                            variant="outline"
+                            className="h-14 rounded-2xl border-gray-200 text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 font-bold"
+                            onClick={() => handleApproveOrder(selectedApproval.id, false)}
+                            disabled={isProcessingApproval}
+                        >
+                            REJECT
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>

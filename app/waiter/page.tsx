@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
     UtensilsCrossed, ShoppingCart, Plus, Minus, Trash2, CheckCircle2,
-    Armchair, Search, User, Clock, ChefHat, Send, LogOut, RefreshCcw
+    Armchair, Search, User, Clock, ChefHat, Send, LogOut, RefreshCcw, XCircle, AlertCircle, ChevronRight, ShoppingBag
 } from 'lucide-react'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 import { toast } from 'sonner'
@@ -43,38 +43,172 @@ export default function WaiterDashboard() {
     const [staffId, setStaffId] = useState('')
     const [staffList, setStaffList] = useState<StaffMember[]>([])
     const [tempStaffData, setTempStaffData] = useState<any>(null)
+    const [pendingApprovals, setPendingApprovals] = useState<any[]>([])
+    const [selectedApproval, setSelectedApproval] = useState<any>(null)
+    const [isApproving, setIsApproving] = useState(false)
+
+    // Refs to avoid stale closures in background interval
+    const selectedApprovalRef = useRef(selectedApproval);
+    useEffect(() => {
+        selectedApprovalRef.current = selectedApproval;
+    }, [selectedApproval]);
 
     useEffect(() => {
-        fetchAll()
-        const ch = supabase.channel('waiter-rt')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'restaurant_tables' }, fetchAll)
-            .subscribe()
-        return () => { supabase.removeChannel(ch) }
-    }, [])
+        // First explicit load
+        fetchAll(false);
+        fetchPendingApprovals(false);
 
-    async function fetchAll() {
+        // ULTRA-RESPONSIVE SILENT HEART-BEAT (1.5s)
+        // We use a self-invoking function inside to always access fresh logic if needed
+        const interval = setInterval(() => {
+            fetchPendingApprovals(true); // Silent
+            fetchAll(true); // Silent
+        }, 1500);
+
+        const ch = supabase.channel('waiter-realtime-v5')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'restaurant_tables' }, () => fetchAll(true))
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'orders'
+            }, () => {
+                fetchAll(true);
+                fetchPendingApprovals(true);
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(ch);
+            clearInterval(interval);
+        };
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    async function fetchPendingApprovals(silent = false) {
         try {
-            setLoading(true)
-            const [{ data: tablesData, error: tErr }, { data: catsData, error: cErr }, { data: itemsData, error: iErr }, { data: staffData }] = await Promise.all([
-                supabase.from('restaurant_tables').select('*').eq('restaurant_id', RESTAURANT_ID).order('table_number'),
-                supabase.from('menu_categories').select('*').eq('restaurant_id', RESTAURANT_ID).order('sort_order'),
-                supabase.from('menu_items').select('*').eq('restaurant_id', RESTAURANT_ID).eq('is_available', true),
-                supabase.from('staff').select('id, name').eq('restaurant_id', RESTAURANT_ID).eq('status', true)
-            ])
+            console.log('🔄 [Waiter] Polling for pending approvals...');
+            
+            // Tier 1: Detailed Join (Preferred)
+            let { data, error } = await supabase
+                .from('orders')
+                .select('*, customers(name, phone), order_items(*), restaurant_tables(table_number)')
+                .eq('restaurant_id', RESTAURANT_ID)
+                .eq('status', 'pending_confirmation')
+                .order('created_at', { ascending: false });
 
-            if (tErr || cErr || iErr) {
-                console.error('Fetch error:', tErr || cErr || iErr)
-                toast.error('Failed to sync dashboard data')
+            // Tier 2: Fallback to Explicit Joins
+            if (error) {
+                console.warn('⚠️ [Waiter] Tier 1 Query Failed, trying Tier 2...', error.message);
+                const fallback = await supabase
+                    .from('orders')
+                    .select('*, customers!customer_id(name, phone), order_items(*), restaurant_tables!table_id(table_number)')
+                    .eq('restaurant_id', RESTAURANT_ID)
+                    .eq('status', 'pending_confirmation')
+                    .order('created_at', { ascending: false });
+                data = fallback.data;
+                error = fallback.error;
+            }
+            
+            // Tier 3: Absolute Minimal fallback (BUT MUST INCLUDE ITEMS)
+            if (error) {
+                 console.warn('⚠️ [Waiter] Tier 2 Query Failed, trying Tier 3...', error.message);
+                 const minimal = await supabase
+                    .from('orders')
+                    .select('*, order_items(*)')
+                    .eq('restaurant_id', RESTAURANT_ID)
+                    .eq('status', 'pending_confirmation')
+                    .order('created_at', { ascending: false });
+                data = minimal.data;
+                error = minimal.error;
             }
 
-            setTables(tablesData || [])
-            setCategories(catsData || [])
-            setMenuItems((itemsData || []).filter((i: MenuItem) => !i.name.startsWith('[DELETED]')))
-            setStaffList(staffData || [])
+            if (error) {
+                console.error('❌ [Waiter Approvals] All Tiers Failed:', error);
+                if (!silent) toast.error('Check server connection / RLS');
+                return;
+            }
+
+            console.log(`✅ [Waiter] Found ${data?.length || 0} pending approvals.`);
+            setPendingApprovals(data || []);
+            
+            const currentSelected = selectedApprovalRef.current;
+            
+            // Auto-open first one if NOT already in an approval dialog
+            if (data && data.length > 0 && !currentSelected) {
+                console.log('📢 [Waiter] Auto-opening approval popup for:', data[0].bill_id);
+                setSelectedApproval(data[0]); 
+                // Play notification sound to alert the waiter
+                try {
+                    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+                    audio.play().catch(() => {});
+                } catch (e) {}
+            } else if ((!data || data.length === 0) && currentSelected) {
+                // If there were approvals but now there is none (e.g. admin accepted others)
+                console.log('🧹 [Waiter] No more pending orders, closing popup.');
+                setSelectedApproval(null);
+            } else if (currentSelected && data && data.length > 0) {
+                // If popup is open, check if THE SPECIFIC ORDER is still in the pending list
+                const isStillPending = data.some(o => o.id === currentSelected.id);
+                if (!isStillPending) {
+                    console.log('🧹 [Waiter] Current order handled on another device (Admin), closing popup.');
+                    setSelectedApproval(null);
+                }
+            }
         } catch (err: any) {
-            toast.error('Connection error: ' + err.message)
+            console.error('Fetch approvals error:', err);
+        }
+    }
+
+    async function handleApproveOrder(orderId: string, accept: boolean) {
+        setIsApproving(true);
+        try {
+            const { error } = await supabase
+                .from('orders')
+                .update({
+                    status: accept ? 'pending' : 'cancelled',
+                    notes: accept ? `Approved by: ${staffName}` : `Rejected by: ${staffName}`,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', orderId);
+
+            if (error) throw error;
+            
+            toast.success(accept ? 'Order Accepted!' : 'Order Rejected');
+            setSelectedApproval(null);
+            fetchPendingApprovals(true);
+            fetchAll(true); // Refresh tables
+        } catch (err: any) {
+            toast.error('Failed to update order: ' + err.message);
         } finally {
-            setLoading(false)
+            setIsApproving(false);
+        }
+    }
+
+    async function fetchAll(silent = false) {
+        try {
+            if (!silent) setLoading(true);
+            const [{ data: tablesData, error: tErr }, { data: catsData, error: cErr }, { data: itemsData, error: iErr }, staffRes] = await Promise.all([
+                supabase.from('restaurant_tables').select('*').eq('restaurant_id', RESTAURANT_ID).order('table_number'),
+                supabase.from('menu_categories').select('*').eq('restaurant_id', RESTAURANT_ID).order('sort_order'),
+                supabase.from('menu_items').select('*').eq('restaurant_id', RESTAURANT_ID).eq('is_available', true).order('name', { ascending: true }),
+                supabase.from('staff').select('id, name').eq('restaurant_id', RESTAURANT_ID).eq('status', true)
+            ]);
+            
+            const staffData = staffRes.data || [];
+
+            if (tErr || cErr || iErr) {
+                console.error('Fetch error:', tErr || cErr || iErr);
+                if (!silent) toast.error('Failed to sync dashboard data');
+            }
+
+            setTables(tablesData || []);
+            setCategories(catsData || []);
+            setMenuItems((itemsData || []).filter((i: MenuItem) => !i.name.startsWith('[DELETED]')));
+            setStaffList(staffData);
+
+        } catch (err: any) {
+            console.error('FetchAll Error:', err);
+        } finally {
+            if (!silent) setLoading(false);
         }
     }
 
@@ -102,24 +236,12 @@ export default function WaiterDashboard() {
                 setStaffName('')
                 setStep('name')
                 toast.info('New Passcode! Please register your name.')
-            } else if (staffList.length === 1) {
-                // Exactly one person uses this PIN - log them in directly
-                const savedStaff = staffList[0]
-                setStaffId(savedStaff.id)
-                setStaffName(savedStaff.name || '')
-                setStep('table')
-                toast.success(`Welcome back, ${savedStaff.name}`)
-                
-                // Track last login
-                await supabase.from('staff').update({ 
-                    last_login_at: new Date().toISOString() 
-                }).eq('id', savedStaff.id)
             } else {
-                // Shared PIN - must ask who is using it
-                setStaffId('')
+                // PIN matched someone(s). Always ask for Name as per user request to differentiate waiters.
+                setStaffId('') 
                 setStaffName('')
                 setStep('name')
-                toast.info('Passcode shared! Please enter your name.')
+                toast.info('Passcode Verified! Please enter your name to continue.')
             }
         } catch (err) {
             console.error('💥 Login Error:', err)
@@ -236,10 +358,10 @@ export default function WaiterDashboard() {
             let customerId: string | null = null
             if (customerName.trim() || customerPhone.trim()) {
                 console.log('👤 [Waiter] Resolving customer:', { name: customerName, phone: customerPhone })
-                
+
                 // Clean phone number: take last 10 digits
                 const cleanedPhone = customerPhone.replace(/\D/g, '').slice(-10)
-                
+
                 // Try to find by phone if provided
                 if (cleanedPhone) {
                     const { data: existing, error: findError } = await supabase
@@ -293,22 +415,22 @@ export default function WaiterDashboard() {
             params.append('tableId', selectedTable.id)
             params.append('tableNumber', selectedTable.table_number.toString())
             params.append('join', 'true') // ALWAYS try to join the existing bill on this table
-            
+
             if (customerId) {
                 params.append('customerId', customerId)
             }
-            
+
             // Add cache busting
             params.append('t', Date.now().toString())
-            
+
             const activeRes = await fetch(`/api/orders/active?${params.toString()}`, { cache: 'no-store' })
             const activeData = await activeRes.json()
-            
+
             if (activeData.error) {
                 console.error('❌ [Waiter] API Error:', activeData.error)
                 throw new Error(activeData.error)
             }
-            
+
             const existingOrder = activeData.order
 
             let orderId = ''
@@ -319,11 +441,11 @@ export default function WaiterDashboard() {
                 orderId = existingOrder.id
                 billId = existingOrder.bill_id
                 const newTotal = Number(existingOrder.total) + cartTotal
-                
+
                 // Update existing order - Reset status to pending if it was already prepared/served
                 // so the kitchen gets notified for the new items
-                const statusUpdate = (existingOrder.status === 'served' || existingOrder.status === 'ready' || existingOrder.status === 'completed') 
-                    ? 'pending' 
+                const statusUpdate = (existingOrder.status === 'served' || existingOrder.status === 'ready' || existingOrder.status === 'completed')
+                    ? 'pending'
                     : existingOrder.status
 
                 await supabase.from('orders').update({
@@ -335,7 +457,7 @@ export default function WaiterDashboard() {
                     notes: (existingOrder.notes || '') + `\n[${staffName}] added +₹${cartTotal}`,
                     updated_at: new Date().toISOString()
                 }).eq('id', orderId)
-                
+
                 toast.info(`Adding items to existing Bill #${billId}`)
             } else {
                 console.log('🆕 Creating new order for Table:', selectedTable.table_number)
@@ -358,7 +480,7 @@ export default function WaiterDashboard() {
 
                 if (orderError) throw orderError
                 orderId = order.id
-                
+
                 // Update table status
                 await supabase.from('restaurant_tables').update({ status: 'occupied' }).eq('id', selectedTable.id)
             }
@@ -425,6 +547,73 @@ export default function WaiterDashboard() {
 
     return (
         <div className="min-h-screen bg-gray-50 p-4 pb-24 lg:p-6 lg:pb-12 max-w-7xl mx-auto space-y-6">
+            {/* Approval Dialog (TOP-LEVEL) */}
+            <Dialog open={!!selectedApproval} onOpenChange={(o) => !o && setSelectedApproval(null)}>
+                <DialogContent className="sm:max-w-[500px] border-none p-0 overflow-hidden shadow-2xl rounded-[2rem]">
+                    <div className="bg-red-600 p-8 text-white relative">
+                        <div className="flex justify-between items-start mb-4">
+                            <div className="bg-white/20 p-3 rounded-2xl">
+                                <ShoppingBag className="h-6 w-6" />
+                            </div>
+                            <Badge className="bg-white/20 text-white border-0 font-bold px-3 py-1 uppercase tracking-wider">#{selectedApproval?.bill_id || 'NEW'}</Badge>
+                        </div>
+                        <DialogTitle className="text-3xl font-black mb-2">New Order Alert!</DialogTitle>
+                        <p className="text-red-100 font-medium opacity-90">Please confirm this order to send it to the kitchen.</p>
+                    </div>
+
+                    <div className="p-8 space-y-6">
+                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-100 shadow-sm">
+                            <div>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Customer</p>
+                                <p className="font-bold text-gray-900">{selectedApproval?.customers?.name || 'Walk-in'}</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Table</p>
+                                <p className="font-bold text-gray-900">T{selectedApproval?.restaurant_tables?.table_number || 'N/A'}</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">Items</p>
+                            <div className="max-h-[200px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                {selectedApproval?.order_items?.map((item: any) => (
+                                    <div key={item.id} className="flex justify-between items-center p-3 bg-white border border-gray-100 rounded-xl">
+                                        <div className="flex items-center gap-3">
+                                            <span className="h-6 w-6 bg-red-50 text-red-600 rounded-full flex items-center justify-center text-[10px] font-black">{item.quantity}</span>
+                                            <span className="text-sm font-bold text-gray-800">{item.item_name}</span>
+                                        </div>
+                                        <span className="text-sm font-black text-gray-900">₹{item.total?.toFixed(2)}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                            <span className="text-lg font-black text-gray-900">Grand Total</span>
+                            <span className="text-2xl font-black text-red-600">₹{selectedApproval?.total?.toFixed(2)}</span>
+                        </div>
+                    </div>
+
+                    <div className="p-8 pt-0 grid grid-cols-2 gap-4">
+                        <Button
+                            className="h-14 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-black text-lg shadow-lg shadow-green-600/20"
+                            onClick={() => handleApproveOrder(selectedApproval.id, true)}
+                            disabled={isApproving}
+                        >
+                            {isApproving ? '...' : 'ACCEPT'}
+                        </Button>
+                        <Button
+                            variant="outline"
+                            className="h-14 rounded-2xl border-gray-200 text-gray-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 font-bold"
+                            onClick={() => handleApproveOrder(selectedApproval.id, false)}
+                            disabled={isApproving}
+                        >
+                            REJECT
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
             {step === 'login' && (
                 <div className="flex flex-col items-center justify-center min-h-[80vh] space-y-8 max-w-md mx-auto">
                     <div className="text-center space-y-2">
@@ -558,11 +747,13 @@ export default function WaiterDashboard() {
                                     </button>
                                 </div>
                             )}
-                            <Button variant="outline" size="icon" className="h-12 w-12 rounded-2xl border" onClick={fetchAll} disabled={loading}>
+                            <Button variant="outline" size="icon" className="h-12 w-12 rounded-2xl border" onClick={() => fetchAll(false)} disabled={loading}>
                                 <RefreshCcw className={cn("h-5 w-5", loading && "animate-spin")} />
                             </Button>
                         </div>
                     </header>
+
+
 
                     {step === 'table' && (
                         <div className="space-y-10">
@@ -869,6 +1060,7 @@ export default function WaiterDashboard() {
                     </Dialog>
                 </div>
             )}
+
         </div>
     )
 }
