@@ -100,24 +100,6 @@ export default function OrderCard({ order, onViewDetails }: OrderCardProps) {
         const nextStatus = getNextStatus()
         if (nextStatus) {
             updateOrder(order.id, { status: nextStatus })
-
-            if (nextStatus === 'served') {
-                triggerAutomationWebhook('order-served', {
-                    bill_id: order.bill_id,
-                    amount: order.total || 0,
-                    customer: {
-                        name: order.customers?.name || 'Customer',
-                        phone: order.customers?.phone || 'N/A'
-                    },
-                    order_type: order.order_type,
-                    status: 'served',
-                    items: (order.order_items || []).map((i) => ({
-                        name: i.item_name || i.menu_items?.name || 'Unknown Item',
-                        quantity: i.quantity,
-                    })),
-                    restaurant_id: process.env.NEXT_PUBLIC_RESTAURANT_ID,
-                })
-            }
         }
     }
 

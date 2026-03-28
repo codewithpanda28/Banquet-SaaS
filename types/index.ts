@@ -16,7 +16,7 @@ export interface Restaurant {
     logo_url: string | null;
     banner_url: string | null;
     upi_id: string | null;
-    upi_qr_url: string | null;
+    qr_code_url: string | null;
     is_open: boolean;
     tax_percentage: number;
     delivery_charge: number;
@@ -25,6 +25,13 @@ export interface Restaurant {
     opening_time: string;
     closing_time: string;
     dietary_type?: 'veg_only' | 'non_veg_only' | 'both';
+    primary_color?: string;
+    secondary_color?: string;
+    slug?: string;
+    custom_domain?: string | null;
+    whatsapp_api_url?: string | null;
+    whatsapp_api_id?: string | null;
+    whatsapp_token?: string | null;
 }
 
 export interface MenuCategory {

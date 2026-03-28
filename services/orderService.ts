@@ -74,6 +74,13 @@ export async function updateOrderStatus(orderId: string, status: string) {
                 .single()
 
             if (order) {
+                // Fetch full restaurant config for dynamic WhatsApp n8n routing
+                const { data: restaurant } = await supabase
+                    .from('restaurants')
+                    .select('*, id, name, whatsapp_api_url, whatsapp_api_id, whatsapp_token')
+                    .eq('id', order.restaurant_id)
+                    .single()
+
                 // ✅ Release table status ONLY on cancellation. 
                 // For 'served', table remains occupied until payment is collected in Admin Dashboard.
                 if (order.table_id && status === 'cancelled') {
@@ -102,7 +109,12 @@ export async function updateOrderStatus(orderId: string, status: string) {
                     })),
                     payment_method: order.payment_method || 'pending',
                     payment_status: order.payment_status,
-                    restaurant_id: RESTAURANT_ID,
+                    restaurant_id: order.restaurant_id,
+                    // SaaS Multi-Tenant Config for n8n
+                    whatsapp_api_url: restaurant?.whatsapp_api_url,
+                    whatsapp_api_id: restaurant?.whatsapp_api_id,
+                    whatsapp_token: restaurant?.whatsapp_token,
+                    restaurant_name: restaurant?.name || 'Restaurant',
                     updated_at: new Date().toISOString(),
                     source: status === 'cancelled' ? 'kitchen_cancelled' : 'kitchen_served',
                     trigger_type: status === 'cancelled' ? 'order_cancelled' : 'order_served'

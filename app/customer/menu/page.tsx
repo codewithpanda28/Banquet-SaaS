@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { Search, MapPin, Phone, Info, Ticket, Percent, Copy, ChevronRight } from 'lucide-react'
+import { Search, MapPin, Phone, Info, Ticket, Percent, Copy, ChevronRight, Star } from 'lucide-react'
 import { useMenu } from '@/hooks/useMenu'
 import { useRestaurant } from '@/hooks/useRestaurant'
 import { useCartStore } from '@/store/cartStore'
@@ -247,6 +247,51 @@ function MenuContent() {
 
     return (
         <div className="min-h-screen bg-white pb-32">
+            {/* 🏷️ Restaurant Branding Header */}
+            <div className="relative group overflow-hidden bg-slate-900 h-56 md:h-72">
+                {restaurant?.banner_url ? (
+                    <img
+                        src={restaurant.banner_url}
+                        className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-60"
+                        alt="Banner"
+                    />
+                ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-indigo-900 via-purple-900 to-black animate-gradient opacity-60" />
+                )}
+
+                <div className="absolute inset-0 flex flex-col justify-end p-6 md:p-10 bg-gradient-to-t from-black via-black/20 to-transparent">
+                    <div className="flex items-center gap-4 md:gap-8 transform group-hover:translate-x-2 transition-transform duration-500">
+                        {restaurant?.logo_url ? (
+                            <div className="h-20 w-20 md:h-28 md:w-28 rounded-3xl bg-white p-2 shadow-2xl border-4 border-white/20 overflow-hidden shrink-0">
+                                <img src={restaurant.logo_url} className="w-full h-full object-contain" alt="Logo" />
+                            </div>
+                        ) : (
+                            <div className="h-20 w-20 md:h-28 md:w-28 rounded-3xl bg-white/10 backdrop-blur-xl flex items-center justify-center border border-white/20 shrink-0">
+                                <Utensils className="w-10 h-10 text-white" />
+                            </div>
+                        )}
+                        <div>
+                            <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter leading-tight drop-shadow-lg">
+                                {restaurant?.name || 'Loading...'}
+                            </h1>
+                            {restaurant?.tagline && (
+                                <p className="text-sm md:text-lg text-white/80 font-medium italic mt-1 drop-shadow-md">
+                                    {restaurant.tagline}
+                                </p>
+                            )}
+                            <div className="flex gap-4 mt-4 text-[10px] md:text-xs">
+                                <div className="px-3 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 flex items-center gap-1 backdrop-blur-md">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> OPEN NOW
+                                </div>
+                                <div className="px-3 py-1 rounded-full bg-white/10 text-white border border-white/20 flex items-center gap-1 backdrop-blur-md">
+                                    <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" /> 4.8 Ratings
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {/* Categories - Sticky Top */}
             <div className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm transition-all duration-300">
                 <CategoryTabs

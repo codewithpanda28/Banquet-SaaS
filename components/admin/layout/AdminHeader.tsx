@@ -376,7 +376,7 @@ export function AdminHeader() {
     const handleLogout = () => {
         // Clear login session
         localStorage.removeItem('admin_logged_in')
-        localStorage.removeItem('admin_email')
+        localStorage.removeItem('admin_restaurant_id')
 
         toast.success('✅ Logged out successfully')
         router.push('/login')
@@ -547,8 +547,8 @@ export function AdminHeader() {
                     <DropdownMenuContent align="end" className="w-56 bg-white border border-gray-100 shadow-xl rounded-xl">
                         <DropdownMenuLabel>
                             <div className="flex flex-col space-y-1 p-1">
-                                <p className="text-sm font-medium leading-none text-gray-900">Restaurant Admin</p>
-                                <p className="text-xs leading-none text-gray-500">admin@restaurant.com</p>
+                                <p className="text-sm font-medium leading-none text-gray-900">Dashboard Control</p>
+                                <p className="text-xs leading-none text-gray-500 uppercase tracking-widest font-black opacity-30 mt-1">Admin Session</p>
                             </div>
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator className="bg-gray-100" />

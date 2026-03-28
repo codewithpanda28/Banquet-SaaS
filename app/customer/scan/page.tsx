@@ -3,7 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2, AlertTriangle, CheckCircle, Armchair, ChevronRight } from 'lucide-react'
-import { supabase, RESTAURANT_ID } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 
 interface TableInfo {
@@ -23,28 +23,35 @@ function ScanRedirect() {
 
     useEffect(() => {
         const tableNumber = searchParams.get('table')
+        const tenantId = searchParams.get('id') // 🔍 CRITICAL: Get ID from URL
 
         // Agar table param nahi hai to seedha menu pe bhejo
         if (!tableNumber) {
+            router.replace(`/customer/menu${tenantId ? `?id=${tenantId}` : ''}`)
+            return
+        }
+
+        handleTableScan(parseInt(tableNumber), tenantId)
+    }, [])
+
+    async function handleTableScan(tableNumber: number, tenantId: string | null) {
+        if (!tenantId) {
+            console.error('No Restaurant ID provided in scan URL!')
             router.replace('/customer/menu')
             return
         }
 
-        handleTableScan(parseInt(tableNumber))
-    }, [])
-
-    async function handleTableScan(tableNumber: number) {
         try {
-            // Step 1: Fetch table details
+            // Step 1: Fetch table details using the DYNAMIC tenantId
             const { data: tableData, error } = await supabase
                 .from('restaurant_tables')
                 .select('*')
-                .eq('restaurant_id', RESTAURANT_ID)
+                .eq('restaurant_id', tenantId)
                 .eq('table_number', tableNumber)
                 .single()
 
             if (error || !tableData) {
-                router.replace(`/customer/menu?table=${tableNumber}`)
+                router.replace(`/customer/menu?table=${tableNumber}&id=${tenantId}`)
                 return
             }
 
@@ -78,7 +85,7 @@ function ScanRedirect() {
                 const { data: availableTables } = await supabase
                     .from('restaurant_tables')
                     .select('*')
-                    .eq('restaurant_id', RESTAURANT_ID)
+                    .eq('restaurant_id', tenantId)
                     .eq('status', 'available')
                     .eq('is_active', true)
                     .limit(5)
@@ -99,7 +106,7 @@ function ScanRedirect() {
 
             // ✅ Log a temporary booking for Admin visibility
             await supabase.from('table_bookings').insert({
-                restaurant_id: RESTAURANT_ID,
+                restaurant_id: tenantId,
                 table_id: tableData.id,
                 customer_name: 'Walk-in Customer',
                 customer_phone: 'qr-scan',
@@ -112,7 +119,7 @@ function ScanRedirect() {
 
             setTimeout(() => {
                 // Since table is available, this is always a fresh order
-                router.replace(`/customer/menu?table=${tableNumber}&type=dine_in&join=false&tableId=${tableData.id}`)
+                router.replace(`/customer/menu?table=${tableNumber}&id=${tenantId}&type=dine_in&join=false&tableId=${tableData.id}`)
             }, 800)
 
         } catch (err) {
@@ -129,7 +136,7 @@ function ScanRedirect() {
             .eq('id', table.id)
 
         await supabase.from('table_bookings').insert({
-            restaurant_id: RESTAURANT_ID,
+            restaurant_id: searchParams.get('id'), // 🔍 Use dynamic context
             table_id: table.id,
             customer_name: 'Walk-in Customer',
             customer_phone: 'qr-scan',
@@ -140,7 +147,7 @@ function ScanRedirect() {
             notes: `Auto-seated via QR scan (alternate) — Table ${table.table_number}`
         })
 
-        router.replace(`/customer/menu?table=${table.table_number}&type=dine_in`)
+        router.replace(`/customer/menu?table=${table.table_number}&id=${searchParams.get('id')}&type=dine_in`)
     }
 
     // ── Loading State ──
@@ -192,7 +199,7 @@ function ScanRedirect() {
                     className="h-14 rounded-2xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-lg shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all"
                     onClick={() => {
                         // Store the intent to join the group
-                        router.replace(`/customer/menu?table=${occupiedTable?.table_number}&type=dine_in&join=true`)
+                        router.replace(`/customer/menu?table=${occupiedTable?.table_number}&id=${searchParams.get('id')}&type=dine_in&join=true`)
                     }}
                 >
                     Join My Group 👥
@@ -203,7 +210,7 @@ function ScanRedirect() {
                     className="h-14 rounded-2xl border-slate-200 bg-white text-slate-700 font-bold text-lg hover:bg-slate-50 active:scale-[0.98] transition-all"
                     onClick={() => {
                         // Store the intent to start a separate order
-                        router.replace(`/customer/menu?table=${occupiedTable?.table_number}&type=dine_in&join=false`)
+                        router.replace(`/customer/menu?table=${occupiedTable?.table_number}&id=${searchParams.get('id')}&type=dine_in&join=false`)
                     }}
                 >
                     Start Separate Order 👤

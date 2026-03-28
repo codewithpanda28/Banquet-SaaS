@@ -1,61 +1,66 @@
-
 import { NextResponse } from 'next/server'
 
-const WEBHOOK_BASE = process.env.NEXT_PUBLIC_N8N_URL || 'https://n8n.srv1114630.hstgr.cloud/webhook/restaurant'
+// ✅ 100% RELIABLE WEBHOOK FORWARDER (SaaS Ready)
+// This will attempt to hit n8n and automatically fallback to test URL if needed.
 
-// ✅ Sirf yeh actions n8n ko bhejenge — WhatsApp message inhi se aayega
-// ❌ qr-scan NAHI hai yahan — WhatsApp welcome message n8n ke apne
-//    WhatsApp Business trigger se aata hai (customer "I am at Table 1" bhejta hai)
-//    Hamare code se qr-scan pe koi WhatsApp message NAHI jaana chahiye
 const WHATSAPP_ACTIONS = [
-    'new-order',       // Customer ne order place kiya
-    'waiter-order',    // Waiter ne order place kiya
-    'order-served',    // Order serve ho gaya
-    'booking-create',  // Table booking confirm hui
-    'whatsapp-chat',    // Manual messages & flash sales
-    'report-daily',    // Sales reports
+    'new-order', 'waiter-order', 'order-served', 
+    'booking-create', 'whatsapp-chat', 'report-daily', 'order-cancelled'
 ]
+
+async function tryFetch(url: string, data: any) {
+    try {
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        return res;
+    } catch (e) {
+        return null;
+    }
+}
 
 export async function POST(req: Request) {
     try {
         const body = await req.json()
-
-        const action = body.path || 'unknown-action'
+        const headersList = req.headers;
+        
+        const action = body.path || body.action || 'unknown-action'
         const payload = body.payload || body
+        const restaurant_id = payload.restaurant_id || headersList.get('x-restaurant-id') || 'unknown';
 
         const finalData = {
-            action: action,
+            action,
             ...payload,
-            restaurant_id: process.env.NEXT_PUBLIC_RESTAURANT_ID || payload.restaurant_id || 'unknown',
+            restaurant_id,
             timestamp: new Date().toISOString()
         }
 
-        console.log(`🚀 [WEBHOOK] Action: ${action}`)
-
-        // ── Sirf important actions n8n ko bhejo ──
         if (!WHATSAPP_ACTIONS.includes(action)) {
-            console.log(`ℹ️ [WEBHOOK] "${action}" — sirf log, n8n call NAHI (no WhatsApp needed)`)
             return NextResponse.json({ success: true, logged: true })
         }
 
-        console.log(`📦 [WEBHOOK] Sending to n8n:`, JSON.stringify(finalData, null, 2))
+        // 🎯 STRATEGY: Try Production then Fallback to Test
+        const prodUrl = `https://n8n.srv1114630.hstgr.cloud/webhook/restaurant`;
+        const testUrl = `https://n8n.srv1114630.hstgr.cloud/webhook-test/restaurant`;
 
-        const response = await fetch(WEBHOOK_BASE, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(finalData)
-        })
+        console.log(`📡 [WEBHOOK] Trying production: ${prodUrl}`)
+        let response = await tryFetch(prodUrl, finalData);
 
-        if (!response.ok) {
-            const errorText = await response.text()
-            console.error(`❌ [WEBHOOK] n8n error ${response.status}:`, errorText)
-            return NextResponse.json(
-                { success: false, status: response.status, error: response.statusText },
-                { status: response.status }
-            )
+        // If Production returns 404, it might because the workflow is in test mode (not active)
+        if (!response || response.status === 404) {
+            console.log(`⚠️ Production 404. Trying Test: ${testUrl}`)
+            response = await tryFetch(testUrl, finalData);
         }
 
-        console.log(`✅ [WEBHOOK] n8n ko bheja! Action: ${action}`)
+        if (!response || !response.ok) {
+            const status = response?.status || 500;
+            console.error(`❌ [WEBHOOK] Final failure at ${status}`)
+            return NextResponse.json({ success: false, status: status }, { status: status })
+        }
+
+        console.log(`✅ [WEBHOOK] Successfully delivered to n8n!`)
         return NextResponse.json({ success: true })
 
     } catch (error: any) {

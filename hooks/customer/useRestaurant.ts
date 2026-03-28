@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase, getRestaurantId } from '@/lib/supabase'
 import { Restaurant } from '@/types'
 
 export function useRestaurant() {
@@ -10,28 +10,15 @@ export function useRestaurant() {
     const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
-        async function fetchRestaurant() {
-            try {
-                const { data, error } = await supabase
-                    .from('restaurants')
-                    .select('*')
-                    .single() // Ideally filter by ID if multiple, but prompt implies single tenant ID provided in env or prompt
-
-                if (error) throw error
-
-                // Wait, prompt gave RESTAURANT_ID = "f1dde894-c027-4506-a55a-dfe65bb0449f"
-                // I should use that.
-                // But if I use .single() on 'restaurants' table, it might return any row if I don't filter.
-                // I should use the ID.
-            } catch (e: any) {
-                // setError(e.message)
-                // If fails, maybe retry with ID specific query
-            }
-        }
-
-        // Actually, let's rewrite to use ID
         const fetchWithId = async () => {
-            const restaurantId = process.env.NEXT_PUBLIC_RESTAURANT_ID || 'f1dde894-c027-4506-a55a-dfe65bb0449f'
+            setLoading(true)
+            const restaurantId = getRestaurantId()
+            
+            if (!restaurantId) {
+                setLoading(false)
+                return
+            }
+
             try {
                 const { data, error } = await supabase
                     .from('restaurants')
@@ -50,6 +37,12 @@ export function useRestaurant() {
         }
 
         fetchWithId()
+        
+        // 🔄 Re-fetch if the URL ID changes
+        if (typeof window !== 'undefined') {
+            window.addEventListener('popstate', fetchWithId);
+            return () => window.removeEventListener('popstate', fetchWithId);
+        }
     }, [])
 
     return { restaurant, loading, error }

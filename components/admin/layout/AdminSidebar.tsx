@@ -28,9 +28,11 @@ import {
     Zap,
     BarChart3,
     ChefHat,
-    Crown
+    Crown,
+    HelpCircle
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { supabase, getRestaurantId } from '@/lib/supabase'
 
 const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/admin' },
@@ -44,6 +46,7 @@ const menuItems = [
     { icon: FileBarChart, label: 'Reports', href: '/admin/reports' },
     { icon: Monitor, label: 'App Previews', href: '/admin/preview' },
     { icon: Settings, label: 'Settings', href: '/admin/settings' },
+    { icon: HelpCircle, label: 'Support HQ', href: '/admin/support', color: 'text-indigo-600' },
 ]
 
 const automationItems = [
@@ -61,9 +64,18 @@ export function AdminSidebar() {
     const { sidebarOpen, toggleSidebar } = useAdminStore()
 
     const [mounted, setMounted] = useState(false)
+    const [restaurant, setRestaurant] = useState<any>(null)
+
     useEffect(() => {
         setMounted(true)
+        fetchBranding()
     }, [])
+
+    async function fetchBranding() {
+        const rid = getRestaurantId()
+        const { data } = await supabase.from('restaurants').select('name, logo_url').eq('id', rid).single()
+        if (data) setRestaurant(data)
+    }
 
     if (!mounted) return null
 
@@ -78,17 +90,25 @@ export function AdminSidebar() {
             <div className="flex h-16 items-center justify-between px-4 border-b border-gray-100">
                 {sidebarOpen ? (
                     <div className="flex items-center gap-3 animate-in fade-in duration-300">
-                        <div className="h-9 w-9 rounded-xl bg-green-600 flex items-center justify-center text-white shadow-lg shadow-green-500/20 ring-1 ring-green-600/20">
-                            <Store className="h-5 w-5" />
+                        <div className="h-9 w-9 rounded-xl bg-green-600 flex items-center justify-center text-white shadow-lg shadow-green-500/20 ring-1 ring-green-600/20 overflow-hidden">
+                            {restaurant?.logo_url ? (
+                                <img src={restaurant.logo_url} className="h-full w-full object-contain" alt="Logo" />
+                            ) : (
+                                <Store className="h-5 w-5" />
+                            )}
                         </div>
-                        <span className="text-xl font-black tracking-tight text-gray-900">
-                            TastyBytes
+                        <span className="text-sm font-black tracking-tight text-gray-900 truncate max-w-[120px]">
+                            {restaurant?.name || 'TastyBytes'}
                         </span>
                     </div>
                 ) : (
                     <div className="mx-auto">
-                        <div className="h-9 w-9 rounded-xl bg-green-600 flex items-center justify-center text-white shadow-lg shadow-green-500/20 ring-1 ring-green-600/20">
-                            <Store className="h-5 w-5" />
+                        <div className="h-9 w-9 rounded-xl bg-green-600 flex items-center justify-center text-white shadow-lg shadow-green-500/20 ring-1 ring-green-600/20 overflow-hidden">
+                             {restaurant?.logo_url ? (
+                                <img src={restaurant.logo_url} className="h-full w-full object-contain" alt="Logo" />
+                            ) : (
+                                <Store className="h-5 w-5" />
+                            )}
                         </div>
                     </div>
                 )}

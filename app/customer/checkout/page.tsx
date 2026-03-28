@@ -12,7 +12,7 @@ import { triggerAutomationWebhook } from '@/lib/webhook'
 import { incrementCouponUsage } from '@/actions/coupon'
 import { Coupon } from '@/types'
 import { format } from 'date-fns'
-import { supabase } from '@/lib/supabase'
+import { supabase, getRestaurantId } from '@/lib/supabase'
 import { useNotificationStore } from '@/store/notificationStore'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
@@ -91,7 +91,7 @@ export default function CheckoutPage() {
 
         setVerifyingCoupon(true)
         try {
-            const rid = process.env.NEXT_PUBLIC_RESTAURANT_ID || ''
+            const rid = getRestaurantId()
             const res = await fetch('/api/coupons', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -140,7 +140,7 @@ export default function CheckoutPage() {
             return
         }
 
-        const rid = process.env.NEXT_PUBLIC_RESTAURANT_ID || 'f1dde894-c027-4506-a55a-dfe65bb0449f'
+        const rid = getRestaurantId()
         console.log('🚀 [Checkout] Place Order clicked', { name, phone, rid })
         toast.info('Starting order placement...')
 
@@ -358,6 +358,7 @@ export default function CheckoutPage() {
             // 4. Add order items
             const orderItemsData = items.map(item => ({
                 order_id: orderId,
+                restaurant_id: rid,
                 menu_item_id: item.id,
                 item_name: item.name,
                 quantity: item.quantity,
@@ -376,6 +377,7 @@ export default function CheckoutPage() {
 
             // 5. Prepare Webhook Data
             const webhookData = {
+                action: 'new-order', // Explicit action for n8n routing
                 bill_id: billId,
                 amount: total,
                 customer: {
@@ -393,6 +395,12 @@ export default function CheckoutPage() {
                 })),
                 payment_method: paymentMethod,
                 restaurant_id: rid,
+                // SaaS Multi-Tenant Config for n8n
+                whatsapp_api_url: restaurant?.whatsapp_api_url,
+                whatsapp_api_id: restaurant?.whatsapp_api_id,
+                whatsapp_token: restaurant?.whatsapp_token,
+                restaurant_name: restaurant?.name || 'Restaurant',
+                custom_domain: restaurant?.custom_domain
             }
 
             // 5. Background Tasks (Non-blocking)
@@ -400,8 +408,8 @@ export default function CheckoutPage() {
             const backgroundTasks = async () => {
                 try {
                     // Trigger n8n Webhook
-                    console.log('📡 [Checkout] Sending Webhook (Background):', webhookData)
-                    triggerAutomationWebhook('new-order', webhookData).catch(e => console.error('Webhook BG error:', e));
+                    console.log('📡 [Checkout] Triggering Automation:', webhookData)
+                    triggerAutomationWebhook('new-order', webhookData).catch(e => console.error('Webhook error:', e));
 
                     // Update Coupon Usage if used
                     if (coupon && !existingOrderId) {
@@ -675,7 +683,7 @@ export default function CheckoutPage() {
                                     <Sheet>
                                         <SheetTrigger asChild>
                                             <Button variant="link" className="text-orange-600 h-auto p-0 font-bold text-xs flex items-center gap-1 hover:no-underline" onClick={async () => {
-                                                const rid = process.env.NEXT_PUBLIC_RESTAURANT_ID
+                                                const rid = getRestaurantId()
                                                 console.log('🎟️ [Checkout] Fetching available coupons for rid:', rid)
                                                 try {
                                                     // Pass phone if available to show private/loyal coupons
@@ -733,7 +741,7 @@ export default function CheckoutPage() {
                                                                             return
                                                                         }
 
-                                                                        const rid = process.env.NEXT_PUBLIC_RESTAURANT_ID || ''
+                                                                        const rid = getRestaurantId()
                                                                         try {
                                                                             const res = await fetch('/api/coupons', {
                                                                                 method: 'POST',

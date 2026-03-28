@@ -12,7 +12,7 @@ import {
     UtensilsCrossed, ShoppingCart, Plus, Minus, Trash2, CheckCircle2,
     Armchair, Search, User, Clock, ChefHat, Send, LogOut, RefreshCcw, XCircle, AlertCircle, ChevronRight, ShoppingBag
 } from 'lucide-react'
-import { supabase, RESTAURANT_ID } from '@/lib/supabase'
+import { supabase, getRestaurantId } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { triggerAutomationWebhook } from '@/lib/webhook'
@@ -91,7 +91,7 @@ export default function WaiterDashboard() {
             let { data, error } = await supabase
                 .from('orders')
                 .select('*, customers(name, phone), order_items(*), restaurant_tables(table_number)')
-                .eq('restaurant_id', RESTAURANT_ID)
+                .eq('restaurant_id', getRestaurantId())
                 .eq('status', 'pending_confirmation')
                 .order('created_at', { ascending: false });
 
@@ -101,7 +101,7 @@ export default function WaiterDashboard() {
                 const fallback = await supabase
                     .from('orders')
                     .select('*, customers!customer_id(name, phone), order_items(*), restaurant_tables!table_id(table_number)')
-                    .eq('restaurant_id', RESTAURANT_ID)
+                    .eq('restaurant_id', getRestaurantId())
                     .eq('status', 'pending_confirmation')
                     .order('created_at', { ascending: false });
                 data = fallback.data;
@@ -111,10 +111,11 @@ export default function WaiterDashboard() {
             // Tier 3: Absolute Minimal fallback (BUT MUST INCLUDE ITEMS)
             if (error) {
                  console.warn('⚠️ [Waiter] Tier 2 Query Failed, trying Tier 3...', error.message);
+                 const rid = getRestaurantId();
                  const minimal = await supabase
                     .from('orders')
                     .select('*, order_items(*)')
-                    .eq('restaurant_id', RESTAURANT_ID)
+                    .eq('restaurant_id', rid)
                     .eq('status', 'pending_confirmation')
                     .order('created_at', { ascending: false });
                 data = minimal.data;
@@ -186,11 +187,12 @@ export default function WaiterDashboard() {
     async function fetchAll(silent = false) {
         try {
             if (!silent) setLoading(true);
+            const rid = getRestaurantId();
             const [{ data: tablesData, error: tErr }, { data: catsData, error: cErr }, { data: itemsData, error: iErr }, staffRes] = await Promise.all([
-                supabase.from('restaurant_tables').select('*').eq('restaurant_id', RESTAURANT_ID).order('table_number'),
-                supabase.from('menu_categories').select('*').eq('restaurant_id', RESTAURANT_ID).order('sort_order'),
-                supabase.from('menu_items').select('*').eq('restaurant_id', RESTAURANT_ID).eq('is_available', true).order('name', { ascending: true }),
-                supabase.from('staff').select('id, name').eq('restaurant_id', RESTAURANT_ID).eq('status', true)
+                supabase.from('restaurant_tables').select('*').eq('restaurant_id', rid).order('table_number'),
+                supabase.from('menu_categories').select('*').eq('restaurant_id', rid).order('sort_order'),
+                supabase.from('menu_items').select('*').eq('restaurant_id', rid).eq('is_available', true).order('name', { ascending: true }),
+                supabase.from('staff').select('id, name').eq('restaurant_id', rid).eq('status', true)
             ]);
             
             const staffData = staffRes.data || [];
@@ -218,11 +220,12 @@ export default function WaiterDashboard() {
         console.log('🔍 Verifying staff with passcode:', passcode)
 
         try {
+            const rid = getRestaurantId();
             const { data: staffList, error } = await supabase
                 .from('staff')
                 .select('*')
                 .eq('passcode', passcode)
-                .eq('restaurant_id', RESTAURANT_ID)
+                .eq('restaurant_id', rid)
 
             if (error) {
                 console.error('❌ DB Error:', error)
@@ -263,12 +266,13 @@ export default function WaiterDashboard() {
             let finalStaffName = staffName
 
             // Identify staff by BOTH passcode AND name to prevent overwriting someone else
+            const rid = getRestaurantId();
             const { data: existingStaff } = await supabase
                 .from('staff')
                 .select('*')
                 .eq('passcode', passcode)
                 .eq('name', staffName.trim())
-                .eq('restaurant_id', RESTAURANT_ID)
+                .eq('restaurant_id', rid)
                 .maybeSingle()
 
             if (existingStaff) {
@@ -277,8 +281,9 @@ export default function WaiterDashboard() {
                 // NO OVERWRITE: We just use the existing matching record
             } else {
                 // Create NEW staff member
+                const rid = getRestaurantId();
                 const { data: newStaff, error: insertErr } = await supabase.from('staff').insert({
-                    restaurant_id: RESTAURANT_ID,
+                    restaurant_id: rid,
                     passcode: passcode,
                     name: staffName,
                     role: passcode === '1801' ? 'admin' : 'waiter',
@@ -311,7 +316,7 @@ export default function WaiterDashboard() {
             triggerAutomationWebhook('waiter-login', {
                 staff_id: finalStaffId || 'temp',
                 name: finalStaffName,
-                restaurant_id: RESTAURANT_ID,
+                restaurant_id: getRestaurantId(),
                 login_at: new Date().toISOString()
             })
         } catch (err) {
@@ -353,6 +358,7 @@ export default function WaiterDashboard() {
     async function placeOrder() {
         if (!selectedTable || cart.length === 0) return
         setIsPlacing(true)
+        const rid = getRestaurantId()
         try {
             // 1. Resolve Customer ID first if name OR phone provided
             let customerId: string | null = null
@@ -364,11 +370,12 @@ export default function WaiterDashboard() {
 
                 // Try to find by phone if provided
                 if (cleanedPhone) {
+                    const rid = getRestaurantId();
                     const { data: existing, error: findError } = await supabase
                         .from('customers')
                         .select('id')
                         .eq('phone', cleanedPhone)
-                        .eq('restaurant_id', RESTAURANT_ID)
+                        .eq('restaurant_id', rid)
                         .maybeSingle()
 
                     if (findError) {
@@ -385,7 +392,7 @@ export default function WaiterDashboard() {
                     const { data: newCust, error: createError } = await supabase
                         .from('customers')
                         .insert({
-                            restaurant_id: RESTAURANT_ID,
+                            restaurant_id: rid,
                             name: customerName.trim() || 'Guest',
                             phone: customerPhone.replace(/\D/g, '').slice(-10) || null
                         })
@@ -411,7 +418,7 @@ export default function WaiterDashboard() {
             // 2. Check for existing active order using Secure API (Robust & bypasses RLS)
             console.log('🔍 [Waiter] Checking for active order on Table:', selectedTable.table_number, 'Customer ID:', customerId)
             const params = new URLSearchParams()
-            params.append('restaurantId', RESTAURANT_ID)
+            params.append('restaurantId', rid)
             params.append('tableId', selectedTable.id)
             params.append('tableNumber', selectedTable.table_number.toString())
             params.append('join', 'true') // ALWAYS try to join the existing bill on this table
@@ -466,7 +473,7 @@ export default function WaiterDashboard() {
                 billId = `BILL${dateStr}${random}`
 
                 const { data: order, error: orderError } = await supabase.from('orders').insert({
-                    restaurant_id: RESTAURANT_ID,
+                    restaurant_id: rid,
                     table_id: selectedTable.id,
                     customer_id: customerId,
                     bill_id: billId,
@@ -487,6 +494,7 @@ export default function WaiterDashboard() {
 
             const orderItems = cart.map(c => ({
                 order_id: orderId,
+                restaurant_id: rid,
                 menu_item_id: c.id,
                 item_name: c.name,
                 quantity: c.quantity,
@@ -513,7 +521,7 @@ export default function WaiterDashboard() {
                     total: cartTotal,
                     waiter_name: staffName || 'Guest Waiter',
                     waiter_id: staffId || 'guest',
-                    restaurant_id: RESTAURANT_ID,
+                    restaurant_id: getRestaurantId(),
                     timestamp: new Date().toISOString()
                 })
                 console.log('✅ Webhook Sent Successfully:', webhookRes)
@@ -784,7 +792,7 @@ export default function WaiterDashboard() {
                                         Select a Table
                                     </h3>
                                     <Badge variant="outline" className="rounded-full px-4 py-1 font-semibold text-[10px] uppercase tracking-wider text-gray-500 border-2">
-                                        REST-ID: {RESTAURANT_ID.slice(0, 6)}...
+                                        REST-ID: {getRestaurantId().slice(0, 6)}...
                                     </Badge>
                                 </div>
 

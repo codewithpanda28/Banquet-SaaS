@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "@/components/ui/sonner";
+import { headers } from "next/headers";
+import { Toaster } from "sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,19 +19,23 @@ export const metadata: Metadata = {
   description: "Manage your restaurant operations efficiently",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const headersList = await headers();
+  const primaryColor = headersList.get('x-primary-color') || '#ef4444'; // Fallback to red
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning
+        style={{ '--primary-brand': primaryColor } as React.CSSProperties}
       >
         {children}
-
+        <Toaster position="top-center" richColors />
       </body>
     </html>
   );

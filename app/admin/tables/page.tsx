@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Plus, QrCode, Users, Edit, Trash2, Download, Armchair, Zap } from 'lucide-react'
-import { supabase, RESTAURANT_ID } from '@/lib/supabase'
+import { supabase, getRestaurantId } from '@/lib/supabase'
 import { RestaurantTable } from '@/types'
 import { toast } from 'sonner'
 import QRCode from 'qrcode'
@@ -32,8 +32,9 @@ export default function TablesPage() {
     useEffect(() => {
         fetchTables()
 
+        const rid = getRestaurantId()
         const ch = supabase.channel('tables-rt')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'restaurant_tables' }, () => fetchTables())
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'restaurant_tables', filter: `restaurant_id=eq.${rid}` }, () => fetchTables())
             .subscribe()
 
         return () => { supabase.removeChannel(ch) }
@@ -47,18 +48,19 @@ export default function TablesPage() {
 
     async function generateAllQRCodes() {
         const codes: Record<string, string> = {}
+        const rid = getRestaurantId()
+
+        // Fetch restaurant phone ONCE for efficient QR generation
+        const { data: restaurant } = await supabase
+            .from('restaurants')
+            .select('whatsapp_number')
+            .eq('id', rid)
+            .single()
+
+        let phone = restaurant?.whatsapp_number?.replace(/[^0-9]/g, '') || '917282871506'
+        
         for (const table of tables) {
             try {
-                // Fetch restaurant phone for direct WhatsApp link
-                const { data: restaurant } = await supabase
-                    .from('restaurants')
-                    .select('whatsapp_number')
-                    .eq('id', RESTAURANT_ID)
-                    .single()
-
-                let phone = '917282871506' // Force user provided number
-                // const dbPhone = restaurant?.whatsapp_number?.replace(/[^0-9]/g, '')
-                // if (dbPhone && dbPhone.length >= 10) phone = dbPhone
                 const text = encodeURIComponent(`I am at Table ${table.table_number}`)
                 const qrValue = `https://wa.me/${phone}?text=${text}`
 
@@ -72,7 +74,7 @@ export default function TablesPage() {
                 })
                 codes[table.id] = url
             } catch (err) {
-                console.error(err)
+                console.error('QR Gen single fail:', err)
             }
         }
         setTableQRCodes(codes)
@@ -81,10 +83,11 @@ export default function TablesPage() {
     async function fetchTables() {
         try {
             setLoading(true)
+            const rid = getRestaurantId()
             const { data, error } = await supabase
                 .from('restaurant_tables')
                 .select('*')
-                .eq('restaurant_id', RESTAURANT_ID)
+                .eq('restaurant_id', rid)
                 .order('table_number')
 
             if (error) throw error
@@ -104,8 +107,14 @@ export default function TablesPage() {
                 return
             }
 
+            const rid = getRestaurantId()
+            if (!rid) {
+                toast.error('Restaurant context not found. Please log in.')
+                return
+            }
+
             const tableData = {
-                restaurant_id: RESTAURANT_ID,
+                restaurant_id: rid,
                 table_number: parseInt(tableForm.table_number),
                 table_name: tableForm.table_name,
                 capacity: parseInt(tableForm.capacity),
@@ -134,9 +143,9 @@ export default function TablesPage() {
             setTableForm({ table_number: '', table_name: '', capacity: '', status: 'available' })
             setEditingTable(null)
             fetchTables()
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error saving table:', error)
-            toast.error('Failed to save table')
+            toast.error(`Save Failed: ${error.message || 'Unknown database error'}`)
         }
     }
 

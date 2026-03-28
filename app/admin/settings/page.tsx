@@ -7,11 +7,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Save, Store, Clock, DollarSign, Phone, Mail, MapPin, Smartphone, Utensils } from 'lucide-react'
-import { supabase, RESTAURANT_ID } from '@/lib/supabase'
+import { Save, Store, Clock, DollarSign, Phone, Mail, MapPin, Smartphone, Utensils, Zap, Globe, HelpCircle, MessageSquare, Send, ImagePlus, Loader2, Trash2, QrCode } from 'lucide-react'
+import { supabase, RESTAURANT_ID, getRestaurantId } from '@/lib/supabase'
 import { Restaurant } from '@/types'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
 
 export default function SettingsPage() {
     const [loading, setLoading] = useState(true)
@@ -32,7 +33,20 @@ export default function SettingsPage() {
         opening_time: '',
         closing_time: '',
         upi_id: '',
+        primary_color: '#ef4444',
+        secondary_color: '#111827',
+        custom_domain: '',
+        logo_url: '',
+        banner_url: '',
+        whatsapp_token: '',
+        whatsapp_api_id: '',
+        whatsapp_api_url: 'https://thinkaiq.in/api',
+        google_review_url: '',
+        qr_code_url: '',
     })
+    const [ticket, setTicket] = useState({ subject: '', message: '' })
+    const [sendingTicket, setSendingTicket] = useState(false)
+    const [isUploading, setIsUploading] = useState(false)
     const [dietaryType, setDietaryType] = useState('both')
 
     useEffect(() => {
@@ -70,6 +84,16 @@ export default function SettingsPage() {
                     opening_time: data.opening_time || '',
                     closing_time: data.closing_time || '',
                     upi_id: data.upi_id || '',
+                    primary_color: data.primary_color || '#ef4444',
+                    secondary_color: data.secondary_color || '#111827',
+                    custom_domain: data.custom_domain || '',
+                    logo_url: data.logo_url || '',
+                    banner_url: data.banner_url || '',
+                    whatsapp_token: data.whatsapp_token || '',
+                    whatsapp_api_id: data.whatsapp_api_id || '',
+                    whatsapp_api_url: data.whatsapp_api_url || 'https://thinkaiq.in/api',
+                    google_review_url: data.google_review_url || '',
+                    qr_code_url: data.qr_code_url || '',
                 })
             }
         } catch (error) {
@@ -77,6 +101,51 @@ export default function SettingsPage() {
             toast.error('Failed to load settings')
         } finally {
             setLoading(false)
+        }
+    }
+
+    async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>, type: 'logo' | 'banner' | 'qr_code') {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setIsUploading(true);
+            const rid = getRestaurantId();
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${rid}-${type}-${Math.random().toString(36).slice(2)}.${fileExt}`;
+            const filePath = `restaurants/${type}s/${fileName}`;
+
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('branding')
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('branding')
+                .getPublicUrl(filePath);
+
+            // Immediately update the restaurant table (Dynamic Column Mapping)
+            let col = '';
+            if (type === 'logo') col = 'logo_url';
+            else if (type === 'banner') col = 'banner_url';
+            else if (type === 'qr_code') col = 'qr_code_url';
+
+            const { error: dbError } = await supabase
+                .from('restaurants')
+                .update({ [col]: publicUrl })
+                .eq('id', rid);
+
+            if (dbError) throw dbError;
+
+            setForm(prev => ({ ...prev, [col]: publicUrl }));
+            toast.success(`${type.toUpperCase().replace('_', ' ')} updated!`);
+            fetchRestaurantData();
+        } catch (err: any) {
+            console.error('Upload Error:', err);
+            toast.error('Failed to upload image: ' + err.message);
+        } finally {
+            setIsUploading(false);
         }
     }
 
@@ -100,6 +169,12 @@ export default function SettingsPage() {
                 closing_time: form.closing_time || null,
                 upi_id: form.upi_id || null,
                 dietary_type: dietaryType,
+                primary_color: form.primary_color,
+                secondary_color: form.secondary_color,
+                whatsapp_token: form.whatsapp_token || null,
+                whatsapp_api_id: form.whatsapp_api_id || null,
+                whatsapp_api_url: form.whatsapp_api_url || 'https://thinkaiq.in/api',
+                google_review_url: form.google_review_url || null,
             }
 
             const { error } = await supabase
@@ -120,6 +195,25 @@ export default function SettingsPage() {
             toast.error(error.message || 'Failed to save settings')
         } finally {
             setSaving(false)
+        }
+    }
+
+    async function handleSubmitTicket() {
+        if (!ticket.message) return
+        try {
+            setSendingTicket(true)
+            const { error } = await supabase.from('support_tickets').insert({
+                restaurant_id: getRestaurantId(),
+                subject: ticket.subject || 'General Assistance',
+                message: ticket.message
+            })
+            if (error) throw error
+            toast.success('Signal sent! Super Admin HQ will resolve this soon.')
+            setTicket({ subject: '', message: '' })
+        } catch (error) {
+            toast.error('Failed to send SOS signal')
+        } finally {
+            setSendingTicket(false)
         }
     }
 
@@ -347,15 +441,27 @@ export default function SettingsPage() {
                                     />
                                 </div>
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="min-order" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Min Order Value (₹)</Label>
-                                <Input
-                                    id="min-order"
-                                    type="number"
-                                    value={form.min_order_amount}
-                                    onChange={(e) => setForm({ ...form, min_order_amount: e.target.value })}
-                                    className="bg-secondary/20 border-border/50 h-11"
-                                />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="min-order" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Min Order Value (₹)</Label>
+                                    <Input
+                                        id="min-order"
+                                        type="number"
+                                        value={form.min_order_amount}
+                                        onChange={(e) => setForm({ ...form, min_order_amount: e.target.value })}
+                                        className="bg-secondary/20 border-border/50 h-11"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="upi_id" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">UPI ID for Payments</Label>
+                                    <Input
+                                        id="upi_id"
+                                        placeholder="merchant@upi"
+                                        value={form.upi_id}
+                                        onChange={(e) => setForm({ ...form, upi_id: e.target.value })}
+                                        className="bg-secondary/20 border-border/50 h-11 font-mono"
+                                    />
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -364,29 +470,56 @@ export default function SettingsPage() {
                 {/* Payment Information */}
                 <Card className="glass-panel border-0 overflow-hidden relative group">
                     <div className="absolute top-0 left-0 w-1 h-full bg-purple-500" />
-                    <CardHeader>
-                        <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-500 group-hover:scale-110 transition-transform">
-                                <Smartphone className="h-5 w-5" />
+                    <CardContent className="space-y-6">
+                        <div className="grid gap-6 md:grid-cols-2">
+                            <div className="space-y-2">
+                                <Label htmlFor="whatsapp_api_id" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">WhatsApp API ID</Label>
+                                <Input
+                                    id="whatsapp_api_id"
+                                    placeholder="bd54faee-..."
+                                    value={form.whatsapp_api_id}
+                                    onChange={(e) => setForm({ ...form, whatsapp_api_id: e.target.value })}
+                                    className="bg-secondary/20 border-border/50 h-11 font-mono"
+                                />
                             </div>
-                            <div>
-                                <CardTitle className="text-lg">Digital Payments</CardTitle>
-                                <CardDescription>UPI configurations</CardDescription>
+                            <div className="space-y-2">
+                                <Label htmlFor="whatsapp_api_url" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">WhatsApp API URL</Label>
+                                <Input
+                                    id="whatsapp_api_url"
+                                    placeholder="https://thinkaiq.in/api"
+                                    value={form.whatsapp_api_url}
+                                    onChange={(e) => setForm({ ...form, whatsapp_api_url: e.target.value })}
+                                    className="bg-secondary/20 border-border/50 h-11 font-mono"
+                                />
                             </div>
                         </div>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-2 max-w-md">
-                            <Label htmlFor="upi" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">UPI ID (Merchant VPA)</Label>
-                            <Input
-                                id="upi"
-                                placeholder="merchant@upi"
-                                value={form.upi_id}
-                                onChange={(e) => setForm({ ...form, upi_id: e.target.value })}
-                                className="bg-secondary/20 border-border/50 h-11 font-mono"
+                        <div className="space-y-2">
+                            <Label htmlFor="whatsapp_token" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">WhatsApp Access Token</Label>
+                            <Textarea
+                                id="whatsapp_token"
+                                placeholder="Bearer aRnT5..."
+                                value={form.whatsapp_token}
+                                onChange={(e) => setForm({ ...form, whatsapp_token: e.target.value })}
+                                className="bg-secondary/20 border-border/50 resize-none min-h-[80px] font-mono"
                             />
-                            <p className="text-xs text-muted-foreground mt-1">This VPA will be encoded in QR codes for direct payments.</p>
                         </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="google_review_url" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Google Review Link</Label>
+                            <div className="relative">
+                                <Globe className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                    id="google_review_url"
+                                    placeholder="https://g.page/review/your-link"
+                                    value={form.google_review_url}
+                                    onChange={(e) => setForm({ ...form, google_review_url: e.target.value })}
+                                    className="pl-10 bg-secondary/20 border-border/50 h-11"
+                                />
+                            </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground italic flex items-center gap-2">
+                            <Zap className="h-3 w-3 text-pink-500" />
+                            Use these credentials and links to route your restaurant's specific automation logic.
+                        </p>
                     </CardContent>
                 </Card>
 
@@ -455,6 +588,109 @@ export default function SettingsPage() {
                                 {dietaryType === 'veg_only' && <span className="text-green-600 font-bold block mt-1">Only Vegetarian items can be added.</span>}
                                 {dietaryType === 'non_veg_only' && <span className="text-red-600 font-bold block mt-1">Only Non-Vegetarian items can be added.</span>}
                             </p>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="glass-panel border-0 overflow-hidden relative group">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-pink-500" />
+                    <CardHeader>
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-pink-500/10 flex items-center justify-center text-pink-500 group-hover:scale-110 transition-transform">
+                                <Zap className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-lg">Identity & Branding Assets</CardTitle>
+                                <CardDescription>Visual assets used across Sidebar and Customer Menu</CardDescription>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="grid gap-8 md:grid-cols-2 text-black">
+        <div className="space-y-4">
+            <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground pl-1">Brand Identity</Label>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Brand Logo</p>
+                    <div className="relative h-28 w-full rounded-2xl bg-secondary/20 flex flex-col items-center justify-center overflow-hidden border border-border/50 hover:border-pink-500/50 transition-all group/logo cursor-pointer">
+                        {form.logo_url ? (
+                            <img src={form.logo_url} className="h-full w-full object-contain p-4 group-hover/logo:scale-105 transition-transform" alt="Logo" />
+                        ) : (
+                            <div className="text-center opacity-40">
+                                <ImagePlus className="h-10 w-10 mx-auto mb-1" />
+                                <span className="text-[10px] font-bold">UPLOAD LOGO</span>
+                            </div>
+                        )}
+                        <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                            onChange={(e) => handleImageUpload(e, 'logo')}
+                            disabled={isUploading}
+                        />
+                        {isUploading && <div className="absolute inset-0 bg-black/60 flex items-center justify-center"><Loader2 className="animate-spin text-white" /></div>}
+                    </div>
+                </div>
+                <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Cover Banner</p>
+                    <div className="relative h-28 w-full rounded-2xl bg-secondary/20 flex flex-col items-center justify-center overflow-hidden border border-border/50 hover:border-pink-500/50 transition-all group/banner cursor-pointer">
+                         {form.banner_url ? (
+                            <img src={form.banner_url} className="h-full w-full object-cover group-hover/banner:scale-105 transition-transform" alt="Banner" />
+                         ) : (
+                            <div className="text-center opacity-40">
+                                <ImagePlus className="h-10 w-10 mx-auto mb-1" />
+                                <span className="text-[10px] font-bold">UPLOAD BANNER</span>
+                            </div>
+                         )}
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                            onChange={(e) => handleImageUpload(e, 'banner')}
+                            disabled={isUploading}
+                        />
+                        {isUploading && <div className="absolute inset-0 bg-black/60 flex items-center justify-center"><Loader2 className="animate-spin text-white" /></div>}
+                    </div>
+                </div>
+                <div className="space-y-2">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Payment QR</p>
+                    <div className="relative h-28 w-full rounded-2xl bg-secondary/10 flex flex-col items-center justify-center overflow-hidden border-2 border-dashed border-border/50 hover:border-blue-500/50 transition-all group/qr cursor-pointer">
+                         {form.qr_code_url ? (
+                            <img src={form.qr_code_url} className="h-full w-full object-contain p-2 group-hover/qr:scale-110 transition-transform" alt="QR Code" />
+                         ) : (
+                            <div className="text-center opacity-40">
+                                <QrCode className="h-10 w-10 mx-auto mb-1" />
+                                <span className="text-[10px] font-bold uppercase">Static QR</span>
+                            </div>
+                         )}
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="absolute inset-0 opacity-0 cursor-pointer"
+                            onChange={(e) => handleImageUpload(e, 'qr_code')}
+                            disabled={isUploading}
+                        />
+                        {isUploading && <div className="absolute inset-0 bg-black/60 flex items-center justify-center"><Loader2 className="animate-spin text-white" /></div>}
+                    </div>
+                </div>
+            </div>
+        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="primary_color" className="text-xs font-bold uppercase tracking-wider text-muted-foreground pl-1">Primary Theme Color</Label>
+                            <div className="flex gap-4 items-center">
+                                <Input
+                                    id="primary_color"
+                                    type="color"
+                                    value={form.primary_color}
+                                    onChange={(e) => setForm({ ...form, primary_color: e.target.value })}
+                                    className="w-16 h-12 p-1 bg-secondary/20 border-border/50 cursor-pointer rounded-xl"
+                                />
+                                <Input
+                                    value={form.primary_color}
+                                    onChange={(e) => setForm({ ...form, primary_color: e.target.value })}
+                                    className="bg-secondary/20 border-border/50 h-12 font-mono uppercase rounded-xl"
+                                />
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mt-2 italic">This color influences buttons, icons and interactive elements across your store.</p>
                         </div>
                     </CardContent>
                 </Card>

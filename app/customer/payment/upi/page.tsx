@@ -48,7 +48,9 @@ function UPIPaymentContent() {
             </div>
 
             <div className="bg-white p-6 rounded-xl shadow-lg border">
-                {upiUrl ? (
+                {restaurant?.qr_code_url ? (
+                    <img src={restaurant.qr_code_url} className="w-[200px] h-[200px] object-contain mx-auto" alt="Payment QR" />
+                ) : upiUrl ? (
                     <QRCodeSVG value={upiUrl} size={200} level="H" includeMargin />
                 ) : (
                     <div className="w-[200px] h-[200px] bg-secondary flex items-center justify-center animate-pulse">
