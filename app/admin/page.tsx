@@ -130,6 +130,14 @@ export default function AdminDashboard() {
             const todayStart = startDate.toISOString()
             const rangeEnd = todayEnd.toISOString()
 
+            // 🚀 SaaS Isolation Check: Don't fetch if no ID
+            const currentRid = RESTAURANT_ID.toString()
+            if (!currentRid || currentRid === 'undefined' || currentRid === '') {
+                console.warn('⚠️ [AdminDashboard] Wait... no restaurant_id found. Pausing fetch.')
+                setLoading(false)
+                return
+            }
+
             // Fetch Revenue
             const { data: revenueData } = await supabase
                 .from('orders')

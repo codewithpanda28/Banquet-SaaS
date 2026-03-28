@@ -57,6 +57,21 @@ export default function SuperAdminPage() {
     primaryColor: '#ef4444',
   });
 
+  const fetchRestaurants = async () => {
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('restaurants')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      toast.error('Failed to load restaurants');
+    } else {
+      setRestaurants(data || []);
+    }
+    setIsLoading(false);
+  };
+
   useEffect(() => {
     // Check if previously authenticated in this session
     const auth = sessionStorage.getItem('saas_auth');
@@ -93,15 +108,15 @@ export default function SuperAdminPage() {
   };
 
   const getFullLink = (path: string, restro: any) => {
-    const base = getBaseURL(restro);
     const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
     
-    // If we are using Query Param strategy (Vercel/Central Domain)
-    if (hostname.includes('vercel.app') || !restro.custom_domain && !hostname.includes('localhost')) {
+    // If we are on Localhost OR Vercel (Environments where subdomains might fail or be wildcard-less)
+    if (hostname.includes('localhost') || hostname.includes('vercel.app')) {
         const separator = path.includes('?') ? '&' : '?';
-        return `${base}${path}${separator}id=${restro.id}`;
+        return `${window.location.protocol}//${window.location.host}${path}${separator}id=${restro.id}`;
     }
-    
+
+    const base = getBaseURL(restro);
     return `${base}${path}`;
   };
 
@@ -148,20 +163,6 @@ export default function SuperAdminPage() {
     }
   };
 
-  const fetchRestaurants = async () => {
-    setIsLoading(true);
-    const { data, error } = await supabase
-      .from('restaurants')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      toast.error('Failed to load restaurants');
-    } else {
-      setRestaurants(data || []);
-    }
-    setIsLoading(false);
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -22,27 +22,43 @@ export default function LoginPage() {
         try {
             const restaurantId = getRestaurantId()
             
+            if (!restaurantId) {
+                toast.error('❌ Access Denied: No Restaurant ID provided.')
+                setLoading(false)
+                return
+            }
+
             // 🔍 Verify Passcode from DB
             const { data, error } = await supabase
                 .from('restaurants')
-                .select('admin_passcode, name')
+                .select('admin_passcode, name, id')
                 .eq('id', restaurantId)
                 .single()
 
-            if (error) {
+            if (error || !data) {
                 toast.error('Restaurant not found or database error')
                 return
             }
 
             if (passcode === data.admin_passcode) {
-                // Store login session
+                // 🧹 CLEAN OLD SESSIONS (Crucial for SaaS Security)
+                localStorage.clear() // Clear any other tenant's data
+                document.cookie.split(";").forEach((c) => {
+                    document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+                });
+
+                // 🏗️ SET NEW SESSION
                 localStorage.setItem('admin_logged_in', 'true')
                 localStorage.setItem('admin_restaurant_id', restaurantId)
+                localStorage.setItem('tenant_id', restaurantId)
+                
+                // Set Secure Cookie for Middleware
+                document.cookie = `tenant_id=${restaurantId}; path=/; max-age=86400`;
 
                 toast.success(`Welcome back, ${data.name}!`)
                 
-                // 🚀 Full Page Refresh redirect (Ensures Layout picks up the new localStorage/cookies)
-                window.location.href = '/admin'
+                // 🚀 Redirect with forced ID to ensure perfect separation
+                window.location.href = `/admin?id=${restaurantId}`
             } else {
                 toast.error('❌ Invalid Authentication Passcode')
             }

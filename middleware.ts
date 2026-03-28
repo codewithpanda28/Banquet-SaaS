@@ -19,9 +19,21 @@ export async function middleware(req: NextRequest) {
   requestHeaders.set('x-current-domain', hostname);
   requestHeaders.set('x-is-main-domain', isMainDomain ? 'true' : 'false');
 
+  // 🆔 ALWAYS Check for ?id= Search Parameter (Universal Overrider)
+  const idFromUrl = url.searchParams.get('id');
+  
   // 🏷️ Admin Login Redirect (Fix 404)
+  // We handle this FIRST to ensure the redirect happens regardless of ?id= param
   if (url.pathname === '/admin/login') {
-    return NextResponse.redirect(new URL('/login', req.url));
+    const loginUrl = new URL('/login', req.url);
+    if (idFromUrl) loginUrl.searchParams.set('id', idFromUrl);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  if (idFromUrl) {
+    const response = NextResponse.next();
+    response.cookies.set('tenant_id', idFromUrl, { path: '/', httpOnly: false });
+    return response;
   }
 
   if (!isMainDomain) {
