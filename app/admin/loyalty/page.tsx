@@ -192,7 +192,8 @@ export default function LoyaltyHubPage() {
             // 2. Send via WhatsApp
             const expiryDateObj = new Date(Date.now() + 7 * 86400000);
             const expiryDisplay = new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(expiryDateObj);
-            const fullMessage = `👑 Loyal Coupon: Congratulations ${selectedCustomer.name}! You've unlocked a special reward: *${rewardText}*. Use Code: *${finalCode}* on your next visit! 🎉\n\n⏰ Valid until: ${expiryDisplay}\n\nSee you soon! 🍕`;
+            
+            const fullMessage = `🎁 *LOYAL COUPON FOR YOU!* 🎁\n\nHello *${selectedCustomer.name}*,\n\nUse this exclusive coupon on your next visit!\n\n⭐ Reward: *${rewardText}*\n🎟️ Code: *${finalCode}*\n⏰ Valid until: *${expiryDisplay}*\n\nSee you soon! 🍕`;
 
             await handleWhatsAppCoupon(
                 selectedCustomer.name, 
