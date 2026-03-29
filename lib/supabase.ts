@@ -34,18 +34,7 @@ export const getRestaurantId = () => {
     return process.env.NEXT_PUBLIC_RESTAURANT_ID || '';
 }
 
-// 🚀 SaaS Reactive Strategy
-// Using a Proxy ensures that existing code using RESTAURANT_ID constant
-// always get the LATEST value from getRestaurantId() without needing a total refactor.
-export const RESTAURANT_ID = new Proxy({}, {
-    get: (_, prop) => {
-        const id = getRestaurantId();
-        if (prop === Symbol.toPrimitive) return () => id;
-        if (prop === 'toString') return () => id;
-        if (prop === 'valueOf') return () => id;
-        if (prop === 'toLowerCase') return () => id.toLowerCase();
-        if (prop === 'toStringTag') return () => 'String';
-        // @ts-ignore - Handle string methods
-        return typeof id[prop] === 'function' ? id[prop].bind(id) : id[prop];
-    }
-}) as unknown as string;
+// 🚀 SaaS Static-Reactive ID
+// We export the ID as a string-serialized result. 
+// Note: In client components, this will re-evaluate on every import/call.
+export const RESTAURANT_ID = typeof window !== 'undefined' ? getRestaurantId() : (process.env.NEXT_PUBLIC_RESTAURANT_ID || '');

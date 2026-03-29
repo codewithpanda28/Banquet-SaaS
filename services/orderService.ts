@@ -1,7 +1,8 @@
-import { supabase, RESTAURANT_ID } from '@/lib/supabase'
+import { supabase, getRestaurantId } from '@/lib/supabase'
 
 export async function getActiveOrders() {
-    const rid = RESTAURANT_ID || process.env.NEXT_PUBLIC_RESTAURANT_ID;
+    // ✅ Always call as function — never use static RESTAURANT_ID which can be stale
+    const rid = getRestaurantId() || process.env.NEXT_PUBLIC_RESTAURANT_ID;
     
     try {
         if (!rid) {

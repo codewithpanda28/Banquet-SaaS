@@ -11,6 +11,7 @@ import {
     UtensilsCrossed,
     Armchair,
     Users,
+    Gift,
     TicketPercent,
     FileBarChart,
     Settings,
@@ -29,7 +30,8 @@ import {
     BarChart3,
     ChefHat,
     Crown,
-    HelpCircle
+    HelpCircle,
+    Share2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { supabase, getRestaurantId } from '@/lib/supabase'
@@ -41,7 +43,9 @@ const menuItems = [
     { icon: Armchair, label: 'Tables', href: '/admin/tables' },
     { icon: ConciergeBell, label: 'Waiter Activity', href: '/admin/waiters' },
     { icon: Users, label: 'Customers', href: '/admin/customers' },
-    { icon: Crown, label: 'Loyalty Hub', href: '/admin/loyalty' },
+    { icon: Crown, label: 'VIP Leaderboard', href: '/admin/loyalty' },
+    { icon: Share2, label: 'Referral Engine', href: '/admin/referrals' },
+    { icon: Gift, label: 'Rewards Program', href: '/admin/rewards' },
     { icon: TicketPercent, label: 'Coupons', href: '/admin/coupons' },
     { icon: FileBarChart, label: 'Reports', href: '/admin/reports' },
     { icon: Monitor, label: 'App Previews', href: '/admin/preview' },

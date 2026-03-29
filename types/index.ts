@@ -32,6 +32,9 @@ export interface Restaurant {
     whatsapp_api_url?: string | null;
     whatsapp_api_id?: string | null;
     whatsapp_token?: string | null;
+    loyalty_milestone_threshold?: number;
+    loyalty_milestone_reward?: string;
+    loyalty_milestone_image?: string;
 }
 
 export interface MenuCategory {
@@ -69,6 +72,13 @@ export interface MenuItem {
     };
 }
 
+export interface CartItem extends MenuItem {
+    cartId: string;
+    quantity: number;
+    instructions: string;
+    lineTotal: number;
+}
+
 export interface RestaurantTable {
     id: string;
     restaurant_id: string;
@@ -90,6 +100,8 @@ export interface Customer {
     total_spent: number;
     last_order_at?: string;
     created_at: string;
+    wallet_balance?: number;
+    loyalty_points?: number;
 }
 
 export interface Order {
@@ -101,54 +113,27 @@ export interface Order {
     order_type: OrderType;
     status: OrderStatus;
     payment_status: PaymentStatus;
-    payment_method: PaymentMethod;
-    subtotal: number;
-    tax: number;
-    discount: number;
-    delivery_charge: number;
-    total: number;
-    special_instructions: string | null;
-    delivery_address: string | null;
-    estimated_time: number;
-    customer_name?: string;
-    customer_phone?: string;
-    waiter_id?: string | null;
+    payment_method: PaymentMethod | null;
+    total_amount: number;
+    discount_amount: number;
+    tax_amount: number;
+    final_amount: number;
+    notes: string | null;
     created_at: string;
     updated_at: string;
-    order_items?: OrderItem[];
     customers?: Customer;
-    restaurant_tables?: {
-        table_number: number;
-    };
-    notes?: string | null;
+    order_items?: OrderItem[];
 }
 
 export interface OrderItem {
     id: string;
     order_id: string;
     menu_item_id: string;
-    item_name: string;
     quantity: number;
     price: number;
-    total: number;
-    special_instructions: string | null;
-    status: 'pending' | 'preparing' | 'ready';
-    created_at?: string; // For NEW badge detection
+    subtotal: number;
+    notes: string | null;
     menu_items?: MenuItem;
-}
-
-export interface DashboardMetrics {
-    todayRevenue: number;
-    todayOrders: number;
-    avgOrderValue: number;
-    activeOrders: number;
-}
-
-export interface CartItem extends MenuItem {
-    cartId: string;
-    quantity: number;
-    instructions: string;
-    lineTotal: number;
 }
 
 export interface Coupon {
@@ -159,9 +144,7 @@ export interface Coupon {
     discount_type: 'percentage' | 'fixed';
     discount_value: number;
     min_order_amount: number;
-    max_discount: number | null;
-    usage_limit: number;
-    used_count: number;
+    max_discount_amount: number | null;
     valid_from: string;
     valid_until: string;
     is_active: boolean;

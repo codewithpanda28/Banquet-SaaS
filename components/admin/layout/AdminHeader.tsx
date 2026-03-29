@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, Search, User, LogOut, Settings as SettingsIcon, ShoppingBag, UtensilsCrossed, Users as UsersIcon, X, Clock, MapPin, Star, DollarSign, Smartphone } from 'lucide-react'
+import { Bell, Search, User, LogOut, Settings as SettingsIcon, ShoppingBag, UtensilsCrossed, Users as UsersIcon, X, Clock, MapPin, Star, DollarSign, Smartphone, Zap, CreditCard, Check, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -17,6 +17,7 @@ import {
     Dialog,
     DialogContent,
     DialogTitle,
+    DialogDescription,
 } from '@/components/ui/dialog'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
@@ -55,6 +56,13 @@ export function AdminHeader() {
             type: 'info'
         }
     ])
+    const [totalCoins, setTotalCoins] = useState(0)
+    const [restaurantBalance, setRestaurantBalance] = useState(0)
+    
+    // Split States
+    const [isSplitDialogOpen, setIsSplitDialogOpen] = useState(false)
+    const [splitCash, setSplitCash] = useState<string>('')
+    const [splitUpi, setSplitUpi] = useState<string>('')
 
     const router = useRouter()
 
@@ -74,7 +82,7 @@ export function AdminHeader() {
             const { data: orders } = await supabase
                 .from('orders')
                 .select('id, bill_id, created_at')
-                .eq('restaurant_id', RESTAURANT_ID)
+                .eq('restaurant_id', String(RESTAURANT_ID))
                 .ilike('bill_id', `%${query}%`)
                 .limit(3)
 
@@ -90,7 +98,7 @@ export function AdminHeader() {
             const { data: menuItems } = await supabase
                 .from('menu_items')
                 .select('id, name, price')
-                .eq('restaurant_id', RESTAURANT_ID)
+                .eq('restaurant_id', String(RESTAURANT_ID))
                 .ilike('name', `%${query}%`)
                 .limit(3)
 
@@ -106,7 +114,7 @@ export function AdminHeader() {
             const { data: customers } = await supabase
                 .from('customers')
                 .select('id, name, phone')
-                .eq('restaurant_id', RESTAURANT_ID)
+                .eq('restaurant_id', String(RESTAURANT_ID))
                 .or(`name.ilike.%${query}%,phone.ilike.%${query}%`)
                 .limit(3)
 
@@ -126,8 +134,28 @@ export function AdminHeader() {
         }
     }, [])
 
+    const fetchWalletTotals = useCallback(async () => {
+        // 1. Customer Loyalty Pool (Accumulated Points)
+        const { data: customerData } = await supabase
+            .from('customers')
+            .select('loyalty_points')
+            .eq('restaurant_id', RESTAURANT_ID)
+
+        // Sum loyalty_points instead of wallet_balance to match Reward Engine
+        const total = customerData?.reduce((acc, curr) => acc + (Number(curr.loyalty_points) || 0), 0) || 0
+        setTotalCoins(Math.max(0, total)) // Safety guard to never show negative
+
+        // 2. Restaurant Operational Balance (From Super Admin)
+        const { data: restData } = await supabase
+            .from('restaurants')
+            .select('coin_balance')
+            .eq('id', String(RESTAURANT_ID))
+            .single()
+        
+        setRestaurantBalance(Number(restData?.coin_balance) || 0)
+    }, [])
+
     useEffect(() => {
-        // Initial fetch for low stock items
         const checkLowStock = async () => {
             const { data: lowStockItems } = await supabase
                 .from('menu_items')
@@ -157,6 +185,7 @@ export function AdminHeader() {
         }
 
         checkLowStock()
+        fetchWalletTotals()
 
         // Subscribe to new orders and menu updates
         const channel = supabase
@@ -237,10 +266,15 @@ export function AdminHeader() {
             )
             .subscribe()
 
+        // Custom Event listener for cross-component balance refresh
+        const handleRefreshEvent = () => fetchWalletTotals()
+        window.addEventListener('refresh-admin-balance', handleRefreshEvent)
+
         return () => {
             supabase.removeChannel(channel)
+            window.removeEventListener('refresh-admin-balance', handleRefreshEvent)
         }
-    }, [])
+    }, [fetchWalletTotals])
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -289,52 +323,93 @@ export function AdminHeader() {
         }
     }
 
-    const handlePaymentClose = async (method: 'cash' | 'upi') => {
+    const handlePaymentClose = async (method: 'cash' | 'upi' | 'mixed', overrideAmounts?: { cash: number, upi: number }) => {
         if (!selectedDetail || selectedDetail.type !== 'order') return
+        setSearching(true)
+
+        const total = Number(selectedDetail.data.total)
+        const cashValue = method === 'mixed' ? (overrideAmounts?.cash || 0) : (method === 'cash' ? total : 0)
+        const upiValue = method === 'mixed' ? (overrideAmounts?.upi || 0) : (method === 'upi' ? total : 0)
 
         const customerName = selectedDetail.data.customers?.name || 'Customer'
         const phone = selectedDetail.data.customers?.phone
         const billId = selectedDetail.data.bill_id
-        const total = selectedDetail.data.total
-
-
-        // WhatsApp functionality disabled - Using webhook only
-        /*
-        if (phone) {
-            let formattedPhone = phone.replace(/[^0-9]/g, '')
-            if (formattedPhone.length === 10) {
-                formattedPhone = '91' + formattedPhone
-            }
-
-            const message = encodeURIComponent(
-                `*Receipt from Restaurant*\\n\\n` +
-                `Hi ${customerName},\\n` +
-                `Your payment of *₹${total.toFixed(2)}* for Order *${billId}* has been received via ${method.toUpperCase()}.\\n\\n` +
-                `Thank you for visiting us! 🙏`
-            )
-
-            const whatsappUrl = `https://wa.me/${formattedPhone}?text=${message}`
-            const waWindow = window.open(whatsappUrl, '_blank')
-            if (!waWindow) {
-                toast.error('WhatsApp popup blocked. Please allow popups for this site.', {
-                    duration: 5000,
-                    action: {
-                        label: 'Open Link',
-                        onClick: () => window.open(whatsappUrl, '_blank')
-                    }
-                })
-            }
-        }
-        */
 
         try {
+            // --- LOYALTY & ADMIN COINS LOGIC ---
+            if ((method === 'cash' || method === 'upi' || method === 'mixed') && Number(total) > 200) {
+                const restId = String(RESTAURANT_ID);
+                
+                // 1. Deduct from Restaurant Admin Coins (Restaurant Cost)
+                const { data: restData } = await supabase
+                    .from('restaurants')
+                    .select('coin_balance, name')
+                    .eq('id', restId)
+                    .single()
+                
+                if (restData) {
+                    const currentRestCoins = Number(restData.coin_balance) || 0
+                    const { data: updatedRest, error: restHeaderUpdateError } = await supabase
+                        .from('restaurants')
+                        .update({ coin_balance: Math.max(0, currentRestCoins - 5) })
+                        .eq('id', restId)
+                        .select();
+                    
+                    if (restHeaderUpdateError) {
+                        toast.error(`Admin Coin Deduction Failed: ${restHeaderUpdateError.message}`);
+                    } else if (updatedRest && updatedRest.length > 0) {
+                        setRestaurantBalance(updatedRest[0].coin_balance)
+                    }
+                }
+
+                // 2. Handle Customer Side Settlement
+                if (selectedDetail.data.customer_id) {
+                    const { data: customerData } = await supabase
+                        .from('customers')
+                        .select('wallet_balance')
+                        .eq('id', selectedDetail.data.customer_id)
+                        .maybeSingle();
+
+                    if (customerData) {
+                        const currentBalance = Number(customerData.wallet_balance) || 0;
+                        const deduction = 5;
+                        
+                        // A. Deduct balance
+                        await supabase
+                            .from('customers')
+                            .update({ 
+                                wallet_balance: currentBalance - deduction,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', selectedDetail.data.customer_id);
+
+                        // B. Record Transaction for Ledger
+                        await supabase
+                            .from('wallet_transactions')
+                            .insert([{
+                                customer_id: selectedDetail.data.customer_id,
+                                restaurant_id: RESTAURANT_ID,
+                                amount: deduction,
+                                type: 'debit',
+                                reason: `Loyalty Settlement (Order > ₹200)`,
+                                order_id: selectedDetail.data.id
+                            }]);
+                    }
+                }
+            }
+            // -----------------------------------
+
             // 1. Update Payment Status
             const { error } = await supabase
                 .from('orders')
                 .update({
                     status: 'completed',
                     payment_status: 'paid',
-                    payment_method: method
+                    payment_method: method,
+                    notes: method === 'mixed' 
+                        ? `Split Payment: Cash ₹${cashValue} + UPI ₹${upiValue}`
+                        : `Paid via ${method.toUpperCase()}`,
+                    updated_at: new Date().toISOString()
                 })
                 .eq('id', selectedDetail.data.id)
 
@@ -342,34 +417,31 @@ export function AdminHeader() {
 
             // 2. Trigger Webhook
             await triggerPaymentWebhook({
-                bill_id: billId,
+                action: 'submit_rating',
+                ...selectedDetail.data,
+                phone: selectedDetail.data.customers?.phone || '',
                 amount: total,
-                customer: {
-                    name: customerName,
-                    phone: phone || 'N/A',
-                    address: selectedDetail.data.delivery_address || selectedDetail.data.customers?.address
-                },
-                order_type: selectedDetail.data.order_type,
-                table_number: selectedDetail.data.restaurant_tables?.table_number,
-                items: selectedDetail.data.order_items?.map((i: any) => ({
-                    name: i.item_name,
-                    quantity: i.quantity,
-                    price: i.price || (i.total / i.quantity),
-                    total: i.total
-                })),
-                payment_method: method,
-                payment_status: 'paid',
-                restaurant_id: RESTAURANT_ID,
-                updated_at: new Date().toISOString(),
-                source: 'admin_header_search',
-                trigger_type: 'payment_marked_manually'
-            })
+                customerName: customerName,
+                itemsOrdered: selectedDetail.data.order_items?.map((i: any) => i.item_name).join(', ') || 'Your Order',
+                payment_method: method === 'mixed' 
+                    ? `MIXED (Cash: ₹${cashValue} + UPI: ₹${upiValue})`
+                    : method.toUpperCase(),
+                status: 'completed',
+                split_details: method === 'mixed' ? { cash: cashValue, upi: upiValue } : null,
+                updated_at: new Date().toISOString()
+            });
 
-            toast.success(`Payment marked as ${method.toUpperCase()} & Message Sent 🚀`)
+            toast.success(`Payment marked as ${method.toUpperCase()} ✅`)
             setSelectedDetail(null)
+            setIsSplitDialogOpen(false)
+            setSearchQuery('')
+            setShowResults(false)
+            fetchWalletTotals()
         } catch (error) {
             console.error('Payment error:', error)
             toast.error('Failed to update payment')
+        } finally {
+            setSearching(false)
         }
     }
 
@@ -475,6 +547,17 @@ export function AdminHeader() {
 
             {/* Actions */}
             <div className="flex items-center gap-3">
+                {/* 🏦 Restaurant Operational Wallet (Super Admin Controlled) */}
+                <div className="hidden md:flex items-center gap-2 h-10 px-3 bg-indigo-50 border border-indigo-200/50 rounded-xl transition-all shadow-sm group">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-white shadow-md transition-transform group-hover:scale-110">
+                        <Zap className="h-3 w-3" />
+                    </div>
+                    <div className="flex flex-col items-start leading-none gap-0.5">
+                        <span className="text-[9px] font-black text-indigo-700 uppercase tracking-widest opacity-60">Admin Coins</span>
+                        <span className="text-xs font-black text-indigo-900 tabular-nums tracking-tighter">₹{restaurantBalance.toLocaleString()}</span>
+                    </div>
+                </div>
+
                 {/* Notifications */}
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -690,18 +773,31 @@ export function AdminHeader() {
                                 {/* Actions Footer */}
                                 <div className="pt-2">
                                     {selectedDetail.data.status !== 'completed' && selectedDetail.data.payment_status !== 'paid' ? (
-                                        <div className="grid grid-cols-2 gap-3">
+                                        <div className="grid grid-cols-3 gap-3">
                                             <Button
-                                                className="h-11 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm"
+                                                className="h-11 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold shadow-sm"
                                                 onClick={() => handlePaymentClose('cash')}
+                                                disabled={searching}
                                             >
-                                                <DollarSign className="mr-2 h-4 w-4" /> Collect Cash
+                                                Cash
                                             </Button>
                                             <Button
                                                 className="h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm"
                                                 onClick={() => handlePaymentClose('upi')}
+                                                disabled={searching}
                                             >
-                                                <Smartphone className="mr-2 h-4 w-4" /> Collect UPI
+                                                UPI
+                                            </Button>
+                                            <Button
+                                                className="h-11 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-sm"
+                                                onClick={() => {
+                                                    setSplitCash('')
+                                                    setSplitUpi('')
+                                                    setIsSplitDialogOpen(true)
+                                                }}
+                                                disabled={searching}
+                                            >
+                                                Mixed
                                             </Button>
                                         </div>
                                     ) : (
@@ -770,6 +866,81 @@ export function AdminHeader() {
                             </div>
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+            {/* --- SPLIT PAYMENT DIALOG (SEARCH FLOW) --- */}
+            <Dialog open={isSplitDialogOpen} onOpenChange={setIsSplitDialogOpen}>
+                <DialogContent className="sm:max-w-[440px] bg-white rounded-[2rem] border-none shadow-2xl overflow-hidden p-0">
+                    <div className="bg-purple-600 p-7 text-white text-center relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
+                        <CreditCard className="h-12 w-12 mx-auto mb-3 opacity-90 relative z-10" />
+                        <DialogTitle className="text-2xl font-black relative z-10">Split Search Result</DialogTitle>
+                        <DialogDescription className="text-purple-100 font-bold opacity-80 relative z-10">
+                            Bill #{selectedDetail?.data?.bill_id} • Total ₹{selectedDetail?.data?.total || 0}
+                        </DialogDescription>
+                    </div>
+
+                    <div className="p-8 space-y-7">
+                        <div className="space-y-4">
+                            <div className="space-y-2 group">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Cash Contribution</label>
+                                <div className="relative">
+                                    <DollarSign className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-orange-600" />
+                                    <Input
+                                        type="number"
+                                        placeholder="0.00"
+                                        className="pl-10 h-14 rounded-2xl border-gray-100 bg-gray-50/50 focus:border-orange-500 transition-all font-black text-xl text-gray-900 shadow-inner"
+                                        value={splitCash}
+                                        onChange={(e) => {
+                                            setSplitCash(e.target.value)
+                                            const remaining = Number(selectedDetail?.data?.total || 0) - Number(e.target.value)
+                                            setSplitUpi(remaining > 0 ? remaining.toString() : '0')
+                                        }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2 group">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">UPI / Online Contribution</label>
+                                <div className="relative">
+                                    <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-blue-600" />
+                                    <Input
+                                        type="number"
+                                        placeholder="0.00"
+                                        className="pl-10 h-14 rounded-2xl border-gray-100 bg-gray-50/50 focus:border-blue-500 transition-all font-black text-xl text-gray-900 shadow-inner"
+                                        value={splitUpi}
+                                        onChange={(e) => setSplitUpi(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="pt-2">
+                            <Button 
+                                className={cn(
+                                    "w-full h-16 rounded-2xl font-black text-lg shadow-xl",
+                                    (Number(splitCash) + Number(splitUpi)) === Number(selectedDetail?.data?.total || 0)
+                                        ? "bg-purple-600 hover:bg-purple-700 text-white shadow-purple-600/20"
+                                        : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                )}
+                                disabled={searching || (Number(splitCash) + Number(splitUpi)) !== Number(selectedDetail?.data?.total || 0)}
+                                onClick={() => handlePaymentClose('mixed', {
+                                    cash: Number(splitCash),
+                                    upi: Number(splitUpi)
+                                })}
+                            >
+                                {searching ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Check className="h-6 w-6 mr-3" />}
+                                Confirm Split Settlement
+                            </Button>
+                            <Button 
+                                variant="ghost" 
+                                className="w-full mt-4 text-gray-400 font-bold hover:text-gray-900 hover:bg-gray-50 rounded-xl"
+                                onClick={() => setIsSplitDialogOpen(false)}
+                            >
+                                Cancel
+                            </Button>
+                        </div>
+                    </div>
                 </DialogContent>
             </Dialog>
         </header>

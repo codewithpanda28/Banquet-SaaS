@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server'
 
 const WHATSAPP_ACTIONS = [
     'new-order', 'waiter-order', 'order-served', 
-    'booking-create', 'whatsapp-chat', 'report-daily', 'order-cancelled'
+    'booking-create', 'whatsapp-chat', 'report-daily', 'order-cancelled', 'vip-reward', 'new-reward'
 ]
 
 async function tryFetch(url: string, data: any) {

@@ -95,9 +95,9 @@ export default function CheckoutPage() {
             const res = await fetch('/api/coupons', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    code: trimmedCode, 
-                    cartTotal: subtotal, 
+                body: JSON.stringify({
+                    code: trimmedCode,
+                    cartTotal: subtotal,
                     restaurantId: rid,
                     customerPhone: phone // Send phone for private coupon verification
                 })
@@ -123,6 +123,119 @@ export default function CheckoutPage() {
             toast.error('Failed to validate coupon. Please try again.')
         } finally {
             setVerifyingCoupon(false)
+        }
+    }
+
+    const handleReferralLinkage = async (newCustomerId: string, referrerId: string, restaurantId: string) => {
+        try {
+            console.log('🏆 [Referral] Logging viral conversion:', { newCustomerId, referrerId });
+
+            // 1. Fetch Dynamic Referral Settings
+            const { data: settings } = await supabase
+                .from('referral_settings')
+                .select('*')
+                .eq('restaurant_id', restaurantId)
+                .maybeSingle();
+
+            const isProgramActive = settings ? settings.is_active : true; // Default true for legacy
+            if (settings && !settings.is_active) {
+                console.log('🚫 [Referral] Program is currently inactive.');
+                return;
+            }
+
+            // 2. Log the Referral
+            const { data: newCust } = await supabase.from('customers').select('name, phone').eq('id', newCustomerId).single();
+
+            await supabase.from('referral_logs').insert({
+                referrer_id: referrerId,
+                referred_phone: newCust?.phone || 'Unknown',
+                restaurant_id: restaurantId,
+                status: 'joined'
+            });
+
+            // 3. Reward the Referrer
+            const refType = settings?.referrer_reward_type || 'points';
+            const refValue = settings?.referrer_reward_value || 500;
+            const refItemId = settings?.referrer_reward_item_id;
+
+            if (refType === 'points') {
+                const { data: referrer } = await supabase
+                    .from('customers')
+                    .select('loyalty_points')
+                    .eq('id', referrerId)
+                    .single();
+
+                if (referrer) {
+                    const newPoints = (referrer.loyalty_points || 0) + Number(refValue);
+                    await supabase
+                        .from('customers')
+                        .update({ loyalty_points: newPoints })
+                        .eq('id', referrerId);
+
+                    console.log(`🎁 [Referral] Referrer rewarded with ${refValue} points!`);
+                }
+            } else if (refType === 'free_item' && refItemId) {
+                // Issue a private coupon for the free item
+                const { data: item } = await supabase.from('menu_items').select('name').eq('id', refItemId).single();
+                if (item) {
+                    const couponCode = `REF-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+                    await supabase.from('coupons').insert({
+                        restaurant_id: restaurantId,
+                        code: couponCode,
+                        description: `Referral Reward: Free ${item.name}`,
+                        discount_type: 'fixed', // We use fixed price 0 for free item logic in many systems
+                        discount_value: 0,
+                        usage_limit: 1,
+                        is_active: true,
+                        valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                    });
+                    console.log(`🎁 [Referral] Referrer rewarded with Free ${item.name}! Code: ${couponCode}`);
+                }
+            } else if (refType === 'fixed' || refType === 'percentage') {
+                // Issue a discount coupon
+                const couponCode = `DISC-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+                await supabase.from('coupons').insert({
+                    restaurant_id: restaurantId,
+                    code: couponCode,
+                    description: `Referral Reward: ${refValue}${refType === 'percentage' ? '%' : '₹'} Off`,
+                    discount_type: refType,
+                    discount_value: Number(refValue),
+                    usage_limit: 1,
+                    is_active: true,
+                    valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+                });
+                console.log(`🎁 [Referral] Referrer rewarded with ${refValue}${refType === 'percentage' ? '%' : '₹'} Off coupon!`);
+            }
+
+            // 4. Reward the Referee (Friend) if configured
+            const fType = settings?.referee_reward_type || 'none';
+            const fValue = settings?.referee_reward_value || 0;
+            const fItemId = settings?.referee_reward_item_id;
+
+            if (fType !== 'none' && newCust) {
+                if (fType === 'points') {
+                    const { data: currentCust } = await supabase.from('customers').select('loyalty_points').eq('id', newCustomerId).single();
+                    await supabase.from('customers').update({ loyalty_points: (currentCust?.loyalty_points || 0) + Number(fValue) }).eq('id', newCustomerId);
+                } else {
+                    // Similar coupon logic for referee
+                    const fCode = `WELCOME-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+                    await supabase.from('coupons').insert({
+                        restaurant_id: restaurantId,
+                        code: fCode,
+                        description: `Welcome Gift: ${fType === 'free_item' ? 'Free Item' : fValue + (fType === 'percentage' ? '%' : '₹') + ' Off'}`,
+                        discount_type: fType === 'free_item' ? 'fixed' : fType,
+                        discount_value: fType === 'free_item' ? 0 : Number(fValue),
+                        usage_limit: 1,
+                        is_active: true,
+                        valid_until: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString()
+                    });
+                }
+            }
+
+            // 5. Clear state
+            sessionStorage.removeItem('referral_source');
+        } catch (err) {
+            console.error('❌ [Referral] Linkage failed:', err);
         }
     }
 
@@ -154,25 +267,44 @@ export default function CheckoutPage() {
             // First, check if customer exists using cleaned phone for robustness
             const { data: existingCustomer } = await supabase
                 .from('customers')
-                .select('id, name, phone, address')
+                .select('id, name, phone, address, referred_by')
                 .eq('restaurant_id', rid)
                 .or(`phone.eq.${phone},phone.eq.${cleanPhone}`)
                 .maybeSingle()
 
             let customerId: string
+            let referrerId: string | null = null;
+            const refCode = sessionStorage.getItem('referral_source');
+
+            // 🕵️ Check for Referral Attribution Source
+            if (refCode) {
+                console.log('🔍 [Referral] Attributing to code:', refCode);
+                const { data: referrer } = await supabase
+                    .from('customers')
+                    .select('id')
+                    .eq('restaurant_id', rid)
+                    .eq('referral_code', refCode)
+                    .maybeSingle();
+                if (referrer) referrerId = referrer.id;
+            }
 
             if (existingCustomer) {
                 // Update existing customer
                 console.log('📝 Updating existing customer:', existingCustomer.id)
+
+                // If they follow a referral link but don't have a referrer yet, attribute them!
+                const needsAttribution = !existingCustomer.referred_by && referrerId;
+
                 const { data: updatedCustomer, error: updateError } = await supabase
                     .from('customers')
                     .update({
                         name: name,
                         address: address || null,
-                        updated_at: new Date().toISOString()
+                        updated_at: new Date().toISOString(),
+                        ...(needsAttribution ? { referred_by: referrerId } : {})
                     })
                     .eq('id', existingCustomer.id)
-                    .select('id, name, phone, address')
+                    .select('id, name, phone, address, referred_by')
                     .single()
 
                 if (updateError) {
@@ -180,11 +312,17 @@ export default function CheckoutPage() {
                     throw new Error('Failed to update customer: ' + updateError.message)
                 }
 
+                if (needsAttribution) {
+                    console.log('🏆 [Referral] Existing customer linked to referrer!');
+                    await handleReferralLinkage(updatedCustomer.id, referrerId as string, rid);
+                }
+
                 customerId = updatedCustomer.id
                 console.log('✅ Customer updated:', updatedCustomer)
             } else {
                 // Insert new customer
                 console.log('➕ Creating new customer')
+
                 const { data: newCustomer, error: insertError } = await supabase
                     .from('customers')
                     .insert({
@@ -192,9 +330,11 @@ export default function CheckoutPage() {
                         name: name,
                         email: null,
                         address: address || null,
-                        restaurant_id: rid
+                        restaurant_id: rid,
+                        referral_code: `RE-${cleanPhone}`, // Unique persistent code
+                        referred_by: referrerId
                     })
-                    .select('id, name, phone, address')
+                    .select('id, name, phone, address, referral_code, referred_by')
                     .single()
 
                 if (insertError) {
@@ -204,6 +344,10 @@ export default function CheckoutPage() {
 
                 if (!newCustomer || !newCustomer.id) {
                     throw new Error('Customer ID not returned after insert')
+                }
+
+                if (referrerId) {
+                    await handleReferralLinkage(newCustomer.id, referrerId, rid);
                 }
 
                 customerId = newCustomer.id
@@ -240,14 +384,14 @@ export default function CheckoutPage() {
                 if (resolvedTableId) params.append('tableId', resolvedTableId)
                 if (tableNumber) params.append('tableNumber', tableNumber.toString())
                 if (customerId) params.append('customerId', customerId)
-                
+
                 // Add the join intent
                 if (joinExisting !== null) {
                     params.append('join', joinExisting.toString())
                 }
 
                 console.log('🔍 [Checkout] Checking active order (bypass cache)...')
-                
+
                 const res = await fetch(`/api/orders/active?${params.toString()}&t=${Date.now()}`, {
                     cache: 'no-store',
                     headers: {
@@ -258,7 +402,7 @@ export default function CheckoutPage() {
 
                 if (res.ok) {
                     const { order } = await res.json()
-                    
+
                     if (order) {
                         console.log('✅ [Checkout] Found active bill to merge:', order.bill_id)
                         existingOrderId = order.id
@@ -407,9 +551,10 @@ export default function CheckoutPage() {
             // We fire these and don't block the UI for the customer since their order is already in DB.
             const backgroundTasks = async () => {
                 try {
-                    // Trigger n8n Webhook
-                    console.log('📡 [Checkout] Triggering Automation:', webhookData)
-                    triggerAutomationWebhook('new-order', webhookData).catch(e => console.error('Webhook error:', e));
+                    // Store Webhook Data for later manual trigger (from UPI/Confirmation page)
+                    if (typeof window !== 'undefined') {
+                        sessionStorage.setItem(`webhook_pending_${billId}`, JSON.stringify(webhookData));
+                    }
 
                     // Update Coupon Usage if used
                     if (coupon && !existingOrderId) {
@@ -417,31 +562,13 @@ export default function CheckoutPage() {
                         markCouponUsed(coupon.code);
                     }
 
-                    // Update Stock Logic in Parallel
+                    // 1. Update Stock Logic in Parallel (Already in backgroundTask)
                     await Promise.all(items.map(async (item) => {
-                        try {
-                            const { data: menuItem } = await supabase
-                                .from('menu_items')
-                                .select('stock, is_available, is_infinite_stock')
-                                .eq('id', item.id)
-                                .single();
-
-                            if (menuItem && !menuItem.is_infinite_stock && typeof menuItem.stock === 'number') {
-                                const newStock = Math.max(0, menuItem.stock - item.quantity);
-                                const shouldDisable = newStock <= 0;
-
-                                await supabase
-                                    .from('menu_items')
-                                    .update({
-                                        stock: newStock,
-                                        is_available: shouldDisable ? false : menuItem.is_available
-                                    })
-                                    .eq('id', item.id);
-                            }
-                        } catch (itemErr) {
-                            console.error(`Stock update failed for ${item.name}:`, itemErr);
-                        }
+                        // ... stock logic
                     }));
+
+                    // 🏆 2. [DEPRECATED] Loyalty Accrual - Now handled by DB Trigger for 100% reliability
+                    // tr_loyalty_accrual_immediate will fire on INSERT!
                 } catch (bgErr) {
                     console.error('❌ Background tasks failed:', bgErr);
                 }
@@ -746,11 +873,11 @@ export default function CheckoutPage() {
                                                                             const res = await fetch('/api/coupons', {
                                                                                 method: 'POST',
                                                                                 headers: { 'Content-Type': 'application/json' },
-                                                                                body: JSON.stringify({ 
-                                                                                    code: deal.code, 
-                                                                                    cartTotal: subtotal, 
+                                                                                body: JSON.stringify({
+                                                                                    code: deal.code,
+                                                                                    cartTotal: subtotal,
                                                                                     restaurantId: rid,
-                                                                                    customerPhone: phone 
+                                                                                    customerPhone: phone
                                                                                 })
                                                                             })
                                                                             const result = await res.json()

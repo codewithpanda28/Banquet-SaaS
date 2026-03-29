@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 // 🚀 [API/WEBHOOK] RELIABLE MULTI-TENANT FORWARDER (With Identity Enrichment)
-// This route is the central hub for ALL n8n automation.
-// It automatically fetches tenant settings (WhatsApp + Google Review Link) from Supabase.
+// Uses Service Role Key (server-side only) to bypass RLS for config reads.
+// Falls back to Anon Key if service role key is not yet configured.
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  // ✅ Service Role Key = server-side only, never NEXT_PUBLIC_, bypasses RLS safely
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
 const WHATSAPP_ACTIONS = [

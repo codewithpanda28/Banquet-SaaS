@@ -2,31 +2,54 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import {
-    Activity,
-    CreditCard,
-    MoreHorizontal,
-    ShoppingBag,
-    Users,
-    UtensilsCrossed,
-    ArrowUpRight,
-    ArrowDownRight,
-    Clock,
-    CheckCircle2,
-    XCircle,
+import { 
+    Activity, 
+    CreditCard, 
+    MoreHorizontal, 
+    ShoppingBag, 
+    Users, 
+    UtensilsCrossed, 
+    ArrowUpRight, 
+    ArrowDownRight, 
+    Clock, 
+    CheckCircle2, 
+    XCircle, 
     Calendar,
-    ChevronRight,
-    DollarSign,
-    TrendingUp,
-    Smartphone,
+    Bell, 
+    Check, 
+    ChevronRight, 
+    Coffee, 
+    DollarSign, 
+    Download, 
+    ExternalLink, 
+    Filter, 
+    LayoutDashboard, 
+    Loader2, 
+    LogOut, 
+    Menu, 
+    MessageSquare, 
+    MoreVertical, 
+    Plus, 
+    Printer, 
+    QrCode, 
+    Search, 
+    Settings, 
+    Smartphone, 
+    Trash2, 
+    User, 
+    Wallet, 
+    X, 
+    Star, 
     Zap,
-    Search
+    TrendingUp,
+    ImagePlus
 } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 import { startOfDay, endOfDay, subDays, format } from 'date-fns'
+import { QRCodeSVG } from 'qrcode.react'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -61,9 +84,12 @@ export default function AdminDashboard() {
         kitchenCounts: { pending_confirmation: 0, pending: 0, preparing: 0, ready: 0, cancelled: 0, completed: 0 }
     })
     const [recentOrders, setRecentOrders] = useState<any[]>([])
+    const [walletTransactions, setWalletTransactions] = useState<any[]>([])
+    const [allCustomers, setAllCustomers] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [selectedOrder, setSelectedOrder] = useState<any>(null)
     const [isDetailsOpen, setIsDetailsOpen] = useState(false)
+    const [isManualOrderOpen, setIsManualOrderOpen] = useState(false)
     const [processingPayment, setProcessingPayment] = useState(false)
     const [range, setRange] = useState<'today' | 'week' | 'month'>('today')
     const [isFlashSale, setIsFlashSale] = useState(false)
@@ -71,13 +97,22 @@ export default function AdminDashboard() {
     const [selectedApproval, setSelectedApproval] = useState<any>(null)
     const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false)
     const [isProcessingApproval, setIsProcessingApproval] = useState(false)
+    const [isLoyaltyRulesOpen, setIsLoyaltyRulesOpen] = useState(false)
+    const [loyaltyRule, setLoyaltyRule] = useState({ threshold: 500, reward: 'Free Dessert', image: '', ratio: 10 })
+    const [isUploadingLoyaltyImage, setIsUploadingLoyaltyImage] = useState(false)
+    
+    // Split Payment States
+    const [isSplitDialogOpen, setIsSplitDialogOpen] = useState(false)
+    const [splitCash, setSplitCash] = useState<string>('')
+    const [splitUpi, setSplitUpi] = useState<string>('')
 
     // Flash Sale Broadcast States
     const [isFlashSaleDialogOpen, setIsFlashSaleDialogOpen] = useState(false)
-    const [allCustomers, setAllCustomers] = useState<any[]>([])
     const [selectedPhones, setSelectedPhones] = useState<string[]>([])
     const [customerSearchQuery, setCustomerSearchQuery] = useState('')
     const [isSendingFlashSale, setIsSendingFlashSale] = useState(false)
+
+
 
     // Filtered customers for flash sale dialog
     const filteredCustomersForFlashSale = allCustomers.filter(c =>
@@ -195,6 +230,22 @@ export default function AdminDashboard() {
                 kitchenCounts: counts
             }))
 
+            // Fetch Loyalty Rule
+            const { data: ruleData } = await supabase
+                .from('restaurants')
+                .select('loyalty_milestone_threshold, loyalty_milestone_reward, loyalty_milestone_image, loyalty_point_ratio')
+                .eq('id', RESTAURANT_ID)
+                .single()
+            
+            if (ruleData) {
+                setLoyaltyRule({
+                    threshold: Number(ruleData.loyalty_milestone_threshold) || 500,
+                    reward: ruleData.loyalty_milestone_reward || 'Free Dessert',
+                    image: ruleData.loyalty_milestone_image || '',
+                    ratio: Number(ruleData.loyalty_point_ratio) || 10
+                })
+            }
+
             // --- AUTO-POPUP LOGIC (RELIABLE SYNC) ---
             const currentSelectedObj = selectedApprovalRef.current
             const currentIsOpen = isApprovalOpenRef.current
@@ -203,7 +254,7 @@ export default function AdminDashboard() {
                 // Fetch first pending confirmation order details
                 const { data: pendingOrder } = await supabase
                     .from('orders')
-                    .select('*, customers(name, phone), order_items(*), restaurant_tables(table_number)')
+                    .select('*, customers(id, name, phone, wallet_balance), order_items(*), restaurant_tables(table_number)')
                     .eq('restaurant_id', RESTAURANT_ID)
                     .eq('status', 'pending_confirmation')
                     .order('created_at', { ascending: false })
@@ -240,7 +291,7 @@ export default function AdminDashboard() {
             // Fetch Recent Orders - Simplified select for maximum robustness
             const { data: recent, error: recentError } = await supabase
                 .from('orders')
-                .select('*, customers (name, phone), order_items(*)')
+                .select('*, customers (id, name, phone, wallet_balance), order_items(*)')
                 .eq('restaurant_id', RESTAURANT_ID)
                 .order('created_at', { ascending: false })
                 .limit(10)
@@ -248,6 +299,16 @@ export default function AdminDashboard() {
             if (recentError) {
                 console.error('❌ [ADMIN HOME] Error fetching recent orders:', recentError)
             }
+
+            // Fetch Recent Wallet Transactions for the "Customer Wallet Hub" Ledger
+            const { data: transactions } = await supabase
+                .from('wallet_transactions')
+                .select('*, customers(name, phone), orders(bill_id, total)')
+                .eq('restaurant_id', RESTAURANT_ID)
+                .order('created_at', { ascending: false })
+                .limit(10)
+
+            setWalletTransactions(transactions || [])
 
             setRecentOrders(recent || [])
 
@@ -267,6 +328,21 @@ export default function AdminDashboard() {
                 hours[h]++
             })
             setStats(prev => ({ ...prev, peakHours: hours }))
+
+            // --- REFRESH CUSTOMER WALLET HUB ---
+            // Fetch customers with non-zero balances for the Hub
+            const { data: customerLedger } = await supabase
+                .from('customers')
+                .select('id, name, phone, wallet_balance')
+                .eq('restaurant_id', RESTAURANT_ID)
+                .neq('wallet_balance', 0)
+                .order('updated_at', { ascending: false })
+            
+            if (customerLedger) {
+                setAllCustomers(customerLedger)
+            }
+            // -----------------------------------
+
             // Low Stock check moved to AdminHeader for global notification support
 
         } catch (error) {
@@ -280,7 +356,7 @@ export default function AdminDashboard() {
     const refreshSelectedOrder = useCallback(async (orderId: string) => {
         const { data } = await supabase
             .from('orders')
-            .select('*, customers(name, phone, address), order_items(*), restaurant_tables(table_number)')
+            .select('*, customers(id, name, phone, wallet_balance), order_items(*), restaurant_tables(table_number)')
             .eq('id', orderId)
             .single()
 
@@ -306,6 +382,8 @@ export default function AdminDashboard() {
             toast.success(accept ? 'Order Accepted!' : 'Order Rejected')
             setIsApprovalDialogOpen(false)
             fetchDashboardData(range)
+            setSelectedOrder(null)
+            setIsDetailsOpen(false)
         } catch (error) {
             console.error('Approval error:', error)
             toast.error('Failed to update order')
@@ -318,7 +396,7 @@ export default function AdminDashboard() {
         try {
             const { data, error } = await supabase
                 .from('customers')
-                .select('id, name, phone')
+                .select('id, name, phone, wallet_balance')
                 .eq('restaurant_id', RESTAURANT_ID)
                 .order('name', { ascending: true })
 
@@ -435,6 +513,55 @@ export default function AdminDashboard() {
         }
     }
 
+    const saveLoyaltyRules = async () => {
+        try {
+            const { error } = await supabase
+                .from('restaurants')
+                .update({
+                    loyalty_milestone_threshold: loyaltyRule.threshold,
+                    loyalty_milestone_reward: loyaltyRule.reward,
+                    loyalty_milestone_image: loyaltyRule.image,
+                    loyalty_point_ratio: loyaltyRule.ratio
+                })
+                .eq('id', RESTAURANT_ID)
+
+            if (error) throw error
+            toast.success('Loyalty Program Rules Updated! 🏆')
+            setIsLoyaltyRulesOpen(false)
+        } catch (error) {
+            toast.error('Failed to update rules')
+        }
+    }
+
+    const handleLoyaltyImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploadingLoyaltyImage(true);
+        try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${RESTAURANT_ID}_milestone_${Math.random()}.${fileExt}`;
+            const filePath = `milestones/${fileName}`;
+
+            const { data, error: uploadError } = await supabase.storage
+                .from('branding')
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('branding')
+                .getPublicUrl(filePath);
+
+            setLoyaltyRule(prev => ({ ...prev, image: publicUrl }));
+            toast.success('Milestone image uploaded! 🎁');
+        } catch (err: any) {
+            toast.error('Image upload failed: ' + err.message);
+        } finally {
+            setIsUploadingLoyaltyImage(false);
+        }
+    };
+
     // --- BULLETPROOF REAL-TIME SYNC ---
     const fetchRef = useRef(fetchDashboardData)
     const refreshRef = useRef(refreshSelectedOrder)
@@ -485,7 +612,7 @@ export default function AdminDashboard() {
                         // Fetch full data to show details
                         const { data: full } = await supabase
                             .from('orders')
-                            .select('*, customers(name, phone), order_items(*), restaurant_tables(table_number)')
+                            .select('*, customers(id, name, phone, wallet_balance), order_items(*), restaurant_tables(table_number)')
                             .eq('id', targetOrder.id)
                             .single()
                         
@@ -555,54 +682,140 @@ export default function AdminDashboard() {
         setIsDetailsOpen(true)
     }
 
-    const handlePayment = async (method: 'cash' | 'upi') => {
+    const handlePayment = async (method: 'cash' | 'upi' | 'mixed', overrideAmounts?: { cash: number, upi: number }) => {
         if (!selectedOrder) return
         setProcessingPayment(true)
-
-        const customerName = selectedOrder.customers?.name || 'Customer'
-        const phone = selectedOrder.customers?.phone
-        const billId = selectedOrder.bill_id
-        const total = selectedOrder.total
-
-        /* 
-        // WhatsApp Message - Commented out as per request to prioritize webhook
-        if (phone) {
-            let formattedPhone = phone.replace(/[^0-9]/g, '')
-            if (formattedPhone.length === 10) {
-                formattedPhone = '91' + formattedPhone
-            }
-
-            const message = encodeURIComponent(
-                `*Receipt from Restaurant*\n\n` +
-                `Hi ${customerName},\n` +
-                `Your payment of *₹${total.toFixed(2)}* for Order *${billId}* has been received via *${method.toUpperCase()}*.\n\n` +
-                `Thank you for visiting us! 🙏`
-            )
-
-            const whatsappUrl = `https://wa.me/${formattedPhone}?text=${message}`
-            const waWindow = window.open(whatsappUrl, '_blank')
-            if (!waWindow) {
-                toast.error('WhatsApp popup blocked. Please allow popups for this site.', {
-                    action: {
-                        label: 'Open Link',
-                        onClick: () => window.open(whatsappUrl, '_blank')
-                    }
-                })
-            }
-        }
-        */
+ 
+        const total = Number(selectedOrder.total)
+        const cashValue = method === 'mixed' ? (overrideAmounts?.cash || 0) : (method === 'cash' ? total : 0)
+        const upiValue = method === 'mixed' ? (overrideAmounts?.upi || 0) : (method === 'upi' ? total : 0)
 
         try {
-            const { error } = await supabase
+            // 🏅 [SAAS] LOYALTY POINTS LOGIC (DYNAMIC RATIO)
+            if ((method === 'cash' || method === 'upi' || method === 'mixed') && selectedOrder.customer_id) {
+                const pointsToEarn = Math.floor(Number(selectedOrder.total) / (loyaltyRule.ratio || 10));
+                if (pointsToEarn > 0) {
+                    console.log(`🏅 [Loyalty] Awarding ${pointsToEarn} points to customer...`);
+                    
+                    // 1. Fetch current points
+                    const { data: customerData } = await supabase
+                        .from('customers')
+                        .select('loyalty_points')
+                        .eq('id', selectedOrder.customer_id)
+                        .maybeSingle();
+
+                    if (customerData) {
+                        const newPoints = (Number(customerData.loyalty_points) || 0) + pointsToEarn;
+                        
+                        // 2. Update points
+                        await supabase
+                            .from('customers')
+                            .update({ loyalty_points: newPoints })
+                            .eq('id', selectedOrder.customer_id);
+
+                        // 3. Record Loyalty History
+                        await supabase
+                            .from('loyalty_history')
+                            .insert([{
+                                customer_id: selectedOrder.customer_id,
+                                restaurant_id: RESTAURANT_ID,
+                                points: pointsToEarn,
+                                type: 'credit',
+                                reason: `Points Earned (Order #${selectedOrder.bill_id})`,
+                                order_id: selectedOrder.id
+                            }]);
+                            
+                        toast.success(`Loyalty Points Earned: +${pointsToEarn} 🏅`);
+                    }
+                }
+            }
+
+            // 💰 [SAAS] COIN WALLET LOGIC
+            // Only deduct if order > 200 and payment is Cash/UPI/Mixed
+            if ((method === 'cash' || method === 'upi' || method === 'mixed') && Number(selectedOrder.total) > 200) {
+                const restId = String(RESTAURANT_ID);
+                
+                // 1. Deduct from Restaurant Admin Coins (The Platform Fee)
+                // We fetch first to ensure we have the latest balance for safety
+                const { data: restData } = await supabase
+                    .from('restaurants')
+                    .select('coin_balance, name')
+                    .eq('id', restId)
+                    .single();
+
+                if (restData) {
+                    const currentRestCoins = Number(restData.coin_balance) || 0;
+                    const { data: updatedRest, error: restUpdateError } = await supabase
+                        .from('restaurants')
+                        .update({ coin_balance: Math.max(0, currentRestCoins - 5) })
+                        .eq('id', restId)
+                        .select();
+
+                    if (restUpdateError) {
+                        console.error('❌ [Admin Wallet Error]:', restUpdateError);
+                        toast.error(`Admin Coin Deduction Failed: ${restUpdateError.message}. Check RLS Policies.`);
+                    } else if (!updatedRest || updatedRest.length === 0) {
+                        console.error('⚠️ [Admin Wallet Security]: Update successful but 0 rows affected. RLS block suspected.');
+                        toast.warning(`Security: Coins not deducted (matched 0 rows). Verify ID: ${restId.substring(0,8)}...`);
+                    } else {
+                        console.log('✅ [Admin Coins] Deducted 5 coins successfully. New balance:', updatedRest[0].coin_balance);
+                        toast.success(`Deducted 5 coins from ${restData.name}`);
+                        // Notify header to refresh balance
+                        window.dispatchEvent(new CustomEvent('refresh-admin-balance'));
+                    }
+                }
+
+                // 2. Handle Customer Side Settlement
+                if (selectedOrder.customer_id) {
+                    // Fetch customer current balance
+                    const { data: customerData } = await supabase
+                        .from('customers')
+                        .select('wallet_balance')
+                        .eq('id', selectedOrder.customer_id)
+                        .maybeSingle();
+
+                    if (customerData) {
+                        const currentBalance = Number(customerData.wallet_balance) || 0;
+                        const deduction = 5;
+
+                        // A. Deduct balance
+                        await supabase
+                            .from('customers')
+                            .update({ 
+                                wallet_balance: currentBalance - deduction,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', selectedOrder.customer_id);
+
+                        // B. Record Transaction with Bill details for the Hub Ledger
+                        await supabase
+                            .from('wallet_transactions')
+                            .insert([{
+                                customer_id: selectedOrder.customer_id,
+                                restaurant_id: RESTAURANT_ID,
+                                amount: deduction,
+                                type: 'debit',
+                                reason: `Loyalty Settlement (Order > ₹200)`,
+                                order_id: selectedOrder.id
+                            }]);
+                            
+                            toast.success(`Loyalty Points Applied: -₹${deduction} from Wallet`);
+                    }
+                }
+            }
+
+            await supabase
                 .from('orders')
                 .update({
-                    status: 'completed',
                     payment_status: 'paid',
-                    payment_method: method
+                    payment_method: method,
+                    status: 'completed',
+                    notes: method === 'mixed' 
+                        ? `Split Payment: Cash ₹${cashValue} + UPI ₹${upiValue}`
+                        : `Paid via ${method.toUpperCase()}`,
+                    updated_at: new Date().toISOString()
                 })
-                .eq('id', selectedOrder.id)
-
-            if (error) throw error
+                .eq('id', selectedOrder.id);
 
             // 2. Update Customer Loyalty Stats (New)
             if (selectedOrder.customer_id) {
@@ -626,30 +839,22 @@ export default function AdminDashboard() {
 
             // 3. Trigger n8n Webhook for Payment Confirmation
             await triggerPaymentWebhook({
-                bill_id: billId,
-                amount: total,
-                customer: {
-                    name: customerName,
-                    phone: phone || 'N/A',
-                    address: selectedOrder.delivery_address || selectedOrder.customers?.address
-                },
-                order_type: selectedOrder.order_type,
-                table_number: selectedOrder.restaurant_tables?.table_number,
-                items: selectedOrder.order_items?.map((i: any) => ({
-                    name: i.item_name,
-                    quantity: i.quantity,
-                    price: i.price || (i.total / i.quantity),
-                    total: i.total
-                })),
-                payment_method: method,
-                payment_status: 'paid',
-                restaurant_id: RESTAURANT_ID,
-                updated_at: new Date().toISOString(),
-                source: 'admin_dashboard_home',
-                trigger_type: 'payment_marked_manually'
-            })
+                action: 'submit_rating',
+                id: selectedOrder.id,
+                bill_id: selectedOrder.bill_id,
+                phone: selectedOrder.customers?.phone || '',
+                customerName: selectedOrder.customers?.name || 'Guest',
+                amount: selectedOrder.total,
+                itemsOrdered: selectedOrder.order_items?.map((i: any) => i.item_name).join(', ') || 'Delicious Meal',
+                payment_method: method === 'mixed' 
+                    ? `MIXED (Cash: ₹${cashValue} + UPI: ₹${upiValue})`
+                    : method.toUpperCase(),
+                status: 'completed',
+                split_details: method === 'mixed' ? { cash: cashValue, upi: upiValue } : null,
+                updated_at: new Date().toISOString()
+            });
 
-            toast.success(`Payment marked as ${method.toUpperCase()} & Message Sent 🚀`)
+            toast.success(`Payment settled successfully! ✅`)
 
             // 3. Mark Table as Available if it's a Dine In order
             if (selectedOrder.table_id) {
@@ -660,7 +865,11 @@ export default function AdminDashboard() {
             }
 
             setIsDetailsOpen(false)
+            setIsSplitDialogOpen(false)
             fetchDashboardData(range) // Refresh data
+
+            // 4. Sync AdminHeader Balance
+            window.dispatchEvent(new CustomEvent('refresh-admin-balance'))
         } catch (error) {
             console.error('Payment error:', error)
             toast.error('Failed to update payment status')
@@ -743,7 +952,7 @@ export default function AdminDashboard() {
                     <Button
                         variant="outline"
                         size="sm"
-                        className="rounded-xl font-bold h-10 gap-2 border-2 bg-white border-gray-100 text-gray-700 hover:border-blue-500 hover:text-blue-600 transition-all"
+                        className="rounded-xl font-bold h-10 gap-2 border-2 bg-white border-gray-100 text-gray-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm"
                         onClick={sendDailyReport}
                         disabled={generatingReport}
                     >
@@ -819,7 +1028,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* Main Content Area */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7">
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-7 items-start">
                 {/* Peak Hours Chart */}
                 <Card className="col-span-7 lg:col-span-7 glass-card border-gray-100 bg-white shadow-sm p-6 relative overflow-hidden group hover:border-blue-500/20 hover:shadow-md transition-all duration-300">
                     <CardHeader className="p-0 pb-4 border-b border-gray-50 flex flex-row justify-between items-center">
@@ -947,7 +1156,69 @@ export default function AdminDashboard() {
 
                 {/* Kitchen Activity / Secondary Metrics */}
                 <div className="col-span-3 space-y-6">
-                    <Card className="glass-card border-gray-100 shadow-sm h-full relative overflow-hidden bg-white hover:border-green-500/20 hover:shadow-md transition-all duration-300">
+                    {/* 💰 Wallet Management Card */}
+                    <Card className="glass-card border-gray-100 shadow-sm relative overflow-hidden bg-white hover:border-amber-500/20 hover:shadow-md transition-all duration-300">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl -mr-16 -mt-16" />
+                        <CardHeader className="relative z-10 border-b border-gray-50 pb-4">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="font-bold text-gray-900 group">
+                                    Customer Wallet Hub 🏦
+                                </CardTitle>
+                                <Badge className="bg-amber-100 text-amber-700 border-none font-bold text-[9px] uppercase tracking-widest px-2 animate-pulse">Live Ledger</Badge>
+                            </div>
+                            <CardDescription className="text-xs text-gray-500">Manage 5rs loyalty settlements</CardDescription>
+                        </CardHeader>
+                        <CardContent className="relative z-10 px-0 pt-2">
+                            <ScrollArea className="h-[320px] px-6">
+                                <div className="space-y-4 py-2">
+                                    {walletTransactions.length === 0 ? (
+                                        <div className="py-20 text-center text-gray-400">
+                                            <div className="h-10 w-10 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                                                <DollarSign className="h-4 w-4 opacity-10" />
+                                            </div>
+                                            <p className="text-xs font-medium">No recent wallet settlements.</p>
+                                        </div>
+                                    ) : (
+                                        walletTransactions.map((tx) => (
+                                            <div key={tx.id} className="flex items-center justify-between p-3 rounded-2xl bg-gray-50/50 border border-gray-100/50 hover:bg-white hover:shadow-sm transition-all group">
+                                                <div className="flex items-center gap-3 overflow-hidden">
+                                                    <div className="h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0 border border-amber-200">
+                                                        <DollarSign className="h-4 w-4 text-amber-700" />
+                                                    </div>
+                                                    <div className="flex flex-col min-w-0">
+                                                        <span className="text-[11px] font-bold text-gray-900 truncate">
+                                                            {tx.customers?.name || 'Walk-in Customer'}
+                                                        </span>
+                                                        <span className="text-[9px] text-gray-500 font-medium">
+                                                            Bill: #{tx.orders?.bill_id || 'N/A'} • ₹{tx.orders?.total || '0'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right shrink-0">
+                                                    <p className="text-xs font-black text-red-600">
+                                                        -₹{Number(tx.amount).toFixed(0)}
+                                                    </p>
+                                                    <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Deducted</p>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
+                                </div>
+                            </ScrollArea>
+                            <div className="mt-4 px-6 pb-4">
+                                <Button 
+                                    className="w-full h-10 rounded-xl bg-gray-900 hover:bg-black text-white font-black text-[10px] uppercase tracking-widest shadow-xl shadow-gray-200 gap-2"
+                                    asChild
+                                >
+                                    <Link href="/admin/customers">
+                                        View All Customer Ledgers <ChevronRight className="h-3 w-3" />
+                                    </Link>
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="glass-card border-gray-100 shadow-sm relative overflow-hidden bg-white hover:border-green-500/20 hover:shadow-md transition-all duration-300">
                         <div className="absolute inset-0 bg-gradient-to-t from-gray-50 via-transparent to-transparent z-0" />
                         <CardHeader className="relative z-10 border-b border-gray-50 pb-4">
                             <CardTitle className="font-bold text-gray-900">Live Kitchen Activity</CardTitle>
@@ -1041,6 +1312,17 @@ export default function AdminDashboard() {
                                         <div>
                                             <p className="font-semibold text-gray-900 text-base">{selectedOrder.customers?.name || 'Walk-in Customer'}</p>
                                             <p className="text-sm text-gray-500 font-medium">{selectedOrder.customers?.phone || 'No Phone'}</p>
+                                            
+                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                {selectedOrder.customers?.wallet_balance !== undefined && (
+                                                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-50 rounded-full border border-amber-100">
+                                                        <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+                                                        <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest">
+                                                            Wallet: ₹{Number(selectedOrder.customers.wallet_balance).toFixed(0)}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                         {(selectedOrder.delivery_address || selectedOrder.customers?.address) && (
                                             <p className="text-xs text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-100 leading-relaxed">
@@ -1118,20 +1400,31 @@ export default function AdminDashboard() {
                             {/* Actions Footer - Fixed at Bottom */}
                             <div className="p-6 pt-2 shrink-0 bg-white border-t border-gray-50 z-10">
                                 {selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && selectedOrder.payment_status !== 'paid' ? (
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-3 gap-3">
                                         <Button
-                                            className="h-11 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm"
+                                            className="h-11 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold shadow-sm"
                                             onClick={() => handlePayment('cash')}
                                             disabled={processingPayment}
                                         >
-                                            <DollarSign className="mr-2 h-4 w-4" /> Collect Cash
+                                            Collect Cash
                                         </Button>
                                         <Button
                                             className="h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm"
                                             onClick={() => handlePayment('upi')}
                                             disabled={processingPayment}
                                         >
-                                            <Smartphone className="mr-2 h-4 w-4" /> Collect UPI
+                                            Collect UPI
+                                        </Button>
+                                        <Button
+                                            className="h-11 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-sm"
+                                            onClick={() => {
+                                                setSplitCash('')
+                                                setSplitUpi('')
+                                                setIsSplitDialogOpen(true)
+                                            }}
+                                            disabled={processingPayment}
+                                        >
+                                            Mixed
                                         </Button>
                                     </div>
                                 ) : (
@@ -1342,6 +1635,89 @@ export default function AdminDashboard() {
                         >
                             REJECT
                         </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* --- SPLIT PAYMENT DIALOG --- */}
+            {/* --- SPLIT PAYMENT DIALOG --- */}
+            <Dialog open={isSplitDialogOpen} onOpenChange={setIsSplitDialogOpen}>
+                <DialogContent className="sm:max-w-[440px] bg-white rounded-[2rem] border-none shadow-2xl overflow-hidden p-0">
+                    <div className="bg-purple-600 p-7 text-white text-center relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl" />
+                        <CreditCard className="h-12 w-12 mx-auto mb-3 opacity-90 relative z-10" />
+                        <DialogTitle className="text-2xl font-black relative z-10">Split Settlement</DialogTitle>
+                        <DialogDescription className="text-purple-100 font-bold opacity-80 relative z-10">
+                            Bill #{selectedOrder?.bill_id} • Total ₹{selectedOrder?.total || 0}
+                        </DialogDescription>
+                    </div>
+
+                    <div className="p-8 space-y-7">
+                        <div className="space-y-5">
+                            <div className="space-y-2 group">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Cash Contribution</label>
+                                <div className="relative">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 h-8 w-8 bg-orange-50 rounded-xl flex items-center justify-center border border-orange-100">
+                                        <DollarSign className="h-4 w-4 text-orange-600" />
+                                    </div>
+                                    <Input
+                                        type="number"
+                                        placeholder="0.00"
+                                        className="pl-16 h-16 rounded-2xl border-gray-100 bg-gray-50/50 focus:border-orange-500 transition-all font-black text-xl text-gray-900 shadow-inner"
+                                        value={splitCash}
+                                        onChange={(e) => {
+                                            setSplitCash(e.target.value)
+                                            const remaining = Number(selectedOrder?.total || 0) - Number(e.target.value)
+                                            setSplitUpi(remaining > 0 ? remaining.toString() : '0')
+                                        }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2 group">
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">UPI / Online Contribution</label>
+                                <div className="relative">
+                                    <div className="absolute left-4 top-1/2 -translate-y-1/2 h-8 w-8 bg-blue-50 rounded-xl flex items-center justify-center border border-blue-100">
+                                        <Smartphone className="h-4 w-4 text-blue-600" />
+                                    </div>
+                                    <Input
+                                        type="number"
+                                        placeholder="0.00"
+                                        className="pl-16 h-16 rounded-2xl border-gray-100 bg-gray-50/50 focus:border-blue-500 transition-all font-black text-xl text-gray-900 shadow-inner"
+                                        value={splitUpi}
+                                        onChange={(e) => setSplitUpi(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="pt-2">
+                            <Button 
+                                className={cn(
+                                    "w-full h-16 rounded-2xl font-black text-lg transition-all duration-300 shadow-xl",
+                                    (Number(splitCash) + Number(splitUpi)) === Number(selectedOrder?.total || 0)
+                                        ? "bg-purple-600 hover:bg-purple-700 text-white shadow-purple-600/20"
+                                        : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                                )}
+                                disabled={processingPayment || (Number(splitCash) + Number(splitUpi)) !== Number(selectedOrder?.total || 0)}
+                                onClick={() => handlePayment('mixed', {
+                                    cash: Number(splitCash),
+                                    upi: Number(splitUpi)
+                                })}
+                            >
+                                {processingPayment ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Check className="h-6 w-6 mr-3" />}
+                                { (Number(splitCash) + Number(splitUpi)) === Number(selectedOrder?.total || 0) 
+                                    ? 'Collect Split Payment' 
+                                    : `Total: ₹${(Number(splitCash) + Number(splitUpi)).toFixed(2)}`}
+                            </Button>
+                            <Button 
+                                variant="ghost" 
+                                className="w-full mt-4 text-gray-400 font-bold hover:text-gray-900 hover:bg-gray-50 rounded-xl"
+                                onClick={() => setIsSplitDialogOpen(false)}
+                            >
+                                Cancel & Return
+                            </Button>
+                        </div>
                     </div>
                 </DialogContent>
             </Dialog>

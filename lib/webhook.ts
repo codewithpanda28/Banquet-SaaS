@@ -1,4 +1,3 @@
-
 export type WebhookType =
     | 'qr-scan'
     | 'new-order'
@@ -15,11 +14,11 @@ export type WebhookType =
     | 'add-stock'
     | 'inventory-low'
     | 'inventory-all'
-    | 'zomato-order'
     | 'swiggy-order'
     | 'upsell'
     | 'report-realtime'
     | 'report-daily'
+    | 'submit_rating'
     | 'whatsapp-chat';
 
 export async function triggerAutomationWebhook(type: WebhookType, payload: any) {
@@ -56,7 +55,20 @@ export async function triggerAutomationWebhook(type: WebhookType, payload: any) 
     }
 }
 
-// Backward compatibility
+// Backward compatibility - used for payment collection confirmation
 export async function triggerPaymentWebhook(payload: any) {
-    return triggerAutomationWebhook('new-order', payload);
+    return triggerAutomationWebhook('submit_rating', payload);
+}
+
+// 🎁 VIP Reward Logic
+export async function handleWhatsAppCoupon(customer: string, phone: string, code: string, rewardText: string, restaurantId: string) {
+    return triggerAutomationWebhook('new-reward' as any, {
+        customer,
+        phone,
+        coupon_code: code,
+        reward_text: rewardText,
+        restaurant_id: restaurantId,
+        type: 'vip-reward',
+        message: `👑 VIP Reward: Congratulations ${customer}! As a top patron of Gold Biryani, you have unlocked an exclusive reward: *${rewardText}*. Use code: *${code}* on your next visit! 🎁🎉`
+    });
 }

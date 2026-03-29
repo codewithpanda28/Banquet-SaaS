@@ -678,17 +678,19 @@ export default function WaiterDashboard() {
                             </button>
                         </div>
 
-                        <div className="pt-8 text-center border-t border-gray-100 mt-4">
-                            <button
-                                onClick={() => {
-                                    setStep('table')
-                                    toast.success('Testing Mode Activated')
-                                }}
-                                className="text-[10px] font-bold text-gray-400 hover:text-primary transition-colors underline underline-offset-8 tracking-widest uppercase"
-                            >
-                                Skip Login for Testing (Guest Mode)
-                            </button>
-                        </div>
+                        {process.env.NODE_ENV === 'development' && (
+                            <div className="pt-8 text-center border-t border-gray-100 mt-4">
+                                <button
+                                    onClick={() => {
+                                        setStep('table')
+                                        toast.success('Testing Mode Activated')
+                                    }}
+                                    className="text-[10px] font-bold text-gray-400 hover:text-primary transition-colors underline underline-offset-8 tracking-widest uppercase"
+                                >
+                                    Skip Login for Testing (Dev Only)
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
             )}

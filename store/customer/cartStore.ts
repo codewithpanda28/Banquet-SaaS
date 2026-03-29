@@ -57,18 +57,33 @@ export const useCartStore = create<CartState>()(
             joinExisting: null,
 
             addItem: (item, quantity, instructions) => {
-                const { items } = get()
+                // 🔥 DIFFERENTIAL PRICING: Only 1st item of Reward is free/discounted
+                const actualBasePrice = item.price || 0;
+                const actualDiscountedPrice = (item.discounted_price !== undefined && item.discounted_price !== null) ? item.discounted_price : actualBasePrice;
+                
+                let calculatedLineTotal = 0;
+                if (instructions?.includes('LOYALTY')) {
+                    calculatedLineTotal = (actualDiscountedPrice * 1) + (actualBasePrice * (quantity - 1));
+                } else {
+                    calculatedLineTotal = actualDiscountedPrice * quantity;
+                }
+
                 const newItem: CartItem = {
                     ...item,
                     cartId: `${item.id}-${Date.now()}`,
                     quantity,
                     instructions,
-                    lineTotal: (item.discounted_price || item.price) * quantity
+                    lineTotal: calculatedLineTotal
                 }
 
-                set({ items: [...items, newItem] })
-            },
+                console.log('🛒 STATE UPDATE: Adding', item.name, 'ID:', newItem.cartId);
+                
+                set((state) => ({ 
+                    items: [...state.items, newItem] 
+                }))
 
+                console.log('📦 NEW CART SIZE:', get().items.length);
+            },
             removeItem: (cartId) => {
                 set({ items: get().items.filter((i) => i.cartId !== cartId) })
             },
@@ -81,11 +96,21 @@ export const useCartStore = create<CartState>()(
                 }
 
                 set({
-                    items: items.map((i) =>
-                        i.cartId === cartId
-                            ? { ...i, quantity, lineTotal: (i.discounted_price || i.price) * quantity }
-                            : i
-                    )
+                    items: items.map((i) => {
+                        if (i.cartId !== cartId) return i;
+                        
+                        const actualBasePrice = i.price || 0;
+                        const actualDiscountedPrice = (i.discounted_price !== undefined && i.discounted_price !== null) ? i.discounted_price : actualBasePrice;
+                        
+                        let calculatedLineTotal = 0;
+                        if (i.instructions?.includes('LOYALTY')) {
+                            calculatedLineTotal = (actualDiscountedPrice * 1) + (actualBasePrice * (quantity - 1));
+                        } else {
+                            calculatedLineTotal = actualDiscountedPrice * quantity;
+                        }
+                        
+                        return { ...i, quantity, lineTotal: calculatedLineTotal };
+                    })
                 })
             },
 
@@ -153,8 +178,8 @@ export const useCartStore = create<CartState>()(
                     discount = coupon.discount_value
                 }
 
-                if (coupon.max_discount && discount > coupon.max_discount) {
-                    discount = coupon.max_discount
+                if (coupon.max_discount_amount && discount > coupon.max_discount_amount) {
+                    discount = coupon.max_discount_amount
                 }
 
                 return discount

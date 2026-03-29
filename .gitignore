@@ -60,3 +60,20 @@ logs
 # package-lock.json
 # yarn.lock
 # pnpm-lock.yaml
+
+# 🔐 Security: Debug & Data Dump files (should never be in repo)
+check_*.js
+test_*.js
+debug_*.js
+dump_*.js
+verify_*.js
+force_*.js
+migrate_*.js
+*.dump.json
+*_dump.json
+ids_output.txt
+out.txt
+
+# 🔐 Security: Never commit .env files with secrets
+.env.production
+.env.staging

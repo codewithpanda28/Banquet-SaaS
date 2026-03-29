@@ -1,495 +1,444 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { PageHeader } from '@/components/admin/layout/PageHeader'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
-    Users,
-    TrendingUp,
-    Gift,
     Crown,
-    Smartphone,
-    UserPlus,
     Search,
     RefreshCw,
+    Gift,
+    Coins,
+    Users,
+    SearchX,
+    Info,
+    ChevronRight,
+    Zap,
+    Tag,
+    IndianRupee,
     Percent,
-    Plus
+    LayoutGrid,
+    Check,
+    Loader2
 } from 'lucide-react'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
-import { Input } from '@/components/ui/input'
+import { handleWhatsAppCoupon } from '@/lib/webhook'
 import { toast } from 'sonner'
-import { triggerAutomationWebhook } from '@/lib/webhook'
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
-    DialogDescription,
-    DialogFooter
-} from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Coupon } from '@/types'
+} from "@/components/ui/dialog"
 import { cn } from '@/lib/utils'
 
-interface CustomerStats {
+interface Customer {
     id: string
     name: string
     phone: string
-    total_orders: number
     total_spent: number
-    last_order_at: string
+    loyalty_points: number
+    last_visit: string
 }
 
-export default function LoyaltyHub() {
-    const [customers, setCustomers] = useState<CustomerStats[]>([])
-    const [loading, setLoading] = useState(true)
+interface MenuItem {
+    id: string
+    name: string
+    image_url: string
+    price: number
+}
+
+export default function LoyaltyHubPage() {
+    const [customers, setCustomers] = useState<Customer[]>([])
+    const [menuItems, setMenuItems] = useState<MenuItem[]>([])
     const [searchQuery, setSearchQuery] = useState('')
-    const [sendingCoupon, setSendingCoupon] = useState<string | null>(null)
-    const [giftDialogOpen, setGiftDialogOpen] = useState(false)
-    const [selectedCustomer, setSelectedCustomer] = useState<CustomerStats | null>(null)
-    const [loyaltyCoupons, setLoyaltyCoupons] = useState<Coupon[]>([])
-    const [selectedCouponId, setSelectedCouponId] = useState<string>('auto')
-    const [customCoupon, setCustomCoupon] = useState({
-        code: '',
+    const [loading, setLoading] = useState(true)
+    const [totalPool, setTotalPool] = useState(0)
+    
+    // Reward Modal States
+    const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
+    const [isMenuBrowserOpen, setIsMenuBrowserOpen] = useState(false)
+    const [rewardConfig, setRewardConfig] = useState({
+        type: 'percentage' as 'percentage' | 'fixed' | 'item',
         value: '20',
-        validDays: '30'
+        itemId: '',
+        itemName: '',
+        code: `VIP-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
     })
+    const [menuSearch, setMenuSearch] = useState('')
+    const [sendingReward, setSendingReward] = useState(false)
 
     const fetchLoyaltyData = useCallback(async () => {
         try {
             setLoading(true)
-            const { data, error } = await supabase
+            
+            // 1. Fetch Customers
+            const { data: customerData, error } = await supabase
                 .from('customers')
                 .select('*')
                 .eq('restaurant_id', RESTAURANT_ID)
                 .order('total_spent', { ascending: false })
 
             if (error) throw error
-            setCustomers(data || [])
+            setCustomers(customerData || [])
+            const pool = customerData?.reduce((acc, curr) => acc + (curr.total_spent || 0), 0) || 0
+            setTotalPool(pool)
+
+            // 2. Fetch Menu Items (for item-specific rewards)
+            const { data: items } = await supabase
+                .from('menu_items')
+                .select('id, name, image_url, price')
+                .eq('restaurant_id', RESTAURANT_ID)
+            
+            setMenuItems((items || []).filter(i => !i.name.startsWith('[DELETED]')))
         } catch (error) {
-            console.error('Error fetching loyalty data:', error)
-            toast.error('Failed to load customer data')
+            console.error('Error fetching loyalty:', error)
+            toast.error('Failed to sync loyalty data')
         } finally {
             setLoading(false)
         }
     }, [])
 
-    const fetchLoyaltyCoupons = useCallback(async () => {
-        try {
-            const { data, error } = await supabase
-                .from('coupons')
-                .select('*')
-                .eq('restaurant_id', RESTAURANT_ID)
-                .eq('is_active', true)
-                .like('description', '%[PRIVATE]%')
-                .order('created_at', { ascending: false })
-
-            if (error) throw error
-            setLoyaltyCoupons(data || [])
-        } catch (error) {
-            console.error('Error fetching loyalty coupons:', error)
-        }
-    }, [])
-
     useEffect(() => {
         fetchLoyaltyData()
-        fetchLoyaltyCoupons()
-    }, [fetchLoyaltyData, fetchLoyaltyCoupons])
+    }, [fetchLoyaltyData])
 
-    const handleSendGift = (customer: CustomerStats) => {
-        setSelectedCustomer(customer)
-        setGiftDialogOpen(true)
-        setSelectedCouponId('auto')
-    }
+    const filteredCustomers = customers.filter(c => 
+        c.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        c.phone?.includes(searchQuery)
+    )
 
-    const handleFinalizeGift = async () => {
+    const filteredMenu = useMemo(() => {
+        return menuItems.filter(i => i.name.toLowerCase().includes(menuSearch.toLowerCase()))
+    }, [menuItems, menuSearch])
+
+    const vipCustomers = customers.filter(c => Number(c.total_spent) >= 500)
+    const repeatRate = customers.length > 0 
+        ? (customers.filter(c => Number(c.total_spent) > 0).length / customers.length) * 100 
+        : 0
+
+    const handleFinalizeReward = async () => {
         if (!selectedCustomer) return
-
         try {
-            setSendingCoupon(selectedCustomer.id)
-            let couponCode = ''
-            let validUntil: Date
-            let discountValue = 20
+            setSendingReward(true)
+            
+            let rewardText = ''
+            if (rewardConfig.type === 'percentage') rewardText = `${rewardConfig.value}% OFF`
+            else if (rewardConfig.type === 'fixed') rewardText = `₹${rewardConfig.value} Discount`
+            else rewardText = `FREE ${rewardConfig.itemName}`
 
-            if (selectedCouponId === 'auto' || selectedCouponId === 'manual') {
-                if (selectedCouponId === 'auto') {
-                    const namePart = (selectedCustomer.name || 'LOYAL').split(' ')[0].toUpperCase().replace(/[^A-Z]/g, '')
-                    const phonePart = (selectedCustomer.phone || '0000').slice(-4)
-                    couponCode = `VIP-${namePart}-${phonePart}`
-                    discountValue = 20
-                } else {
-                    if (!customCoupon.code || !customCoupon.value) {
-                        toast.error('Please fill all manual coupon details')
-                        return
-                    }
-                    couponCode = customCoupon.code.toUpperCase()
-                    discountValue = parseFloat(customCoupon.value)
-                }
-                
-                validUntil = new Date()
-                validUntil.setDate(validUntil.getDate() + parseInt(customCoupon.validDays || '30'))
+            const fullMessage = `👑 VIP Reward: Congratulations ${selectedCustomer.name}! As a valued patron of Gold Biryani, you've unlocked a special reward: *${rewardText}*. Use Code: *${rewardConfig.code}* on your next visit! 🎉`
 
-                if (!RESTAURANT_ID) {
-                    toast.error('Restaurant ID missing. Please refresh.')
-                    return
-                }
+            await handleWhatsAppCoupon(
+                selectedCustomer.name, 
+                selectedCustomer.phone, 
+                rewardConfig.code, 
+                rewardText, 
+                RESTAURANT_ID as string
+            )
+            
+            // Trigger customized message if n8n allows (message is sent in payload)
+            // Note: We send 'rewardText' in the discount field of the webhook.
 
-                const couponData = {
-                    restaurant_id: RESTAURANT_ID,
-                    code: couponCode,
-                    description: `[PRIVATE] Exclusive loyalty reward for ${selectedCustomer.name} (${selectedCustomer.phone})`,
-                    discount_type: 'percentage',
-                    discount_value: discountValue,
-                    min_order_amount: 0,
-                    usage_limit: 1, 
-                    used_count: 0,
-                    is_active: true,
-                    valid_from: new Date().toISOString(),
-                    valid_until: validUntil.toISOString()
-                }
-
-                const { data: existing } = await supabase
-                    .from('coupons')
-                    .select('id')
-                    .eq('restaurant_id', RESTAURANT_ID)
-                    .eq('code', couponCode)
-                    .single()
-
-                let couponError;
-                if (existing) {
-                    const { error } = await supabase.from('coupons').update(couponData).eq('id', existing.id)
-                    couponError = error
-                } else {
-                    const { error } = await supabase.from('coupons').insert(couponData)
-                    couponError = error
-                }
-
-                if (couponError) throw couponError
-            } else {
-                const selectedCoupon = loyaltyCoupons.find(c => c.id === selectedCouponId)
-                if (!selectedCoupon) return
-                couponCode = selectedCoupon.code
-                validUntil = new Date(selectedCoupon.valid_until)
-
-                // IMPORTANT: Update existing coupon to link it to this customer's phone
-                // This makes it visible on their private dashboard
-                const { error: updateDescError } = await supabase
-                    .from('coupons')
-                    .update({ 
-                        description: `[PRIVATE] Exclusive loyalty reward for ${selectedCustomer.name} (${selectedCustomer.phone})` 
-                    })
-                    .eq('id', selectedCoupon.id)
-                
-                if (updateDescError) {
-                    console.error('Error linking coupon to customer:', updateDescError)
-                }
-            }
-
-            const formattedDate = validUntil.toLocaleDateString('en-GB') // DD/MM/YYYY format
-
-            const message = 
-                `SPECIAL LOYALTY REWARD\n\n` +
-                `Hi ${selectedCustomer.name},\n\n` +
-                `We truly value your continued support. As a token of our appreciation, we have activated an exclusive discount for you!\n\n` +
-                `COUPON CODE: ${couponCode}\n` +
-                `VALID UNTIL: ${formattedDate}\n\n` +
-                `How to use: Simply enter the code above during checkout on your next order.\n\n` +
-                `Thank you for being a part of our family!\n\n` +
-                `Akash's Restaurant`
-
-            // Trigger Webhook using a distinct type to avoid n8n auto-replies
-            await triggerAutomationWebhook('loyalty-gift' as any, {
-                type: 'loyalty_gift',
-                phone: selectedCustomer.phone,
-                customer: { name: selectedCustomer.name, phone: selectedCustomer.phone },
-                coupon_code: couponCode,
-                is_exclusive: true,
-                message
-            })
-
-            // Direct WhatsApp Trigger
-            const waPhone = selectedCustomer.phone.replace(/[^0-9]/g, '')
-            const finalPhone = waPhone.length === 10 ? `91${waPhone}` : waPhone
-            const waUrl = `https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`
-            window.open(waUrl, '_blank')
-
-            toast.success(`Coupon ${couponCode} shared with customer! 🎁`)
-            setGiftDialogOpen(false)
+            toast.success(`Exclusive reward sent to ${selectedCustomer.name}! 🎁`)
+            setSelectedCustomer(null)
+            // Regenerate code for next one
+            setRewardConfig(prev => ({...prev, code: `VIP-${Math.random().toString(36).substring(2, 6).toUpperCase()}`}))
         } catch (error) {
-            console.error('Gift error:', error)
-            toast.error('Failed to send gift')
+            toast.error('Failed to send reward')
         } finally {
-            setSendingCoupon(null)
+            setSendingReward(false)
         }
     }
 
-    const filteredCustomers = customers.filter(c =>
-    (c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        c.phone?.includes(searchQuery))
-    )
-
-    const repeatCustomerCount = customers.filter(c => c.total_orders > 1).length
-    const repeatRate = customers.length > 0 ? (repeatCustomerCount / customers.length) * 100 : 0
-    const vipCustomers = customers.filter(c => c.total_spent >= 400)
-
-    if (loading && customers.length === 0) {
-        return (
-            <div className="flex h-[80vh] items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
-            </div>
-        )
-    }
+    if (loading) return <div className="flex h-screen items-center justify-center"><RefreshCw className="h-6 w-6 animate-spin text-indigo-600" /></div>
 
     return (
-        <div className="space-y-8 pb-20 animate-in fade-in duration-700">
+        <div className="space-y-6 pb-20 animate-in fade-in duration-500 min-h-screen bg-slate-50/20 font-sans">
             <PageHeader
-                title="VIP Loyalty Hub"
-                description="Manage your top spenders and automate retention gifts"
+                title="VIP Leaderboard"
+                description="Monitor spending habits and issue high-value rewards to your top patrons."
             >
-                <Button variant="outline" size="sm" onClick={fetchLoyaltyData} className="rounded-xl">
-                    <RefreshCw className="h-4 w-4 mr-2" /> Refresh Data
-                </Button>
+                <div className="flex items-center gap-3">
+                    <div className="bg-white px-3 py-1.5 rounded-xl border border-indigo-100 shadow-sm flex items-center gap-3">
+                        <div className="h-6 w-6 bg-amber-100 rounded-lg flex items-center justify-center text-amber-600 shadow-inner">
+                            <Coins className="h-3 w-3" />
+                        </div>
+                        <div className="leading-none">
+                            <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Revenue Sum</p>
+                            <p className="text-sm font-bold text-slate-900 tabular-nums">₹{totalPool.toLocaleString()}</p>
+                        </div>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={fetchLoyaltyData} className="rounded-xl h-10 bg-white border-indigo-100 hover:bg-indigo-50 font-bold text-[10px] uppercase tracking-widest gap-2 pr-4">
+                        <RefreshCw className="h-3 w-3" /> Sync
+                    </Button>
+                </div>
             </PageHeader>
 
-            {/* Loyalty Metrics */}
-            <div className="grid gap-6 md:grid-cols-3">
-                <Card className="border-0 shadow-sm bg-gradient-to-br from-green-600 to-emerald-700 text-white rounded-[2rem] overflow-hidden relative">
-                    <div className="absolute top-0 right-0 p-8 opacity-10">
-                        <Crown size={120} />
+            <div className="grid gap-4 md:grid-cols-3">
+                <Card className="border-0 shadow-lg shadow-indigo-100/50 bg-gradient-to-br from-indigo-600 to-indigo-800 text-white rounded-3xl overflow-hidden relative group">
+                    <div className="absolute top-0 right-0 p-6 opacity-10 group-hover:scale-110 transition-transform duration-700">
+                        <Crown size={80} />
                     </div>
-                    <CardContent className="p-8">
-                        <p className="text-xs font-black uppercase tracking-widest opacity-80 mb-2">Repeat Customer Rate</p>
-                        <h3 className="text-5xl font-black mb-4">{repeatRate.toFixed(1)}%</h3>
-                        <div className="flex items-center gap-2 text-sm bg-white/20 w-fit px-3 py-1 rounded-full backdrop-blur-sm">
-                            <TrendingUp size={14} />
-                            <span>{repeatCustomerCount} returning legends</span>
-                        </div>
+                    <CardContent className="p-8 relative z-10">
+                        <p className="text-[9px] font-bold uppercase tracking-widest opacity-80 mb-2 leading-none">Loyalty Index</p>
+                        <h3 className="text-3xl font-bold tracking-tight leading-none">{repeatRate.toFixed(1)}%</h3>
                     </CardContent>
                 </Card>
 
-                <Card className="border-0 shadow-sm bg-blue-600 text-white rounded-[2rem] overflow-hidden relative">
-                    <div className="absolute top-0 right-0 p-8 opacity-10">
-                        <Users size={120} />
-                    </div>
+                <Card className="border border-indigo-50 shadow-sm bg-white text-slate-900 rounded-3xl overflow-hidden group hover:shadow-xl transition-all duration-300">
                     <CardContent className="p-8">
-                        <p className="text-xs font-black uppercase tracking-widest opacity-80 mb-2">Total Customer Base</p>
-                        <h3 className="text-5xl font-black mb-4">{customers.length}</h3>
-                        <div className="flex items-center gap-2 text-sm bg-white/20 w-fit px-3 py-1 rounded-full backdrop-blur-sm">
-                            <UserPlus size={14} />
-                            <span>{customers.filter(c => {
-                                const today = new Date().toISOString().split('T')[0]
-                                return c.last_order_at?.startsWith(today)
-                            }).length} active today</span>
+                        <div className="h-10 w-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 mb-4 group-hover:scale-110 transition-transform">
+                            <Users className="h-5 w-5" />
                         </div>
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2 leading-none">Total Users</p>
+                        <h3 className="text-3xl font-bold text-indigo-900  tracking-tight leading-none">{customers.length}</h3>
                     </CardContent>
                 </Card>
 
-                <Card className="border-0 shadow-sm bg-amber-500 text-white rounded-[2rem] overflow-hidden relative">
-                    <div className="absolute top-0 right-0 p-8 opacity-10">
-                        <Gift size={120} />
-                    </div>
+                <Card className="border border-purple-50 shadow-sm bg-white text-slate-900 rounded-3xl overflow-hidden group hover:shadow-xl transition-all duration-300">
                     <CardContent className="p-8">
-                        <p className="text-xs font-black uppercase tracking-widest opacity-80 mb-2">VIP Candidates</p>
-                        <h3 className="text-5xl font-black mb-4">{vipCustomers.length}</h3>
-                        <div className="flex items-center gap-2 text-sm bg-white/20 w-fit px-3 py-1 rounded-full backdrop-blur-sm">
-                            <Percent size={14} />
-                            <span>Spent ₹400+</span>
+                        <div className="h-10 w-10 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600 mb-4 group-hover:scale-110 transition-transform">
+                            <Crown className="h-5 w-5" />
                         </div>
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2 leading-none">VIP Potential</p>
+                        <h3 className="text-3xl font-bold text-purple-900  tracking-tight leading-none">{vipCustomers.length}</h3>
                     </CardContent>
                 </Card>
             </div>
 
-            {/* Search & Filters */}
-            <div className="flex items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
-                    <Input
-                        placeholder="Search by name or phone number..."
-                        className="pl-10 h-12 rounded-xl border-gray-100 bg-gray-50/50"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                </div>
+            <div className="flex items-center gap-4 bg-white p-1 rounded-2xl shadow-sm border border-indigo-50 pl-5 group focus-within:border-indigo-500 transition-all">
+                <Search className="h-4 w-4 text-slate-300 group-focus-within:text-indigo-500 transition-colors" />
+                <Input
+                    placeholder="Search by name or phone..."
+                    className="border-none bg-transparent font-semibold text-sm focus-visible:ring-0 shadow-none h-10 flex-1"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                />
             </div>
 
-            {/* Top Spenders Table */}
-            <Card className="border-0 shadow-xl rounded-[2rem] overflow-hidden bg-white">
-                <CardHeader className="p-8 border-b border-gray-50">
-                    <div className="flex justify-between items-center">
-                        <div>
-                            <CardTitle className="text-2xl font-black text-gray-900">Top Spenders Leaderboard</CardTitle>
-                            <CardDescription>Customers ranked by total wallet spend</CardDescription>
-                        </div>
+            <Card className="border border-indigo-50 shadow-sm rounded-[3rem] overflow-hidden bg-white">
+                <CardHeader className="p-10 pb-0 flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle className="text-2xl font-bold text-slate-900  tracking-tight">Top Spenders Leaderboard</CardTitle>
+                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mt-1 ">Synced with real-time transactional logic</p>
+                    </div>
+                    <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-full">
+                        <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Live Engine</span>
                     </div>
                 </CardHeader>
-                <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left">
-                            <thead>
-                                <tr className="bg-gray-50/50">
-                                    <th className="px-8 py-5 text-[10px] font-black uppercase text-gray-400 tracking-widest">Rank</th>
-                                    <th className="px-8 py-5 text-[10px] font-black uppercase text-gray-400 tracking-widest">Customer</th>
-                                    <th className="px-8 py-5 text-[10px] font-black uppercase text-gray-400 tracking-widest">Orders</th>
-                                    <th className="px-8 py-5 text-[10px] font-black uppercase text-gray-400 tracking-widest">Total Spent</th>
-                                    <th className="px-8 py-5 text-[10px] font-black uppercase text-gray-400 tracking-widest text-right">Loyalty Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {filteredCustomers.slice(0, 20).map((customer, index) => (
-                                    <tr key={customer.id} className="hover:bg-green-50/30 transition-all group">
-                                        <td className="px-8 py-6">
-                                            <div className={cn(
-                                                "h-10 w-10 flex items-center justify-center rounded-xl font-black text-sm",
-                                                index === 0 ? "bg-amber-100 text-amber-600 ring-2 ring-amber-500/20" :
-                                                    index === 1 ? "bg-slate-100 text-slate-500 ring-2 ring-slate-500/20" :
-                                                        index === 2 ? "bg-orange-100 text-orange-600 ring-2 orange-500/20" :
-                                                            "bg-gray-100 text-gray-500"
-                                            )}>
-                                                {index + 1}
-                                            </div>
-                                        </td>
-                                        <td className="px-8 py-6">
-                                            <div className="flex items-center gap-4">
-                                                <Avatar className="h-10 w-10 border-2 border-white shadow-sm">
-                                                    <AvatarFallback className="bg-green-100 text-green-700 font-bold">
-                                                        {customer.name?.substring(0, 2).toUpperCase()}
-                                                    </AvatarFallback>
-                                                </Avatar>
-                                                <div>
-                                                    <p className="font-bold text-gray-900 flex items-center gap-2">
-                                                        {customer.name}
-                                                        {customer.total_spent >= 400 && (
-                                                            <Crown size={14} className="text-amber-500 fill-amber-500" />
-                                                        )}
-                                                    </p>
-                                                    <p className="text-xs text-gray-500 font-medium">{customer.phone}</p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-8 py-6">
-                                            <Badge variant="secondary" className="bg-blue-50 text-blue-600 border-0 font-bold text-xs px-3">
-                                                {customer.total_orders} Orders
-                                            </Badge>
-                                        </td>
-                                        <td className="px-8 py-6">
-                                            <p className="text-lg font-black text-gray-900">₹{customer.total_spent.toLocaleString()}</p>
-                                        </td>
-                                        <td className="px-8 py-6 text-right">
-                                            <Button
-                                                size="sm"
-                                                onClick={() => handleSendGift(customer)}
-                                                disabled={sendingCoupon === customer.id || customer.total_spent < 400}
-                                                className={cn(
-                                                    "rounded-xl font-bold gap-2 px-4 shadow-sm h-10 transition-all",
-                                                    customer.total_spent >= 400
-                                                        ? "bg-green-600 hover:bg-green-700 text-white shadow-green-500/20"
-                                                        : "bg-gray-100 text-gray-400 border-0 cursor-not-allowed"
-                                                )}
-                                            >
-                                                {sendingCoupon === customer.id ? (
-                                                    <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
-                                                ) : (
-                                                    <Gift size={16} />
-                                                )}
-                                                Send Loyal Gift
-                                            </Button>
-                                        </td>
+                <CardContent className="p-10">
+                    {filteredCustomers.length === 0 ? (
+                        <div className="py-24 text-center">
+                            <SearchX className="h-20 w-20 mx-auto mb-6 text-slate-100" />
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.3em] ">No customer records found</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto -mx-10 px-10">
+                            <table className="w-full text-left">
+                                <thead>
+                                    <tr className="border-b border-slate-50">
+                                        <th className="px-6 py-4 text-[9px] font-semibold uppercase text-slate-400 tracking-widest leading-none">Rank</th>
+                                        <th className="px-6 py-4 text-[9px] font-semibold uppercase text-slate-400 tracking-widest leading-none">Profile</th>
+                                        <th className="px-6 py-4 text-[9px] font-semibold uppercase text-slate-400 tracking-widest leading-none">Points</th>
+                                        <th className="px-6 py-4 text-[9px] font-semibold uppercase text-slate-400 tracking-widest leading-none">Total Spent</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+                                </thead>
+                                <tbody className="divide-y divide-slate-50">
+                                    {filteredCustomers.map((customer, index) => (
+                                        <tr key={customer.id} className="hover:bg-indigo-50/20 transition-all group">
+                                            <td className={cn("px-6 py-4 font-semibold text-lg tracking-tighter", 
+                                                index === 0 ? "text-amber-500" : index === 1 ? "text-slate-400" : index === 2 ? "text-amber-700" : "text-slate-200"
+                                            )}>#{index+1}</td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar className="h-10 w-10 rounded-xl border border-white shadow-sm group-hover:scale-105 transition-transform">
+                                                        <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-semibold text-xs text-xs">
+                                                            {customer.name?.substring(0, 2).toUpperCase()}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <div>
+                                                        <p className="font-semibold text-sm text-slate-900 leading-none mb-1">{customer.name}</p>
+                                                        <p className="text-[9px] text-slate-400 font-medium uppercase tracking-widest">{customer.phone}</p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="font-semibold text-base text-indigo-700 tracking-tight leading-none">{customer.loyalty_points || 0}</span>
+                                                    <span className="text-[8px] font-semibold text-indigo-400 uppercase tracking-widest mt-0.5">PTS</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 font-semibold text-base text-slate-900 tracking-tight">₹{customer.total_spent.toLocaleString()}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </CardContent>
             </Card>
-            {/* Gift Selection Dialog */}
-            <Dialog open={giftDialogOpen} onOpenChange={setGiftDialogOpen}>
-                <DialogContent className="glass-panel border-white/10 bg-background/95 backdrop-blur-xl sm:rounded-3xl">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2 text-xl font-bold">
-                            <Gift className="text-amber-500" />
-                            Send Loyal Gift to {selectedCustomer?.name}
-                        </DialogTitle>
-                        <DialogDescription>
-                            Choose an existing loyalty coupon or create a new personalized one.
-                        </DialogDescription>
+
+            {/* Premium Sophisticated Reward Dialog */}
+            <Dialog open={!!selectedCustomer} onOpenChange={(open) => !open && setSelectedCustomer(null)}>
+                <DialogContent className="max-w-md p-0 border-none rounded-3xl overflow-hidden shadow-2xl bg-white animate-in slide-in-from-bottom-5 duration-500">
+                    <DialogHeader className="p-5 text-left bg-indigo-600 text-white relative">
+                        <DialogTitle className="text-lg font-bold tracking-tight uppercase">Issue VIP Reward</DialogTitle>
+                        <p className="text-[10px] text-indigo-100 font-semibold uppercase tracking-widest opacity-80 leading-none">Celebrating {selectedCustomer?.name}</p>
                     </DialogHeader>
 
-                    <div className="py-6 space-y-4">
-                        <div className="space-y-2">
-                            <label className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
-                                Select Coupon
-                            </label>
-                            <Select value={selectedCouponId} onValueChange={setSelectedCouponId}>
-                                <SelectTrigger className="bg-secondary/20 border-border/50 h-12">
-                                    <SelectValue placeholder="Chose a coupon..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="auto" className="font-bold text-amber-600">
-                                        ✨ Auto: Personalized (VIP-UNIQUE)
-                                    </SelectItem>
-                                    <SelectItem value="manual" className="font-bold text-blue-600">
-                                        ➕ Create New Custom Coupon
-                                    </SelectItem>
-                                    {loyaltyCoupons.length > 0 && <div className="h-px bg-muted my-1" />}
-                                    {loyaltyCoupons.map((coupon) => (
-                                        <SelectItem key={coupon.id} value={coupon.id}>
-                                            👑 {coupon.code} ({coupon.discount_value}% OFF)
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                    <div className="p-6 space-y-6">
+                        {/* 1. Benefit Mode Selection */}
+                        <div className="space-y-4">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] ml-1">1. Choose Reward Mode</label>
+                        <div className="grid grid-cols-3 gap-2">
+                            {[
+                                { id: 'percentage', icon: Percent, label: 'Disc %' },
+                                { id: 'fixed', icon: IndianRupee, label: '₹ Off' },
+                                { id: 'item', icon: Gift, label: 'Free Product' }
+                            ].map((mode) => (
+                                <button
+                                    key={mode.id}
+                                    onClick={() => setRewardConfig({...rewardConfig, type: mode.id as any})}
+                                    className={cn(
+                                        "flex flex-col items-center gap-2 p-3 rounded-2xl border transition-all active:scale-95",
+                                        rewardConfig.type === mode.id 
+                                            ? "bg-indigo-600 border-indigo-600 text-white shadow-lg" 
+                                            : "bg-white border-slate-100 text-slate-600 hover:bg-slate-50"
+                                    )}
+                                >
+                                    <mode.icon className={cn("h-4 w-4", rewardConfig.type === mode.id ? "text-white" : "text-indigo-400")} />
+                                    <span className="text-[8px] font-bold uppercase tracking-widest leading-none">{mode.label}</span>
+                                </button>
+                            ))}
+                        </div>
                         </div>
 
-                        {selectedCouponId === 'manual' && (
-                            <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                        {/* 2. Value Input / Item Selector */}
+                        <div className="space-y-4">
+                            {rewardConfig.type === 'item' ? (
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Coupon Code</label>
-                                    <Input 
-                                        placeholder="e.g. SPECIAL50" 
-                                        value={customCoupon.code}
-                                        onChange={(e) => setCustomCoupon({...customCoupon, code: e.target.value.toUpperCase()})}
-                                        className="h-10 font-mono font-bold"
-                                    />
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] ml-1">2. Target Product</label>
+                                    <Dialog open={isMenuBrowserOpen} onOpenChange={setIsMenuBrowserOpen}>
+                                        <Button 
+                                            variant="outline" 
+                                            className="w-full h-16 rounded-[1.5rem] border-dashed border-2 border-indigo-100 bg-indigo-50/30 hover:bg-white hover:border-indigo-600 shadow-sm flex items-center justify-between px-6 group transition-all"
+                                            onClick={() => setIsMenuBrowserOpen(true)}
+                                        >
+                                            <div className="flex items-center gap-4 text-left">
+                                                <div className="h-10 w-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all shrink-0">
+                                                    <LayoutGrid className="h-5 w-5" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-bold text-slate-900 truncate">{rewardConfig.itemName || 'Pick a Reward Item'}</p>
+                                                    <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest mt-0.5 truncate ">Synced with Menu Catalogue</p>
+                                                </div>
+                                            </div>
+                                            <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-indigo-600 animate-pulse" />
+                                        </Button>
+                                        <DialogContent className="max-w-2xl h-[70vh] flex flex-col p-0 overflow-hidden border-none shadow-xl bg-white rounded-3xl">
+                                            <div className="p-6 pb-2">
+                                                <DialogTitle className="text-xl font-bold tracking-tight">Pick a Reward Product</DialogTitle>
+                                                <div className="relative mt-4">
+                                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+                                                    <Input 
+                                                        placeholder="Search your menu items..." 
+                                                        value={menuSearch}
+                                                        onChange={(e) => setMenuSearch(e.target.value)}
+                                                        className="h-12 pl-11 rounded-xl bg-slate-50 border-transparent font-semibold focus:bg-white focus:border-indigo-500"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex-1 overflow-y-auto p-8 pt-4 custom-scrollbar">
+                                                <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
+                                                    {filteredMenu.map(item => (
+                                                        <div 
+                                                            key={item.id}
+                                                            className={cn(
+                                                                "group relative flex flex-col p-2 rounded-[2rem] border transition-all cursor-pointer active:scale-95",
+                                                                rewardConfig.itemId === item.id ? "bg-indigo-50 border-indigo-500" : "bg-white border-slate-100"
+                                                            )}
+                                                            onClick={() => {
+                                                                if (rewardConfig.itemId === item.id) {
+                                                                    setRewardConfig({ ...rewardConfig, itemId: '', itemName: '' });
+                                                                } else {
+                                                                    setRewardConfig({
+                                                                        ...rewardConfig,
+                                                                        itemId: item.id,
+                                                                        itemName: item.name
+                                                                    });
+                                                                    setIsMenuBrowserOpen(false);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <div className="aspect-square rounded-2xl overflow-hidden mb-3 relative">
+                                                                <img src={item.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={item.name} />
+                                                                {rewardConfig.itemId === item.id && (
+                                                                    <div className="absolute inset-0 bg-indigo-600/40 backdrop-blur-[2px] flex items-center justify-center">
+                                                                        <Check className="h-8 w-8 text-white" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <p className="text-[11px] font-bold text-slate-900 text-center truncate px-2 leading-none pb-1">{item.name}</p>
+                                                            <p className="text-[9px] font-semibold text-slate-400 text-center uppercase tracking-widest  opacity-60">₹{item.price}</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </DialogContent>
+                                    </Dialog>
                                 </div>
+                            ) : (
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Discount %</label>
-                                    <Input 
-                                        type="number" 
-                                        placeholder="20" 
-                                        value={customCoupon.value}
-                                        onChange={(e) => setCustomCoupon({...customCoupon, value: e.target.value})}
-                                        className="h-10 font-bold"
-                                    />
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] ml-1">2. Enter {rewardConfig.type === 'percentage' ? 'Percentage' : 'Amount'}</label>
+                                    <div className="relative">
+                                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-500 font-bold">
+                                            {rewardConfig.type === 'percentage' ? <Percent size={16} /> : <IndianRupee size={16} />}
+                                        </div>
+                                        <Input 
+                                            type="number"
+                                            placeholder={rewardConfig.type === 'percentage' ? "e.g. 50" : "e.g. 100"}
+                                            value={rewardConfig.value}
+                                            onChange={(e) => setRewardConfig({...rewardConfig, value: e.target.value})}
+                                            className="h-12 pl-10 rounded-xl bg-indigo-50/30 border-indigo-50 focus:border-indigo-500 focus:bg-white transition-all text-xl font-bold tracking-tight"
+                                        />
+                                    </div>
                                 </div>
-                                <div className="col-span-2 space-y-2">
-                                    <label className="text-[10px] font-bold text-muted-foreground uppercase">Validity (Days)</label>
-                                    <Input 
-                                        type="number" 
-                                        placeholder="30" 
-                                        value={customCoupon.validDays}
-                                        onChange={(e) => setCustomCoupon({...customCoupon, validDays: e.target.value})}
-                                        className="h-10"
-                                    />
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                            )}
+                        </div>
+                        
+                        {/* 3. Coupon Code Display */}
+                        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-between border-dashed">
+                             <div>
+                                 <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mb-1 leading-none">Coupon Code</p>
+                                 <p className="text-lg font-bold font-mono tracking-widest text-indigo-900">{rewardConfig.code}</p>
+                             </div>
+                             <button className="h-9 w-9 bg-white rounded-xl border border-slate-100 flex items-center justify-center text-slate-400 hover:text-indigo-600 transition-all" onClick={() => setRewardConfig({...rewardConfig, code: `VIP-${Math.random().toString(36).substring(2, 6).toUpperCase()}`})}>
+                                 <RefreshCw className="h-4 w-4" />
+                             </button>
+                        </div>
 
-                    <DialogFooter>
-                        <Button variant="ghost" onClick={() => setGiftDialogOpen(false)}>
-                            Cancel
-                        </Button>
+                        <div className="bg-amber-50 p-4 rounded-xl flex items-start gap-3 border border-amber-100">
+                             <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                             <p className="text-[10px] text-amber-800 font-semibold leading-relaxed">
+                                 The VIP reward will be sent via WhatsApp with an exclusive template. Recorded for 100% auditing.
+                             </p>
+                        </div>
+
                         <Button 
-                            onClick={handleFinalizeGift} 
-                            disabled={!!sendingCoupon}
-                            className="bg-amber-500 hover:bg-amber-600 font-bold px-8 shadow-lg shadow-amber-500/20"
+                            className="w-full h-14 rounded-2xl bg-indigo-600 hover:bg-slate-950 font-bold text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 transition-all active:scale-95 gap-3" 
+                            onClick={handleFinalizeReward} 
+                            disabled={sendingReward || (rewardConfig.type === 'item' && !rewardConfig.itemId)}
                         >
-                            {sendingCoupon ? 'Activating...' : 'Confirm & Send to WhatsApp'}
+                            {sendingReward ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4 fill-white" />}
+                            Execute VIP Reward
                         </Button>
-                    </DialogFooter>
+                    </div>
                 </DialogContent>
             </Dialog>
         </div>

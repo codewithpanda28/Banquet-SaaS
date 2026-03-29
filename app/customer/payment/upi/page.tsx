@@ -6,7 +6,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { useRestaurant } from '@/hooks/useRestaurant'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-import { Copy, ArrowRight } from 'lucide-react'
+import { Copy, ArrowRight, Loader2 } from 'lucide-react'
 
 function UPIPaymentContent() {
     const router = useRouter()
@@ -17,11 +17,11 @@ function UPIPaymentContent() {
 
     const { restaurant } = useRestaurant()
     const [upiUrl, setUpiUrl] = useState('')
+    const [activeButton, setActiveButton] = useState<'payment' | 'cash' | null>(null)
 
     useEffect(() => {
         if (restaurant?.upi_id && amount > 0) {
             // Construct UPI URL
-            // pa: payee address, pn: payee name, am: amount, tr: transaction ref (billId), tn: transaction note
             const url = `upi://pay?pa=${restaurant.upi_id}&pn=${encodeURIComponent(restaurant.name)}&am=${amount}&tr=${billId}&tn=${encodeURIComponent(`Payment for Bill ${billId}`)}&cu=INR`
             setUpiUrl(url)
         }
@@ -34,8 +34,40 @@ function UPIPaymentContent() {
         }
     }
 
-    const handlePaymentDone = () => {
-        router.replace(`/customer/track/${billId}`)
+    const handlePaymentDone = async (type: 'payment' | 'cash') => {
+        try {
+            setActiveButton(type)
+            const isCash = type === 'cash'
+            
+            // 📡 [Automation] Manual Trigger from Confirmation
+            const storedKey = `webhook_pending_${billId}`;
+            const storedData = sessionStorage.getItem(storedKey);
+            
+            if (storedData) {
+                const webhookData = JSON.parse(storedData)
+                console.log('📡 [UPI] Manual Webhook Trigger:', webhookData)
+                const { triggerAutomationWebhook } = await import('@/lib/webhook')
+                
+                // CRITICAL: Must be 'new-order' for n8n filters
+                await triggerAutomationWebhook('new-order', {
+                    ...webhookData,
+                    action: 'new-order',
+                    payment_confirmation: isCash ? 'cash' : 'online_self_reported',
+                    payment_status: isCash ? 'unpaid' : 'client_verified',
+                    is_manual_trigger: true
+                })
+                
+                sessionStorage.removeItem(storedKey)
+            }
+
+            toast.success(isCash ? 'Order Confirmed! Pay at Counter. 💰' : 'Thank you! Order Received. ✅')
+            router.replace(`/customer/track/${billId}`)
+        } catch (error) {
+            console.error('Webhook error:', error)
+            router.replace(`/customer/track/${billId}`)
+        } finally {
+            setActiveButton(null)
+        }
     }
 
     if (!billId || !amount) return <div>Invalid Payment Details</div>
@@ -81,11 +113,22 @@ function UPIPaymentContent() {
                     </Button>
                 )}
 
-                <Button className="w-full h-12 text-base font-bold bg-green-600 hover:bg-green-700" onClick={handlePaymentDone}>
-                    I have completed payment <ArrowRight className="ml-2 w-5 h-5" />
+                <Button 
+                    className="w-full h-12 text-base font-bold bg-green-600 hover:bg-green-700" 
+                    onClick={() => handlePaymentDone('payment')}
+                    disabled={activeButton !== null}
+                >
+                    {activeButton === 'payment' ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : 'I have completed payment'} 
+                    {activeButton !== 'payment' && <ArrowRight className="ml-2 w-5 h-5" />}
                 </Button>
-                <Button variant="outline" className="w-full" onClick={() => router.replace(`/customer/track/${billId}`)}>
-                    Pay Cash at Counter
+                
+                <Button 
+                    variant="outline" 
+                    className="w-full" 
+                    onClick={() => handlePaymentDone('cash')}
+                    disabled={activeButton !== null}
+                >
+                    {activeButton === 'cash' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Pay Cash at Counter'}
                 </Button>
             </div>
         </div>
