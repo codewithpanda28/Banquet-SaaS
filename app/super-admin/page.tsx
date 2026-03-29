@@ -157,11 +157,13 @@ export default function SuperAdminPage() {
   const getFullLink = (path: string, restro: any) => {
     const protocol = window.location.protocol;
     const hostname = window.location.hostname;
-    let base = restro.custom_domain ? `${protocol}//${restro.custom_domain}` : `${protocol}//${restro.slug}.localhost:3000`;
-    if (!hostname.includes('localhost')) {
-        const mainDomain = hostname.replace(/^(admin|super-admin|www|waiter|kitchen|shop)\./, '');
-        if (!restro.custom_domain) base = `${protocol}//${restro.slug}.${mainDomain}`;
-    }
+    
+    // If not localhost, and no custom domain, simply use the main Vercel app domain.
+    // The middleware will rely entirely on the ?id= parameter, resolving the 404/DNS issue.
+    let base = restro.custom_domain 
+        ? `${protocol}//${restro.custom_domain}` 
+        : `${protocol}//${hostname}`;
+        
     const separator = path.includes('?') ? '&' : '?';
     return `${base}${path}${separator}id=${restro.id}`;
   };
