@@ -175,6 +175,7 @@ export default function SettingsPage() {
                 whatsapp_api_id: form.whatsapp_api_id || null,
                 whatsapp_api_url: form.whatsapp_api_url || 'https://thinkaiq.in/api',
                 google_review_url: form.google_review_url || null,
+                custom_domain: form.custom_domain || null,
             }
 
             const { error } = await supabase
@@ -653,7 +654,7 @@ export default function SettingsPage() {
                 </div>
             </div>
         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-4">
                             <Label htmlFor="primary_color" className="text-xs font-bold uppercase tracking-wider text-muted-foreground pl-1">Primary Theme Color</Label>
                             <div className="flex gap-4 items-center">
                                 <Input
@@ -670,6 +671,45 @@ export default function SettingsPage() {
                                 />
                             </div>
                             <p className="text-[10px] text-muted-foreground mt-2 italic">This color influences buttons, icons and interactive elements across your store.</p>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Domain & SEO Configuration */}
+                <Card className="glass-panel border-0 overflow-hidden relative group">
+                    <div className="absolute top-0 left-0 w-1 h-full bg-slate-500" />
+                    <CardHeader>
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-slate-500/10 flex items-center justify-center text-slate-500 group-hover:scale-110 transition-transform">
+                                <Globe className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-lg">Domain & SEO Settings</CardTitle>
+                                <CardDescription>Connect your own domain to your brand dashboard</CardDescription>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <div className="space-y-2">
+                            <Label htmlFor="custom_domain" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Custom Domain</Label>
+                            <div className="flex gap-3">
+                                <Input
+                                    id="custom_domain"
+                                    placeholder="e.g. menu.yourbrand.com"
+                                    value={form.custom_domain}
+                                    onChange={(e) => setForm({ ...form, custom_domain: e.target.value })}
+                                    className="bg-secondary/20 border-border/50 h-12 font-mono"
+                                />
+                                <Button variant="outline" size="icon" className="h-12 w-12 rounded-xl" asChild>
+                                    <a href={`https://${form.custom_domain || '#'}`} target="_blank" rel="noopener noreferrer">
+                                        <Globe className="h-4 w-4" />
+                                    </a>
+                                </Button>
+                            </div>
+                            <p className="text-[10px] text-muted-foreground mt-2 italic leading-relaxed">
+                                <Zap className="h-3 w-3 text-amber-500 inline mr-1" />
+                                <strong>How to connect:</strong> Point your domain's <strong>CNAME</strong> record to your Vercel deployment and enter the domain here without "http://".
+                            </p>
                         </div>
                     </CardContent>
                 </Card>

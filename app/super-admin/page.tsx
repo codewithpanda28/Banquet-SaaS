@@ -53,7 +53,11 @@ export default function SuperAdminPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-        const payload = { ...formData };
+        const payload = { 
+            ...formData,
+            custom_domain: formData.custom_domain.trim() === '' ? null : formData.custom_domain.trim()
+        };
+        
         if (editingId) {
             const { error } = await supabase.from('restaurants').update(payload).eq('id', editingId);
             if (error) throw error;
