@@ -166,15 +166,17 @@ function MenuContent() {
 
         console.log("🧐 [Menu] Session Check:", { phone: customerPhone, lastOrder: lastOrder?.id, payment: lastOrder?.payment_status })
 
-        // ONLY reset if payment is completed (paid status)
-        // Don't reset just because order is served/completed - customer might order again
+        // ONLY reset if payment is completed (paid status) AND we haven't already reset for this specific order
         if (lastOrder && lastOrder.payment_status === 'paid') {
-            // Previous session is paid. Start fresh.
-            console.log("Previous session paid. Resetting cart.")
-            clearCart()
-            setOrderType(null)
-            sessionStorage.removeItem('orderTypeConfirmed')
-            return true
+            const lastCleared = localStorage.getItem('last_cleared_order_id')
+            if (lastCleared !== lastOrder.id) {
+                console.log("Previous session paid. Resetting cart ONCE for this order.")
+                clearCart()
+                setOrderType(null)
+                sessionStorage.removeItem('orderTypeConfirmed')
+                localStorage.setItem('last_cleared_order_id', lastOrder.id)
+                return true
+            }
         }
         return false
     }, [customerPhone, clearCart, setOrderType, RESTAURANT_ID])
