@@ -240,8 +240,8 @@ export default function CheckoutPage() {
     }
 
     const handlePlaceOrder = async () => {
-        if (isNaN(total) || total <= 0) {
-            toast.error('Invalid order amount. Please check your cart.')
+        if (isNaN(total) || total < 0 || items.length === 0) {
+            toast.error('Invalid order. Please add valid items to your cart.')
             return
         }
         if (!name || !phone) {
@@ -590,7 +590,7 @@ export default function CheckoutPage() {
             })
 
             // Navigate immediately
-            if (paymentMethod === 'upi') {
+            if (paymentMethod === 'upi' && total > 0) {
                 router.push(`/customer/payment/upi?billId=${billId}&amount=${total}`)
             } else {
                 router.push(`/customer/order-confirmed/${billId}`)
