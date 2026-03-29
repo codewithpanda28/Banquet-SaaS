@@ -67,9 +67,12 @@ export default function LoyaltyHubPage() {
         value: '20',
         itemId: '',
         itemName: '',
-        code: `VIP-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
+        code: `LOYAL-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
     })
     const [menuSearch, setMenuSearch] = useState('')
+    const [existingCoupons, setExistingCoupons] = useState<any[]>([])
+    const [isCreatingNew, setIsCreatingNew] = useState(true)
+    const [selectedExistingCoupon, setSelectedExistingCoupon] = useState<any>(null)
     const [sendingReward, setSendingReward] = useState(false)
 
     const fetchLoyaltyData = useCallback(async () => {
@@ -95,6 +98,17 @@ export default function LoyaltyHubPage() {
                 .eq('restaurant_id', RESTAURANT_ID)
             
             setMenuItems((items || []).filter(i => !i.name.startsWith('[DELETED]')))
+
+            // 3. Fetch Existing Coupons (for reuse) - ONLY general/reusable ones
+            const { data: coupons } = await supabase
+                .from('coupons')
+                .select('*')
+                .eq('restaurant_id', RESTAURANT_ID)
+                .is('customer_id', null) // Avoid private linked ones
+                .eq('is_active', true)
+                .order('created_at', { ascending: false })
+            
+            setExistingCoupons(coupons || [])
         } catch (error) {
             console.error('Error fetching loyalty:', error)
             toast.error('Failed to sync loyalty data')
@@ -127,27 +141,79 @@ export default function LoyaltyHubPage() {
             setSendingReward(true)
             
             let rewardText = ''
-            if (rewardConfig.type === 'percentage') rewardText = `${rewardConfig.value}% OFF`
-            else if (rewardConfig.type === 'fixed') rewardText = `₹${rewardConfig.value} Discount`
-            else rewardText = `FREE ${rewardConfig.itemName}`
+            let discountType: 'percentage' | 'fixed' = 'percentage'
+            let discountValue = 0
+            let finalCode = ''
 
-            const fullMessage = `👑 VIP Reward: Congratulations ${selectedCustomer.name}! As a valued patron of Gold Biryani, you've unlocked a special reward: *${rewardText}*. Use Code: *${rewardConfig.code}* on your next visit! 🎉`
+            if (isCreatingNew) {
+                discountValue = Number(rewardConfig.value)
+                finalCode = rewardConfig.code
+                if (rewardConfig.type === 'percentage') {
+                    rewardText = `${rewardConfig.value}% OFF`
+                    discountType = 'percentage'
+                } else if (rewardConfig.type === 'fixed') {
+                    rewardText = `₹${rewardConfig.value} Discount`
+                    discountType = 'fixed'
+                } else {
+                    rewardText = `FREE ${rewardConfig.itemName}`
+                    discountType = 'percentage'
+                    discountValue = 100
+                }
+
+                // 1. Create Private Coupon in Database
+                const { error: dbError } = await supabase
+                    .from('coupons')
+                    .insert([{
+                        restaurant_id: RESTAURANT_ID,
+                        customer_id: selectedCustomer.id,
+                        code: finalCode,
+                        description: `[PRIVATE] Loyal Coupon for ${selectedCustomer.phone}: ${rewardText}`,
+                        discount_type: discountType,
+                        discount_value: discountValue,
+                        min_order_amount: 0,
+                        usage_limit: 1,
+                        valid_from: new Date().toISOString(),
+                        valid_until: new Date(Date.now() + 7 * 86400000).toISOString(),
+                        is_active: true
+                    }]);
+
+                if (dbError) throw dbError;
+            } else {
+                if (!selectedExistingCoupon) {
+                    toast.error('Please select an existing coupon first');
+                    return;
+                }
+                finalCode = selectedExistingCoupon.code;
+                rewardText = selectedExistingCoupon.discount_type === 'percentage' 
+                    ? `${selectedExistingCoupon.discount_value}% OFF` 
+                    : `₹${selectedExistingCoupon.discount_value} OFF`;
+            }
+
+            // 2. Send via WhatsApp
+            const expiryDateObj = new Date(Date.now() + 7 * 86400000);
+            const expiryDisplay = new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(expiryDateObj);
+            const fullMessage = `👑 Loyal Coupon: Congratulations ${selectedCustomer.name}! You've unlocked a special reward: *${rewardText}*. Use Code: *${finalCode}* on your next visit! 🎉\n\n⏰ Valid until: ${expiryDisplay}\n\nSee you soon! 🍕`;
 
             await handleWhatsAppCoupon(
                 selectedCustomer.name, 
                 selectedCustomer.phone, 
-                rewardConfig.code, 
+                finalCode, 
                 rewardText, 
                 RESTAURANT_ID as string
             )
             
-            // Trigger customized message if n8n allows (message is sent in payload)
-            // Note: We send 'rewardText' in the discount field of the webhook.
+            // 3. 📱 Direct WhatsApp Draft
+            const cleanPhone = selectedCustomer.phone.replace(/\D/g, '').slice(-10);
+            const waNumber = cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`;
+            const waMessage = encodeURIComponent(fullMessage);
+            
+            window.open(`https://wa.me/${waNumber}?text=${waMessage}`, '_blank');
 
-            toast.success(`Exclusive reward sent to ${selectedCustomer.name}! 🎁`)
+            toast.success(`Loyal Coupon ${isCreatingNew ? 'created' : 'reused'}! WhatsApp draft opened. 🎁`)
             setSelectedCustomer(null)
-            // Regenerate code for next one
-            setRewardConfig(prev => ({...prev, code: `VIP-${Math.random().toString(36).substring(2, 6).toUpperCase()}`}))
+            setIsCreatingNew(true)
+            setSelectedExistingCoupon(null)
+            fetchLoyaltyData()
         } catch (error) {
             toast.error('Failed to send reward')
         } finally {
@@ -205,7 +271,7 @@ export default function LoyaltyHubPage() {
                         <div className="h-10 w-10 bg-purple-50 rounded-xl flex items-center justify-center text-purple-600 mb-4 group-hover:scale-110 transition-transform">
                             <Crown className="h-5 w-5" />
                         </div>
-                        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2 leading-none">VIP Potential</p>
+                        <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-2 leading-none">Loyal Coupon Elite</p>
                         <h3 className="text-3xl font-bold text-purple-900  tracking-tight leading-none">{vipCustomers.length}</h3>
                     </CardContent>
                 </Card>
@@ -247,6 +313,7 @@ export default function LoyaltyHubPage() {
                                         <th className="px-6 py-4 text-[9px] font-semibold uppercase text-slate-400 tracking-widest leading-none">Profile</th>
                                         <th className="px-6 py-4 text-[9px] font-semibold uppercase text-slate-400 tracking-widest leading-none">Points</th>
                                         <th className="px-6 py-4 text-[9px] font-semibold uppercase text-slate-400 tracking-widest leading-none">Total Spent</th>
+                                        <th className="px-6 py-4 text-[9px] font-semibold uppercase text-slate-400 tracking-widest leading-none text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
@@ -275,6 +342,21 @@ export default function LoyaltyHubPage() {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 font-semibold text-base text-slate-900 tracking-tight">₹{customer.total_spent.toLocaleString()}</td>
+                                            <td className="px-6 py-4 text-right">
+                                                {customer.total_spent >= 1000 ? (
+                                                    <Button 
+                                                        size="sm" 
+                                                        onClick={() => setSelectedCustomer(customer)}
+                                                        className="bg-indigo-600 hover:bg-slate-900 text-white rounded-xl h-9 px-4 font-bold text-[9px] uppercase tracking-widest gap-2 shadow-lg shadow-indigo-100 transition-all active:scale-95"
+                                                    >
+                                                        <Gift className="h-3 w-3" /> Issue Loyal Coupon
+                                                    </Button>
+                                                ) : (
+                                                    <Badge variant="outline" className="text-[8px] uppercase tracking-widest bg-slate-50 text-slate-400 border-slate-200 h-8 px-3 rounded-lg">
+                                                        ₹1,000+ Req.
+                                                    </Badge>
+                                                )}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -288,19 +370,42 @@ export default function LoyaltyHubPage() {
             <Dialog open={!!selectedCustomer} onOpenChange={(open) => !open && setSelectedCustomer(null)}>
                 <DialogContent className="max-w-md p-0 border-none rounded-3xl overflow-hidden shadow-2xl bg-white animate-in slide-in-from-bottom-5 duration-500">
                     <DialogHeader className="p-5 text-left bg-indigo-600 text-white relative">
-                        <DialogTitle className="text-lg font-bold tracking-tight uppercase">Issue VIP Reward</DialogTitle>
+                        <DialogTitle className="text-lg font-bold tracking-tight uppercase">Issue Loyal Coupon</DialogTitle>
                         <p className="text-[10px] text-indigo-100 font-semibold uppercase tracking-widest opacity-80 leading-none">Celebrating {selectedCustomer?.name}</p>
                     </DialogHeader>
 
-                    <div className="p-6 space-y-6">
+                    <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto custom-scrollbar">
+                        {/* 0. Creation Mode Toggle */}
+                        <div className="flex bg-slate-100 p-1.5 rounded-2xl gap-1.5">
+                            <button 
+                                onClick={() => setIsCreatingNew(true)}
+                                className={cn(
+                                    "flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2",
+                                    isCreatingNew ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                                )}
+                            >
+                                Create New
+                            </button>
+                            <button 
+                                onClick={() => setIsCreatingNew(false)}
+                                className={cn(
+                                    "flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2",
+                                    !isCreatingNew ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                                )}
+                            >
+                                Reuse Existing
+                            </button>
+                        </div>
+
+                        {isCreatingNew ? (
+                            <>
                         {/* 1. Benefit Mode Selection */}
                         <div className="space-y-4">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] ml-1">1. Choose Reward Mode</label>
-                        <div className="grid grid-cols-3 gap-2">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] ml-1">1. Choose Coupon Mode</label>
+                        <div className="grid grid-cols-2 gap-2">
                             {[
                                 { id: 'percentage', icon: Percent, label: 'Disc %' },
-                                { id: 'fixed', icon: IndianRupee, label: '₹ Off' },
-                                { id: 'item', icon: Gift, label: 'Free Product' }
+                                { id: 'fixed', icon: IndianRupee, label: '₹ Off' }
                             ].map((mode) => (
                                 <button
                                     key={mode.id}
@@ -426,7 +531,7 @@ export default function LoyaltyHubPage() {
                         <div className="bg-amber-50 p-4 rounded-xl flex items-start gap-3 border border-amber-100">
                              <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                              <p className="text-[10px] text-amber-800 font-semibold leading-relaxed">
-                                 The VIP reward will be sent via WhatsApp with an exclusive template. Recorded for 100% auditing.
+                                 The Loyal Coupon will be sent via WhatsApp with an exclusive template. Recorded for 100% auditing.
                              </p>
                         </div>
 
@@ -436,8 +541,59 @@ export default function LoyaltyHubPage() {
                             disabled={sendingReward || (rewardConfig.type === 'item' && !rewardConfig.itemId)}
                         >
                             {sendingReward ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4 fill-white" />}
-                            Execute VIP Reward
+                            Execute Loyal Coupon
                         </Button>
+                            </>
+                        ) : (
+                            <div className="space-y-4">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] ml-1">Select from Previous Coupons</label>
+                                <div className="grid grid-cols-1 gap-2.5">
+                                    {existingCoupons.length === 0 ? (
+                                        <div className="py-10 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No previous coupons found</p>
+                                        </div>
+                                    ) : (
+                                        existingCoupons.map((c) => (
+                                            <button
+                                                key={c.id}
+                                                onClick={() => setSelectedExistingCoupon(c)}
+                                                className={cn(
+                                                    "w-full p-4 rounded-2xl border transition-all text-left group active:scale-[0.98]",
+                                                    selectedExistingCoupon?.id === c.id 
+                                                        ? "bg-indigo-600 border-indigo-600 text-white shadow-lg" 
+                                                        : "bg-white border-slate-100 hover:border-indigo-200"
+                                                )}
+                                            >
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className={cn(
+                                                        "text-[10px] font-black uppercase tracking-widest",
+                                                        selectedExistingCoupon?.id === c.id ? "text-indigo-100" : "text-indigo-600"
+                                                    )}>
+                                                        {c.discount_type === 'percentage' ? `${c.discount_value}% OFF` : `₹${c.discount_value} OFF`}
+                                                    </span>
+                                                    <span className={cn(
+                                                        "font-mono text-[10px] font-bold",
+                                                        selectedExistingCoupon?.id === c.id ? "text-white/80" : "text-slate-400"
+                                                    )}>{c.code}</span>
+                                                </div>
+                                                <p className={cn(
+                                                    "text-xs font-bold truncate",
+                                                    selectedExistingCoupon?.id === c.id ? "text-white" : "text-slate-900"
+                                                )}>{c.description?.replace('[PRIVATE]', '').trim() || 'No Description'}</p>
+                                            </button>
+                                        ))
+                                    )}
+                                </div>
+                                <Button 
+                                    className="w-full h-14 rounded-2xl bg-indigo-600 hover:bg-slate-950 font-bold text-[11px] uppercase tracking-widest shadow-xl shadow-indigo-100 transition-all active:scale-95 gap-3 mt-4" 
+                                    onClick={handleFinalizeReward} 
+                                    disabled={sendingReward || !selectedExistingCoupon}
+                                >
+                                    {sendingReward ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4 fill-white" />}
+                                    Reuse Loyal Coupon
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 </DialogContent>
             </Dialog>

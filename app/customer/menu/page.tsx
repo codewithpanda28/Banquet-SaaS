@@ -73,7 +73,9 @@ function MenuContent() {
     const [availableRewards, setAvailableRewards] = useState<any[]>([])
     const [claimingRewardId, setClaimingRewardId] = useState<string | null>(null)
     const [claimedTicket, setClaimedTicket] = useState<{ id: string, name: string, code: string } | null>(null)
-    const [referralStats, setReferralStats] = useState({ invited: 0, earned: 0 })
+    const [referralStats, setReferralStats] = useState({ invited: 0, earned: 0, unclaimedInvites: 0, unclaimedEarned: 0 })
+    const [currentCustomerId, setCurrentCustomerId] = useState<string | null>(null)
+    const [isClaimingReferral, setIsClaimingReferral] = useState(false)
     const [referralCode, setReferralCode] = useState<string>('')
     const [isReferExpanded, setIsReferExpanded] = useState(false)
     const [isPointsExpanded, setIsPointsExpanded] = useState(false)
@@ -113,6 +115,7 @@ function MenuContent() {
             .maybeSingle()
         
         if (customerData) {
+            setCurrentCustomerId(customerData.id)
             setLoyaltyPoints(customerData.loyalty_points || 0)
             
             // 🏆 Persist Referral Code if it's missing in DB to ensure attribution works
@@ -135,13 +138,19 @@ function MenuContent() {
             
             if (refLogs) {
                 const joinedCount = refLogs.filter(r => r.status === 'joined').length
+                const claimedCount = refLogs.filter(r => r.status === 'claimed').length
                 
                 // Calculate earned points dynamically based on settings
                 const rewardPerReferral = refSettings?.referrer_reward_type === 'points' 
                     ? refSettings.referrer_reward_value 
                     : 500; // fallback
 
-                setReferralStats({ invited: joinedCount, earned: joinedCount * rewardPerReferral })
+                setReferralStats({ 
+                    invited: joinedCount + claimedCount, 
+                    earned: (joinedCount + claimedCount) * rewardPerReferral,
+                    unclaimedInvites: joinedCount,
+                    unclaimedEarned: joinedCount * rewardPerReferral
+                })
             }
         }
 
@@ -152,6 +161,19 @@ function MenuContent() {
             .eq('restaurant_id', rid)
             .order('threshold', { ascending: true })
         if (rewardsData) setAvailableRewards(rewardsData)
+        
+        // 🎫 Fetch Private & Public Coupons for this specific session
+        const { data: couponData } = await supabase
+            .from('coupons')
+            .select('*')
+            .eq('restaurant_id', rid)
+            .eq('is_active', true)
+            .gt('valid_until', new Date().toISOString())
+            .or(`customer_id.is.null,customer_id.eq.${customerData?.id}`)
+
+        if (couponData) {
+            setAvailableCoupons(couponData)
+        }
 
         if (!customerData) return
 
@@ -270,6 +292,51 @@ function MenuContent() {
             toast.error('Failed to claim reward. Please try again.')
         } finally {
             setClaimingRewardId(null)
+        }
+    }
+
+    const handleClaimReferralPoints = async () => {
+        if (!currentCustomerId || referralStats.unclaimedInvites === 0) {
+            toast.error('No pending points to claim!');
+            return;
+        }
+        
+        setIsClaimingReferral(true);
+        try {
+            // 1. Calculate new points
+            const newTotalPoints = loyaltyPoints + referralStats.unclaimedEarned;
+            
+            // 2. Add to customer balance
+            const { error: customerError } = await supabase
+                .from('customers')
+                .update({ loyalty_points: newTotalPoints })
+                .eq('id', currentCustomerId);
+                
+            if (customerError) throw customerError;
+            
+            // 3. Mark logs as claimed
+            const { error: logError } = await supabase
+                .from('referral_logs')
+                .update({ status: 'claimed' })
+                .eq('referrer_id', currentCustomerId)
+                .eq('status', 'joined');
+                
+            if (logError) throw logError;
+            
+            // 4. Update UI
+            setLoyaltyPoints(newTotalPoints);
+            setReferralStats(prev => ({
+                ...prev,
+                unclaimedInvites: 0,
+                unclaimedEarned: 0
+            }));
+            
+            toast.success(`🎉 ${referralStats.unclaimedEarned} points successfully claimed and added to your wallet!`);
+        } catch (error) {
+            console.error('Failed to claim points:', error);
+            toast.error('Failed to claim points. Please try again later.');
+        } finally {
+            setIsClaimingReferral(false);
         }
     }
 
@@ -638,15 +705,30 @@ function MenuContent() {
                                     </div>
                                 </div>
 
-                                {/* 📊 Mini Stats */}
+                                {/* 📊 Mini Stats & Claim */}
                                 <div className="grid grid-cols-2 gap-3 pb-2">
                                     <div className="bg-white/5 p-3 rounded-[1.2rem] border border-white/10 text-center backdrop-blur-sm">
                                         <p className="text-lg font-black text-white mb-0.5">{referralStats.invited}</p>
                                         <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest leading-none">Dost Joined</p>
                                     </div>
-                                    <div className="bg-white/5 p-3 rounded-[1.2rem] border border-white/10 text-center backdrop-blur-sm">
-                                        <p className="text-lg font-black text-purple-400 mb-0.5">{referralStats.earned}</p>
-                                        <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest leading-none">Points Won</p>
+                                    <div className="bg-white/5 p-3 rounded-[1.2rem] border border-white/10 text-center backdrop-blur-sm flex flex-col justify-center items-center">
+                                        {referralStats.unclaimedInvites > 0 ? (
+                                            <div className="w-full flex flex-col items-center">
+                                                <p className="text-sm font-black text-purple-400 mb-1">{referralStats.unclaimedEarned} Pending!</p>
+                                                <Button 
+                                                    onClick={handleClaimReferralPoints}
+                                                    disabled={isClaimingReferral}
+                                                    className="w-full h-6 text-[9px] uppercase tracking-wider font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-md p-0 m-0"
+                                                >
+                                                    {isClaimingReferral ? 'Claiming...' : 'Claim Now'}
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <p className="text-lg font-black text-purple-400 mb-0.5">{referralStats.earned}</p>
+                                                <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest leading-none">Points Won</p>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -866,6 +948,53 @@ function MenuContent() {
 
                     <div className="p-6 pt-2 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
                         {/* Integrated Progress & Points Card */}
+                        {/* 🎫 Exclusive Coupons Section */}
+                        {availableCoupons.length > 0 && (
+                            <div className="space-y-4">
+                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 flex items-center justify-between">
+                                    Special Coupons 🎟️
+                                    <span className="text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded-full">{availableCoupons.length} Active</span>
+                                </h3>
+                                <div className="space-y-3">
+                                    {availableCoupons.map((coupon) => (
+                                        <div 
+                                            key={coupon.id} 
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(coupon.code);
+                                                toast.success('Coupon code copied! 📋');
+                                            }}
+                                            className="group relative p-4 rounded-[2rem] border border-amber-100 bg-amber-50/30 hover:bg-amber-50 cursor-pointer active:scale-95 transition-all"
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className="h-12 w-12 rounded-xl bg-white border border-amber-100 flex items-center justify-center shrink-0">
+                                                    <Percent className="h-5 w-5 text-amber-600" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 leading-none mb-1">
+                                                        {coupon.discount_type === 'percentage' ? `${coupon.discount_value}% OFF` : `₹${coupon.discount_value} OFF`}
+                                                    </p>
+                                                    <p className="font-black text-sm tracking-tight text-slate-900 truncate">
+                                                        {coupon.description
+                                                            ?.replace(/\[PRIVATE\]/g, '')
+                                                            ?.replace(/Loyal (VIP Reward|Coupon) for \d+/g, '')
+                                                            ?.replace(/[:\s]+$/, '')
+                                                            ?.replace(/^[:\s]+/, '')
+                                                            ?.trim() || 'Special Discount'}
+                                                    </p>
+                                                    <div className="flex items-center gap-2 mt-1.5">
+                                                        <span className="bg-white px-2 py-0.5 rounded-md border border-amber-100 font-mono text-xs font-black tracking-widest text-slate-800">
+                                                            {coupon.code}
+                                                        </span>
+                                                        <span className="text-[8px] font-bold text-amber-500 uppercase tracking-tighter">Tap to Copy</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 shadow-inner space-y-4">
                             <div className="flex justify-between items-center">
                                 <div className="space-y-1">

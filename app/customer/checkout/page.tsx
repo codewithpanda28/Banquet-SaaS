@@ -159,21 +159,11 @@ export default function CheckoutPage() {
             const refItemId = settings?.referrer_reward_item_id;
 
             if (refType === 'points') {
-                const { data: referrer } = await supabase
-                    .from('customers')
-                    .select('loyalty_points')
-                    .eq('id', referrerId)
-                    .single();
-
-                if (referrer) {
-                    const newPoints = (referrer.loyalty_points || 0) + Number(refValue);
-                    await supabase
-                        .from('customers')
-                        .update({ loyalty_points: newPoints })
-                        .eq('id', referrerId);
-
-                    console.log(`🎁 [Referral] Referrer rewarded with ${refValue} points!`);
-                }
+                // 🎉 SAAS FEATURE: Manual Claim Update
+                // We no longer auto-add points here.
+                // The points will be securely added when the user clicks 'Claim Points' 
+                // in the Referral Modal, allowing for a better psychological reward loop.
+                console.log(`🎁 [Referral] Referrer will earn ${refValue} points (Pending Claim)!`);
             } else if (refType === 'free_item' && refItemId) {
                 // Issue a private coupon for the free item
                 const { data: item } = await supabase.from('menu_items').select('name').eq('id', refItemId).single();
