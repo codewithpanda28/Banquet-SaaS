@@ -102,8 +102,8 @@ export default function TablesPage() {
 
     async function handleSaveTable() {
         try {
-            if (!tableForm.table_number || !tableForm.table_name || !tableForm.capacity) {
-                toast.error('Please fill all required fields')
+            if (!tableForm.table_number || !tableForm.capacity) {
+                toast.error('Please fill all required fields (Table No. and Capacity)')
                 return
             }
 
@@ -113,10 +113,12 @@ export default function TablesPage() {
                 return
             }
 
+            const finalTableName = tableForm.table_name.trim() || `Table ${tableForm.table_number}`
+
             const tableData = {
                 restaurant_id: rid,
                 table_number: parseInt(tableForm.table_number),
-                table_name: tableForm.table_name,
+                table_name: finalTableName,
                 capacity: parseInt(tableForm.capacity),
                 status: tableForm.status,
                 is_active: true,
