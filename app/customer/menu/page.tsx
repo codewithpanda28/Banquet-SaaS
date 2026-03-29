@@ -228,13 +228,11 @@ function MenuContent() {
                 
                 if (menuItem) {
                     console.log('✅ Found MenuItem! Injecting into Cart...');
-                    const store = useCartStore.getState();
-                    store.addItem({ ...menuItem, discounted_price: 0 }, 1, '🎁 LOYALTY REWARD');
-                    
-                    const updatedCount = useCartStore.getState().items.length;
-                    toast.success(`🎉 ${menuItem.name} added to your Cart! (Total: ${updatedCount} items) ✨`);
+                    addItem({ ...menuItem, discounted_price: 0 }, 1, '🎁 LOYALTY REWARD');
+                    toast.success(`🎉 ${menuItem.name} added to your Cart! ✨`);
                 } else {
                     console.warn('❌ MenuItem NOT FOUND in current menu items list!');
+                    toast.error(`Could not locate ${reward.reward_name} in the menu!`);
                 }
             } else if (reward.reward_type === 'percentage' || reward.reward_type === 'fixed') {
                 console.log('🎟️ Applying Discount Coupon...');
@@ -252,11 +250,10 @@ function MenuContent() {
                     is_active: true,
                     created_at: new Date().toISOString()
                 });
-                toast.success(`🎟️ ${reward.reward_name} applied to your order!`);
+                toast.success(`🎟️ ${reward.reward_name} reward applied to your cart subtotal!`);
             }
 
             setLoyaltyPoints(newPoints);
-            toast.success(`🎉 ${reward.reward_name} added to your Cart! ✨`);
 
             // 5. Direct-to-Cart: Close modal and OPEN CART immediately
             setIsLoyaltyInfoOpen(false);
