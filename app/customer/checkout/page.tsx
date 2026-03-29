@@ -54,6 +54,7 @@ export default function CheckoutPage() {
 
     const [paymentMethod, setPaymentMethod] = useState<'cash' | 'upi'>('upi')
     const [loading, setLoading] = useState(false)
+    const [isSuccess, setIsSuccess] = useState(false) // Added to prevent empty cart flicker
     const [couponCode, setCouponCode] = useState('')
     const [verifyingCoupon, setVerifyingCoupon] = useState(false)
     const [availableCoupons, setAvailableCoupons] = useState<Coupon[]>([])
@@ -159,13 +160,8 @@ export default function CheckoutPage() {
             const refItemId = settings?.referrer_reward_item_id;
 
             if (refType === 'points') {
-                // 🎉 SAAS FEATURE: Manual Claim Update
-                // We no longer auto-add points here.
-                // The points will be securely added when the user clicks 'Claim Points' 
-                // in the Referral Modal, allowing for a better psychological reward loop.
                 console.log(`🎁 [Referral] Referrer will earn ${refValue} points (Pending Claim)!`);
             } else if (refType === 'free_item' && refItemId) {
-                // Issue a private coupon for the free item
                 const { data: item } = await supabase.from('menu_items').select('name').eq('id', refItemId).single();
                 if (item) {
                     const couponCode = `REF-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
@@ -173,16 +169,14 @@ export default function CheckoutPage() {
                         restaurant_id: restaurantId,
                         code: couponCode,
                         description: `Referral Reward: Free ${item.name}`,
-                        discount_type: 'fixed', // We use fixed price 0 for free item logic in many systems
+                        discount_type: 'fixed',
                         discount_value: 0,
                         usage_limit: 1,
                         is_active: true,
                         valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
                     });
-                    console.log(`🎁 [Referral] Referrer rewarded with Free ${item.name}! Code: ${couponCode}`);
                 }
             } else if (refType === 'fixed' || refType === 'percentage') {
-                // Issue a discount coupon
                 const couponCode = `DISC-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
                 await supabase.from('coupons').insert({
                     restaurant_id: restaurantId,
@@ -194,20 +188,15 @@ export default function CheckoutPage() {
                     is_active: true,
                     valid_until: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
                 });
-                console.log(`🎁 [Referral] Referrer rewarded with ${refValue}${refType === 'percentage' ? '%' : '₹'} Off coupon!`);
             }
 
-            // 4. Reward the Referee (Friend) if configured
             const fType = settings?.referee_reward_type || 'none';
             const fValue = settings?.referee_reward_value || 0;
-            const fItemId = settings?.referee_reward_item_id;
-
             if (fType !== 'none' && newCust) {
                 if (fType === 'points') {
                     const { data: currentCust } = await supabase.from('customers').select('loyalty_points').eq('id', newCustomerId).single();
                     await supabase.from('customers').update({ loyalty_points: (currentCust?.loyalty_points || 0) + Number(fValue) }).eq('id', newCustomerId);
                 } else {
-                    // Similar coupon logic for referee
                     const fCode = `WELCOME-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
                     await supabase.from('coupons').insert({
                         restaurant_id: restaurantId,
@@ -221,8 +210,6 @@ export default function CheckoutPage() {
                     });
                 }
             }
-
-            // 5. Clear state
             sessionStorage.removeItem('referral_source');
         } catch (err) {
             console.error('❌ [Referral] Linkage failed:', err);
@@ -250,11 +237,8 @@ export default function CheckoutPage() {
         setLoading(true)
 
         try {
-            // 1. Handle Customer - Manual upsert (check then insert/update)
+            // ... (previous customer logic remains same) ...
             const cleanPhone = phone.replace(/\D/g, '').slice(-10)
-            console.log('💾 [Step 1/5] Saving customer...', { name, phone, cleanPhone, address, rid })
-
-            // First, check if customer exists using cleaned phone for robustness
             const { data: existingCustomer } = await supabase
                 .from('customers')
                 .select('id, name, phone, address, referred_by')
@@ -266,9 +250,7 @@ export default function CheckoutPage() {
             let referrerId: string | null = null;
             const refCode = sessionStorage.getItem('referral_source');
 
-            // 🕵️ Check for Referral Attribution Source
             if (refCode) {
-                console.log('🔍 [Referral] Attributing to code:', refCode);
                 const { data: referrer } = await supabase
                     .from('customers')
                     .select('id')
@@ -279,12 +261,7 @@ export default function CheckoutPage() {
             }
 
             if (existingCustomer) {
-                // Update existing customer
-                console.log('📝 Updating existing customer:', existingCustomer.id)
-
-                // If they follow a referral link but don't have a referrer yet, attribute them!
                 const needsAttribution = !existingCustomer.referred_by && referrerId;
-
                 const { data: updatedCustomer, error: updateError } = await supabase
                     .from('customers')
                     .update({
@@ -297,22 +274,10 @@ export default function CheckoutPage() {
                     .select('id, name, phone, address, referred_by')
                     .single()
 
-                if (updateError) {
-                    console.error('❌ Customer update failed:', updateError)
-                    throw new Error('Failed to update customer: ' + updateError.message)
-                }
-
-                if (needsAttribution) {
-                    console.log('🏆 [Referral] Existing customer linked to referrer!');
-                    await handleReferralLinkage(updatedCustomer.id, referrerId as string, rid);
-                }
-
+                if (updateError) throw new Error('Failed to update customer: ' + updateError.message)
+                if (needsAttribution) await handleReferralLinkage(updatedCustomer.id, referrerId as string, rid);
                 customerId = updatedCustomer.id
-                console.log('✅ Customer updated:', updatedCustomer)
             } else {
-                // Insert new customer
-                console.log('➕ Creating new customer')
-
                 const { data: newCustomer, error: insertError } = await supabase
                     .from('customers')
                     .insert({
@@ -321,34 +286,17 @@ export default function CheckoutPage() {
                         email: null,
                         address: address || null,
                         restaurant_id: rid,
-                        referral_code: `RE-${cleanPhone}`, // Unique persistent code
+                        referral_code: `RE-${cleanPhone}`,
                         referred_by: referrerId
                     })
                     .select('id, name, phone, address, referral_code, referred_by')
                     .single()
 
-                if (insertError) {
-                    console.error('❌ Customer insert failed:', insertError)
-                    throw new Error('Failed to create customer: ' + insertError.message)
-                }
-
-                if (!newCustomer || !newCustomer.id) {
-                    throw new Error('Customer ID not returned after insert')
-                }
-
-                if (referrerId) {
-                    await handleReferralLinkage(newCustomer.id, referrerId, rid);
-                }
-
-                customerId = newCustomer.id
-                console.log('✅ New customer created:', newCustomer)
+                if (insertError) throw new Error('Failed to create customer: ' + insertError.message)
+                if (referrerId) await handleReferralLinkage(newCustomer!.id, referrerId, rid);
+                customerId = newCustomer!.id
             }
 
-            console.log('✅ Customer ID confirmed:', customerId, 'Name:', name, 'Phone:', phone)
-            toast.success('Customer saved successfully!')
-
-
-            // 2. Resolve Table ID from Table Number
             let resolvedTableId = null
             if (tableNumber) {
                 const { data: tableData } = await supabase
@@ -357,11 +305,9 @@ export default function CheckoutPage() {
                     .eq('table_number', parseInt(tableNumber.toString()))
                     .eq('restaurant_id', rid)
                     .maybeSingle()
-
                 if (tableData) resolvedTableId = tableData.id
             }
 
-            // 3. Check for existing active order via Secure API (bypasses RLS)
             let existingOrderId = null
             let existingBillId = null
             let existingTotal = 0
@@ -374,38 +320,21 @@ export default function CheckoutPage() {
                 if (resolvedTableId) params.append('tableId', resolvedTableId)
                 if (tableNumber) params.append('tableNumber', tableNumber.toString())
                 if (customerId) params.append('customerId', customerId)
-
-                // Add the join intent
-                if (joinExisting !== null) {
-                    params.append('join', joinExisting.toString())
-                }
-
-                console.log('🔍 [Checkout] Checking active order (bypass cache)...')
+                if (joinExisting !== null) params.append('join', joinExisting.toString())
 
                 const res = await fetch(`/api/orders/active?${params.toString()}&t=${Date.now()}`, {
-                    cache: 'no-store',
-                    headers: {
-                        'Pragma': 'no-cache',
-                        'Cache-Control': 'no-cache'
-                    }
+                    cache: 'no-store'
                 })
 
                 if (res.ok) {
                     const { order } = await res.json()
-
                     if (order) {
-                        console.log('✅ [Checkout] Found active bill to merge:', order.bill_id)
                         existingOrderId = order.id
                         existingBillId = order.bill_id
                         existingTotal = order.total
                         existingSubtotal = order.subtotal || 0
                         existingStatus = order.status
-                    } else {
-                        console.log('🆕 [Checkout] No mergeable bill found. Will create new.')
                     }
-                } else {
-                    const errRes = await res.json().catch(() => ({}))
-                    console.error('⚠️ [Checkout] API check failed:', res.status, errRes)
                 }
             } catch (err) {
                 console.error('❌ [Checkout] Active order check crash:', err)
@@ -415,36 +344,23 @@ export default function CheckoutPage() {
             let billId = existingBillId
 
             if (existingOrderId) {
-                // Append to existing order
                 const { error: updateError } = await supabase
                     .from('orders')
                     .update({
                         total: existingTotal + total,
                         subtotal: existingSubtotal + subtotal,
-                        tax: ((existingSubtotal + subtotal - discount) * 0.05), // Recalculate tax roughly
-                        // Note: Discount logic on existing orders is complex. 
-                        // We apply discount only to the current chunk effectively by adding `total` (which is already discounted).
-                        // However, we might need to store the discount value.
-                        // Let's increment discount if any.
-                        discount: (discount || 0), // This might need to check existing discount, but schema doesn't seem to fetch it above easily.
-                        // SMART STATUS LOGIC: 
-                        // A. If NOT yet approved (pending_confirmation) -> Stay pending_confirmation
-                        // B. If ALREADY APPROVED (confirmed, preparing, etc) -> GO DIRECT (Skip Admin)
-                        // C. If previous items were 'served', move back to 'confirmed' to alert kitchen
+                        tax: ((existingSubtotal + subtotal - discount) * 0.05),
+                        discount: (discount || 0),
                         status: (existingStatus === 'pending_confirmation' || existingStatus === 'completed' || existingStatus === 'cancelled')
-                            ? 'pending_confirmation'  // New or Not Yet Approved session
-                            : (existingStatus === 'served' ? 'confirmed' : existingStatus), // Approved session -> Direct to Kitchen
+                            ? 'pending_confirmation'
+                            : (existingStatus === 'served' ? 'confirmed' : existingStatus),
                         payment_status: 'pending',
                         updated_at: new Date().toISOString()
                     })
                     .eq('id', existingOrderId)
 
                 if (updateError) throw updateError
-                toast.success('Items added to your existing order!', {
-                    description: `Bill ID: ${billId}`
-                })
             } else {
-                // Create new order
                 const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '')
                 const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
                 billId = `BILL${dateStr}${random}`
@@ -469,27 +385,16 @@ export default function CheckoutPage() {
                     created_at: new Date().toISOString()
                 }
 
-                console.log('📤 [Step 3/5] Inserting order to Supabase...', orderPayload)
-
                 const { data: orderData, error: orderError } = await supabase
                     .from('orders')
                     .insert(orderPayload)
                     .select()
                     .single()
 
-                if (orderError) {
-                    console.error('❌ Order insertion failed!')
-                    throw new Error(`DB Error [${orderError.code}]: ${orderError.message}`)
-                }
-
-                console.log('✅ Order created successfully:', orderData)
+                if (orderError) throw new Error(`DB Error [${orderError.code}]: ${orderError.message}`)
                 orderId = orderData.id
-                toast.success('Order placed successfully!', {
-                    description: `Bill ID: ${billId}`
-                })
             }
 
-            // 4. Add order items
             const orderItemsData = items.map(item => ({
                 order_id: orderId,
                 restaurant_id: rid,
@@ -499,9 +404,8 @@ export default function CheckoutPage() {
                 price: item.discounted_price || item.price,
                 total: item.lineTotal,
                 special_instructions: item.instructions,
-                status: 'pending'  // Explicitly set status to pending - kitchen staff will manually mark as ready
+                status: 'pending'
             }))
-            console.log('📦 [Step 4/5] Adding order items...', orderItemsData)
 
             const { error: itemsError } = await supabase
                 .from('order_items')
@@ -509,16 +413,12 @@ export default function CheckoutPage() {
 
             if (itemsError) throw itemsError
 
-            // 5. Prepare Webhook Data
+            // 📢 5. TRIGGER WEBHOOK IMMEDIATELY (RELIABLE NOTIFICATION)
             const webhookData = {
-                action: 'new-order', // Explicit action for n8n routing
+                action: 'new-order',
                 bill_id: billId,
                 amount: total,
-                customer: {
-                    name: name,
-                    phone: phone,
-                    address: address
-                },
+                customer: { name, phone, address },
                 order_type: orderType || 'dine_in',
                 table_number: tableNumber || 0,
                 items: items.map(i => ({
@@ -529,7 +429,6 @@ export default function CheckoutPage() {
                 })),
                 payment_method: paymentMethod,
                 restaurant_id: rid,
-                // SaaS Multi-Tenant Config for n8n
                 whatsapp_api_url: restaurant?.whatsapp_api_url,
                 whatsapp_api_id: restaurant?.whatsapp_api_id,
                 whatsapp_token: restaurant?.whatsapp_token,
@@ -537,69 +436,48 @@ export default function CheckoutPage() {
                 custom_domain: restaurant?.custom_domain
             }
 
-            // 5. Background Tasks (Non-blocking)
-            // We fire these and don't block the UI for the customer since their order is already in DB.
-            const backgroundTasks = async () => {
-                try {
-                    // Store Webhook Data for later manual trigger (from UPI/Confirmation page)
-                    if (typeof window !== 'undefined') {
-                        sessionStorage.setItem(`webhook_pending_${billId}`, JSON.stringify(webhookData));
-                    }
+            // Fire and forget webhook for immediate notification
+            triggerAutomationWebhook('new-order', webhookData).catch(err => console.error('Webhook failed:', err));
 
-                    // Update Coupon Usage if used
-                    if (coupon && !existingOrderId) {
-                        incrementCouponUsage(coupon.id).catch(e => console.error('Coupon increment error:', e));
-                        markCouponUsed(coupon.code);
-                    }
+            // Background tasks
+            if (coupon && !existingOrderId) {
+                incrementCouponUsage(coupon.id).catch(e => console.error('Coupon increment error:', e));
+                markCouponUsed(coupon.code);
+            }
 
-                    // 1. Update Stock Logic in Parallel (Already in backgroundTask)
-                    await Promise.all(items.map(async (item) => {
-                        // ... stock logic
-                    }));
-
-                    // 🏆 2. [DEPRECATED] Loyalty Accrual - Now handled by DB Trigger for 100% reliability
-                    // tr_loyalty_accrual_immediate will fire on INSERT!
-                } catch (bgErr) {
-                    console.error('❌ Background tasks failed:', bgErr);
-                }
-            };
-
-            // Start background tasks
-            backgroundTasks();
-
-            // 6. Finalize UI Flow (Fast Redirect)
-            clearCart()
+            // 🚀 6. SUCCESS STATE & REDIRECT
+            setIsSuccess(true)
+            toast.success('Order placed successfully!')
 
             addNotification({
                 title: existingOrderId ? 'Items Added!' : 'Order Placed!',
-                message: existingOrderId
-                    ? `Additional items added to your order #${billId}.`
-                    : `Your order #${billId} has been successfully placed.`,
+                message: existingOrderId ? `Order updated #${billId}.` : `Order placed #${billId}.`,
                 type: 'order_status',
                 link: `/customer/track/${billId}`
             })
 
-            // Navigate immediately
-            if (paymentMethod === 'upi' && total > 0) {
-                router.push(`/customer/payment/upi?billId=${billId}&amount=${total}`)
-            } else {
-                router.push(`/customer/order-confirmed/${billId}`)
-            }
+            // Store for manual re-trigger if needed
+            sessionStorage.setItem(`webhook_pending_${billId}`, JSON.stringify(webhookData));
+
+            // Wait a bit for the toast to be readable on mobile
+            setTimeout(() => {
+                clearCart()
+                if (paymentMethod === 'upi' && total > 0) {
+                    router.push(`/customer/payment/upi?billId=${billId}&amount=${total.toFixed(2)}`)
+                } else {
+                    router.push(`/customer/order-confirmed/${billId}`)
+                }
+            }, 500)
 
         } catch (err: any) {
-            console.error('❌ CRITICAL: Order placement failed!')
-            console.error('Error object:', err)
-            const errorMessage = err.message || err.details || (typeof err === 'object' ? JSON.stringify(err) : String(err))
-
-            toast.error('Failed to place order: ' + errorMessage, {
-                duration: 10000
-            })
+            console.error('❌ CRITICAL: Order placement failed!', err)
+            toast.error('Failed to place order: ' + (err.message || 'Unknown error'))
         } finally {
             setLoading(false)
         }
     }
 
-    if (items.length === 0) {
+    if (items.length === 0 && !isSuccess) {
         return (
             <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center space-y-6 bg-slate-50">
                 <div className="w-32 h-32 bg-slate-100 rounded-full flex items-center justify-center animate-pulse">
@@ -612,6 +490,21 @@ export default function CheckoutPage() {
                 <Button onClick={() => router.push('/customer/menu')} className="h-14 px-10 rounded-full text-lg font-bold shadow-xl shadow-orange-500/20 bg-orange-600 hover:bg-orange-700 transition-all active:scale-95">
                     Start Ordering
                 </Button>
+            </div>
+        )
+    }
+
+    if (isSuccess) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center space-y-6 bg-white">
+                <div className="w-24 h-24 bg-green-50 rounded-full flex items-center justify-center">
+                    <CheckCircle2 className="w-12 h-12 text-green-500 animate-bounce" />
+                </div>
+                <div>
+                    <h2 className="text-2xl font-black text-slate-900">Finalizing Your Order...</h2>
+                    <p className="text-slate-500 mt-2">Please wait while we set everything up for you.</p>
+                </div>
+                <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
             </div>
         )
     }

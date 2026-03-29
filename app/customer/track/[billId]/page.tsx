@@ -111,30 +111,30 @@ export default function TrackOrderPage() {
     const activeStep = STATUS_STEPS[currentStepIndex]
     const isCompleted = ['served', 'completed'].includes(order.status)
     return (
-        <div className="min-h-screen bg-slate-50/50 pb-36 relative overflow-hidden font-sans">
+        <div className="min-h-screen bg-slate-50/50 pb-36 relative font-sans">
             {/* Background Decorations */}
-            <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-orange-50 to-transparent -z-10" />
+            <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-orange-50 to-transparent -z-10 overflow-hidden" />
             <div className="absolute -top-24 -right-24 w-64 h-64 bg-yellow-200/20 rounded-full blur-3xl -z-10" />
             <div className="absolute top-48 -left-24 w-64 h-64 bg-orange-200/20 rounded-full blur-3xl -z-10" />
 
             {/* Header */}
-            <header className="px-4 py-4 sticky top-0 z-40 flex items-center justify-between bg-white/80 backdrop-blur-md border-b border-white/20 shadow-sm">
+            <header className="px-3 sm:px-4 py-3 sm:py-4 sticky top-[3.5rem] z-40 flex items-center justify-between bg-white/80 backdrop-blur-md border-b border-white/20 shadow-sm">
                 <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => router.push('/customer/menu')}
-                    className="rounded-full hover:bg-black/5 hover:text-black transition-colors text-slate-600"
+                    className="rounded-full h-9 w-9 sm:h-10 sm:w-10 hover:bg-black/5 hover:text-black transition-colors text-slate-600"
                 >
-                    <ArrowLeft className="w-6 h-6" />
+                    <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6" />
                 </Button>
                 <div className="flex flex-col items-center">
-                    <span className="text-[10px] font-black tracking-[0.2em] text-slate-400 uppercase">Order ID</span>
-                    <span className="text-sm font-bold text-slate-900 font-mono tracking-wide">#{billId.slice(-6)}</span>
+                    <span className="text-[9px] sm:text-[10px] font-black tracking-[0.2em] text-slate-400 uppercase">Order ID</span>
+                    <span className="text-xs sm:text-sm font-bold text-slate-900 font-mono tracking-wide">#{billId.slice(-6)}</span>
                 </div>
-                <div className="w-10 flex justify-center">
+                <div className="w-9 sm:w-10 flex justify-end pr-1 sm:pr-0">
                     {order.table_id && (
-                        <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center border-2 border-orange-200">
-                            <span className="text-[10px] font-black text-orange-700">T-{order.restaurant_tables?.table_number || '?'}</span>
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-orange-100 flex items-center justify-center border-2 border-orange-200 shadow-sm shrink-0">
+                            <span className="text-[9px] sm:text-[10px] font-black text-orange-700">T-{order.restaurant_tables?.table_number || '?'}</span>
                         </div>
                     )}
                 </div>

@@ -12,20 +12,51 @@ interface FeaturedCarouselProps {
 }
 
 export function FeaturedCarousel({ items, onAdd }: FeaturedCarouselProps) {
+    const scrollRef = React.useRef<HTMLDivElement>(null)
     const featuredItems = items.filter(i => i.is_bestseller || i.is_new)
+
+    React.useEffect(() => {
+        const container = scrollRef.current
+        if (!container || featuredItems.length <= 1) return
+
+        const isMobile = window.innerWidth < 640
+        if (!isMobile) return
+
+        let currentIndex = 0
+        const interval = setInterval(() => {
+            if (!container) return
+            
+            currentIndex = (currentIndex + 1) % featuredItems.length
+            const scrollAmount = container.clientWidth * (0.85) + 16 // 85vw + gap (approx)
+            
+            // On very small devices, 85vw might vary. Better to calc exactly.
+            const itemWidth = container.firstElementChild?.nextElementSibling?.clientWidth || 300
+            const gap = 16
+            
+            container.scrollTo({
+                left: currentIndex * (itemWidth + gap),
+                behavior: 'smooth'
+            })
+        }, 3000)
+
+        return () => clearInterval(interval)
+    }, [featuredItems.length])
 
     if (featuredItems.length === 0) return null
 
     return (
-        <div className="py-6 space-y-4">
-            <div className="px-4 flex items-center justify-between">
-                <h2 className="text-xl font-black tracking-tight flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-amber-500 fill-amber-500" />
+        <div className="pt-2 pb-1 space-y-2">
+            <div className="px-2 flex items-center justify-between">
+                <h2 className="text-lg font-black tracking-tight flex items-center gap-1.5 text-slate-900">
+                    <Sparkles className="w-4 h-4 text-amber-500 fill-amber-500" />
                     Recommended For You
                 </h2>
             </div>
 
-            <div className="flex overflow-x-auto px-4 gap-4 pb-4 no-scrollbar snap-x snap-mandatory">
+            <div 
+                ref={scrollRef}
+                className="flex overflow-x-auto px-4 gap-4 pb-4 no-scrollbar snap-x snap-mandatory scroll-smooth"
+            >
                 {featuredItems.map((item) => (
                     <div
                         key={item.id}
@@ -38,7 +69,6 @@ export function FeaturedCarousel({ items, onAdd }: FeaturedCarouselProps) {
                             alt={item.name}
                             className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                         />
-
                         {/* Gradient Overlay */}
                         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 

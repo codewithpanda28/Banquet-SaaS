@@ -88,13 +88,13 @@ export function Header() {
                         <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full shadow-sm" />
                     </div>
 
-                    <div className="flex flex-col">
-                        <h1 className="font-black tracking-tight text-slate-950 transition-all duration-300 ease-out leading-none text-sm sm:text-base">
+                    <div className="flex flex-col min-w-0">
+                        <h1 className="font-black tracking-tight text-slate-950 transition-all duration-300 ease-out leading-none text-sm sm:text-base truncate max-w-[100px] xs:max-w-[140px] sm:max-w-none">
                             {restaurant.name}
                         </h1>
                         <div className="flex items-center gap-1 transition-all duration-300 opacity-100 h-auto mt-1">
-                            <Flame className="w-3 h-3 text-orange-500 fill-orange-500" />
-                            <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-orange-600/90 whitespace-nowrap">
+                            <Flame className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-orange-500 fill-orange-500" />
+                            <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-[0.05em] sm:tracking-[0.1em] text-orange-600/90 whitespace-nowrap truncate">
                                 Tasty & Healthy
                             </span>
                         </div>
@@ -102,7 +102,7 @@ export function Header() {
                 </div>
 
                 {/* Interaction Actions */}
-                <div className="flex items-center gap-1.5 sm:gap-2">
+                <div className="flex items-center gap-1 sm:gap-2 ml-auto">
                     {/* Order History link - Minimalistic Circle */}
                     {mounted && (
                         <Button
@@ -225,18 +225,18 @@ export function Header() {
                                 <Button
                                     variant="outline"
                                     className={cn(
-                                        "h-10 gap-2 rounded-2xl px-4 border-none shadow-md transition-all active:scale-95 font-black text-[11px] uppercase tracking-wider",
+                                        "h-9 sm:h-10 gap-1 sm:gap-2 rounded-2xl px-2 sm:px-4 border-none shadow-md transition-all active:scale-95 font-black text-[10px] sm:text-[11px] uppercase tracking-wider",
                                         currentType.bg, currentType.color,
                                         "ring-1 ring-black/5 hover:ring-orange-200"
                                     )}
                                 >
-                                    <TypeIcon className="w-3.5 h-3.5 transition-transform group-hover:scale-110" />
-                                    <span>
+                                    <TypeIcon className="w-3 sm:w-3.5 h-3 sm:h-3.5 transition-transform group-hover:scale-110" />
+                                    <span className="flex items-center gap-1">
                                         <span className="max-sm:hidden">{currentType.label}</span>
                                         {orderType === 'dine_in' && tableNumber ? (
                                             <>
-                                                <span className="max-sm:hidden mx-1.5 opacity-50">•</span>
-                                                <span className="bg-white/20 px-1.5 py-0.5 rounded-md">T-{tableNumber}</span>
+                                                <span className="max-sm:hidden opacity-50">•</span>
+                                                <span className="bg-white/20 px-1.5 py-0.5 rounded-md min-w-[2.5rem] text-center">T-{tableNumber}</span>
                                             </>
                                         ) : (
                                             <span className="sm:hidden">{currentType.label.charAt(0)}</span>

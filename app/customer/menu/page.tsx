@@ -539,238 +539,191 @@ function MenuContent() {
     }
 
     return (
-        <div className="min-h-screen bg-white pb-32">
-            {/* 🏷️ Restaurant Branding Header */}
-            <div className="relative group overflow-hidden bg-slate-900 h-56 md:h-72">
-                {restaurant?.banner_url ? (
-                    <img
-                        src={restaurant.banner_url}
-                        className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110 opacity-60"
-                        alt="Banner"
-                    />
-                ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-indigo-900 via-purple-900 to-black animate-gradient opacity-60" />
-                )}
+        <div className="min-h-screen bg-white pb-32 selection:bg-orange-100 selection:text-orange-900">
+            {/* ✨ Premium Background Elements */}
+            <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+                <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-orange-100/30 rounded-full blur-[120px] -translate-y-1/2" />
+                <div className="absolute top-1/2 right-0 w-[400px] h-[400px] bg-indigo-50/40 rounded-full blur-[100px] translate-x-1/2" />
+                <div className="absolute bottom-1/4 left-0 w-[300px] h-[300px] bg-rose-50/30 rounded-full blur-[80px] -translate-x-1/2" />
+            </div>
 
-                <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-black/80 pointer-events-none" />
-                
-                {/* 🏆 Referral & Loyalty Floating Badges */}
-                <div ref={floatingRef} className={cn(
-                    "z-[100] flex flex-col items-end gap-3 transition-all duration-500",
-                    "fixed right-0 top-1/2 -translate-y-1/2 floating-nav-container", // Mobile
-                    "md:absolute md:top-6 md:right-6 md:translate-y-0 md:z-20 md:gap-2" // Desktop
-                )}>
-                    {/* Points Button */}
+            {/* 🏆 Referral & Loyalty Floating Badges (Pinned to viewport) */}
+            <div ref={floatingRef} className={cn(
+                "z-[100] flex flex-col items-end gap-2.5 transition-all duration-500",
+                "fixed right-0 top-1/2 -translate-y-1/2 floating-nav-container"
+            )}>
+                {/* Points Button */}
+                <Button 
+                    onClick={() => {
+                        if (window.innerWidth < 768 && !isPointsExpanded) {
+                            setIsPointsExpanded(true);
+                            return;
+                        }
+                        setIsLoyaltyInfoOpen(true);
+                    }}
+                    className={cn(
+                        "group flex items-center transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] overflow-hidden",
+                        "h-12 sm:h-14 w-44 sm:w-48 rounded-l-full p-0 flex-row bg-slate-950/90 backdrop-blur-2xl border-l border-y border-white/10 shadow-2xl",
+                        "translate-x-[126px] sm:translate-x-[142px] hover:translate-x-0 focus-within:translate-x-0",
+                        isPointsExpanded ? "translate-x-0 bg-slate-950" : ""
+                    )}
+                >
+                    <div className="w-12 sm:w-14 h-12 sm:h-14 flex items-center justify-center shrink-0">
+                        <div className="flex items-center justify-center transition-all duration-500 h-8 sm:h-9 w-8 sm:w-9 rounded-full bg-yellow-500/20 group-hover:scale-110">
+                            <Star className="h-4 sm:h-5 w-4 sm:w-5 text-yellow-500 fill-yellow-500" />
+                        </div>
+                    </div>
+                    <div className={cn(
+                        "flex-1 px-4 text-center transition-all duration-500",
+                        "opacity-0 translate-x-4 group-hover:opacity-100 group-hover:translate-x-0",
+                        isPointsExpanded ? "opacity-100 translate-x-0" : ""
+                    )}>
+                        <p className="font-black text-[10px] sm:text-[11px] uppercase tracking-[0.2em] whitespace-nowrap text-white">
+                            {loyaltyPoints || 0} Points
+                        </p>
+                    </div>
+                </Button>
+
+                <Dialog open={isReferDialogOpen} onOpenChange={setIsReferDialogOpen}>
                     <Button 
                         onClick={() => {
-                            if (window.innerWidth < 768 && !isPointsExpanded) {
-                                setIsPointsExpanded(true);
+                            if (window.innerWidth < 768 && !isReferExpanded) {
+                                setIsReferExpanded(true);
                                 return;
                             }
-                            setIsLoyaltyInfoOpen(true);
+                            setIsReferDialogOpen(true);
                         }}
                         className={cn(
-                            "group flex items-center transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] overflow-hidden",
-                            // Mobile Styles
-                            "h-14 w-48 rounded-l-full p-0 flex-row bg-slate-900/95 backdrop-blur-3xl border-l border-y border-white/20 translate-x-[142px]",
-                            isPointsExpanded ? "translate-x-0 bg-slate-900 shadow-2xl" : "",
-                            // Desktop Styles (md:) - Reverting to original
-                            "md:h-10 md:w-auto md:translate-x-0 md:rounded-2xl md:px-4 md:bg-white/10 md:backdrop-blur-xl md:border md:border-white/20 md:shadow-xl md:font-black md:text-[10px] md:uppercase md:tracking-widest md:gap-2 md:hover:bg-white/20"
+                            "group flex items-center transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] overflow-hidden border-none text-white",
+                            "h-12 sm:h-14 w-44 sm:w-48 rounded-l-full p-0 flex-row bg-gradient-to-br from-indigo-600 to-purple-800 shadow-2xl",
+                            "translate-x-[126px] sm:translate-x-[142px] hover:translate-x-0 focus-within:translate-x-0",
+                            isReferExpanded ? "translate-x-0" : ""
                         )}
                     >
-                        {/* Icon Container - Only circle on mobile */}
-                        <div className="w-14 h-14 flex items-center justify-center shrink-0 md:w-auto md:h-auto md:border-none">
-                            <div className={cn(
-                                "flex items-center justify-center transition-all duration-500",
-                                "h-9 w-9 rounded-full bg-yellow-500/10 md:h-auto md:w-auto md:bg-transparent" // Revert on desktop
-                            )}>
-                                <Star className="h-5 w-5 md:h-4 md:w-4 text-yellow-500 fill-yellow-500" />
+                        <div className="w-12 sm:w-14 h-12 sm:h-14 flex items-center justify-center shrink-0">
+                            <div className="flex items-center justify-center transition-all duration-500 h-8 sm:h-9 w-8 sm:w-9 rounded-full bg-white/20 group-hover:rotate-12 group-hover:scale-110">
+                                <Ticket className="h-4 sm:h-5 w-4 sm:w-5 text-white" />
                             </div>
                         </div>
-
-                        {/* Text Container */}
                         <div className={cn(
-                            "flex-1 px-4 text-center transition-all duration-500 md:flex-none md:px-0 md:opacity-100 md:translate-x-0",
-                            isPointsExpanded ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4"
+                            "flex-1 px-4 text-center transition-all duration-500",
+                            "opacity-0 translate-x-4 group-hover:opacity-100 group-hover:translate-x-0",
+                            isReferExpanded ? "opacity-100 translate-x-0" : ""
                         )}>
-                            <p className="font-black text-[11px] md:text-[10px] uppercase tracking-[0.2em] md:tracking-widest whitespace-nowrap">
-                                {loyaltyPoints || 0} Points
+                            <p className="font-black text-[10px] sm:text-[11px] uppercase tracking-[0.2em] whitespace-nowrap">
+                                Refer & Earn
                             </p>
                         </div>
                     </Button>
+                    <DialogContent className="p-0 border-none bg-slate-950 max-w-[320px] w-[90%] rounded-[2.5rem] overflow-hidden max-h-[90vh] flex flex-col shadow-2xl">
+                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-purple-500/10 pointer-events-none" />
+                        
+                        <div className="relative pt-6 pb-3 text-center border-b border-white/5 bg-white/[0.02] shrink-0">
+                            <div className="inline-flex items-center justify-center p-3 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl mb-2 shadow-2xl shadow-indigo-500/20">
+                                <Users className="h-5 w-5 text-white" />
+                            </div>
+                            <DialogTitle className="text-white text-xl font-black tracking-tight mb-0.5">Invite Friends</DialogTitle>
+                            <DialogDescription className="text-slate-400 text-[10px] max-w-[220px] mx-auto font-medium">
+                                Invite a friend & get <span className="text-white font-black bg-indigo-500/30 px-1.5 py-0.5 rounded-md border border-indigo-500/20">{renderReferReward()}</span> when they order!
+                            </DialogDescription>
+                        </div>
 
-                    <Dialog open={isReferDialogOpen} onOpenChange={setIsReferDialogOpen}>
-                        <Button 
-                            onClick={() => {
-                                if (window.innerWidth < 768 && !isReferExpanded) {
-                                    setIsReferExpanded(true);
-                                    return;
-                                }
-                                setIsReferDialogOpen(true);
-                            }}
-                            className={cn(
-                                "group flex items-center transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] overflow-hidden border-none text-white",
-                                // Mobile Styles
-                                "h-14 w-48 rounded-l-full p-0 flex-row bg-gradient-to-br from-indigo-600 to-purple-800 shadow-[0_10px_40px_rgba(79,70,229,0.3)] translate-x-[142px]",
-                                isReferExpanded ? "translate-x-0" : "",
-                                // Desktop Styles (md:) - Reverting to original
-                                "md:h-10 md:w-auto md:translate-x-0 md:rounded-2xl md:px-4 md:bg-gradient-to-r md:from-indigo-500 md:to-purple-500 md:shadow-indigo-500/20 md:font-black md:text-[10px] md:uppercase md:tracking-widest md:gap-2 md:hover:scale-105 md:active:scale-95 shadow-xl"
-                            )}
-                        >
-                            {/* Icon Container */}
-                            <div className="w-14 h-14 flex items-center justify-center shrink-0 md:w-auto md:h-auto">
-                                <div className={cn(
-                                    "flex items-center justify-center transition-all duration-500",
-                                    "h-9 w-9 rounded-full bg-white/20 md:h-auto md:w-auto md:bg-transparent"
-                                )}>
-                                    <Ticket className="h-5 w-5 md:h-4 md:w-4 text-white" />
+                        <div className="p-4 space-y-4 relative overflow-y-auto flex-1 custom-scrollbar">
+                            <div className="bg-gradient-to-b from-white/[0.05] to-transparent border border-white/10 p-4 rounded-[1.5rem] text-center shadow-inner relative overflow-hidden group">
+                                <p className="text-[8px] font-black uppercase tracking-[0.4em] text-indigo-400 mb-2">Unique Code</p>
+                                <div className="text-2xl font-black text-white tracking-[0.2em] mb-4 select-all bg-black/40 py-2.5 rounded-lg border border-white/5 shadow-inner">
+                                    {referralCode || (customerPhone ? `RE-${customerPhone.replace(/\D/g, '').slice(-4)}` : 'GUEST')}
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-2.5">
+                                    <Button 
+                                        variant="default"
+                                        onClick={() => {
+                                            const code = referralCode || `RE-${customerPhone?.replace(/\D/g, '').slice(-4)}`;
+                                            const url = `${window.location.protocol}//${window.location.host}/customer/menu?id=${RESTAURANT_ID}&ref=${code}`;
+                                            
+                                            if (navigator.clipboard && navigator.clipboard.writeText) {
+                                                navigator.clipboard.writeText(url).then(() => {
+                                                    toast.success('Link Copied! 🚀');
+                                                }).catch(() => {
+                                                    const el = document.createElement('textarea');
+                                                    el.value = url;
+                                                    document.body.appendChild(el);
+                                                    el.select();
+                                                    document.execCommand('copy');
+                                                    document.body.removeChild(el);
+                                                    toast.success('Link Copied! 🚀');
+                                                });
+                                            } else {
+                                                toast.error('Browser blocked copy.');
+                                            }
+                                        }}
+                                        className="rounded-[0.8rem] bg-white text-black hover:bg-slate-100 h-10 font-black text-[10px] uppercase tracking-widest gap-2.5 shadow-xl shadow-white/5 active:scale-95 transition-all w-full"
+                                    >
+                                        <Copy className="h-4 w-4" />
+                                        Copy Invite Link
+                                    </Button>
+                                    
+                                    <Button 
+                                        variant="default"
+                                        onClick={() => {
+                                            const code = referralCode || `RE-${customerPhone?.replace(/\D/g, '').slice(-4)}`;
+                                            const url = `${window.location.protocol}//${window.location.host}/customer/menu?id=${RESTAURANT_ID}&ref=${code}`;
+                                            const text = `Join me at this restaurant! 🔥 Use my code & we both get rewards! 🍔\n\n${url}`;
+                                            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                                        }}
+                                        className="rounded-[0.8rem] bg-[#25D366] text-white hover:bg-[#128C7E] h-10 font-black text-[10px] uppercase tracking-widest gap-2.5 shadow-xl shadow-green-500/20 active:scale-95 transition-all w-full"
+                                    >
+                                        <Bike className="h-4 w-4" />
+                                        Share via WhatsApp
+                                    </Button>
                                 </div>
                             </div>
 
-                            {/* Text Container */}
-                            <div className={cn(
-                                "flex-1 px-4 text-center transition-all duration-500 md:flex-none md:px-0 md:opacity-100 md:translate-x-0",
-                                isReferExpanded ? "opacity-100 translate-x-0" : "opacity-0 translate-x-4"
-                            )}>
-                                <p className="font-black text-[11px] md:text-[10px] uppercase tracking-[0.2em] md:tracking-widest whitespace-nowrap">
-                                    Refer & Earn
-                                </p>
-                            </div>
-                        </Button>
-                        <DialogContent className="p-0 border-none bg-slate-950 max-w-[320px] w-[90%] rounded-[2.5rem] overflow-hidden max-h-[90vh] flex flex-col shadow-2xl">
-                            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-purple-500/10 pointer-events-none" />
-                            
-                            {/* 📱 Header Section */}
-                            <div className="relative pt-6 pb-3 text-center border-b border-white/5 bg-white/[0.02] shrink-0">
-                                <div className="inline-flex items-center justify-center p-3 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl mb-2 shadow-2xl shadow-indigo-500/20">
-                                    <Users className="h-5 w-5 text-white" />
+                            <div className="grid grid-cols-2 gap-3 pb-2">
+                                <div className="bg-white/5 p-3 rounded-[1.2rem] border border-white/10 text-center backdrop-blur-sm">
+                                    <p className="text-lg font-black text-white mb-0.5">{referralStats.invited}</p>
+                                    <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest leading-none">Dost Joined</p>
                                 </div>
-                                <DialogTitle className="text-white text-xl font-black tracking-tight mb-0.5">Invite Friends</DialogTitle>
-                                <DialogDescription className="text-slate-400 text-[10px] max-w-[220px] mx-auto font-medium">
-                                    Invite a friend & get <span className="text-white font-black bg-indigo-500/30 px-1.5 py-0.5 rounded-md border border-indigo-500/20">{renderReferReward()}</span> when they order!
-                                </DialogDescription>
-                            </div>
-
-                            <div className="p-4 space-y-4 relative overflow-y-auto flex-1 custom-scrollbar">
-                                {/* 🎁 Referral Card */}
-                                <div className="bg-gradient-to-b from-white/[0.05] to-transparent border border-white/10 p-4 rounded-[1.5rem] text-center shadow-inner relative overflow-hidden group">
-                                    <p className="text-[8px] font-black uppercase tracking-[0.4em] text-indigo-400 mb-2">Unique Code</p>
-                                    <div className="text-2xl font-black text-white tracking-[0.2em] mb-4 select-all bg-black/40 py-2.5 rounded-lg border border-white/5 shadow-inner">
-                                        {referralCode || (customerPhone ? `RE-${customerPhone.replace(/\D/g, '').slice(-4)}` : 'GUEST')}
-                                    </div>
-
-                                    <div className="grid grid-cols-1 gap-2.5">
-                                        <Button 
-                                            variant="default"
-                                            onClick={() => {
-                                                const code = referralCode || `RE-${customerPhone?.replace(/\D/g, '').slice(-4)}`;
-                                                const url = `${window.location.protocol}//${window.location.host}/customer/menu?id=${RESTAURANT_ID}&ref=${code}`;
-                                                
-                                                if (navigator.clipboard && navigator.clipboard.writeText) {
-                                                    navigator.clipboard.writeText(url).then(() => {
-                                                        toast.success('Link Copied! 🚀');
-                                                    }).catch(() => {
-                                                        // Fallback for some browsers
-                                                        const el = document.createElement('textarea');
-                                                        el.value = url;
-                                                        document.body.appendChild(el);
-                                                        el.select();
-                                                        document.execCommand('copy');
-                                                        document.body.removeChild(el);
-                                                        toast.success('Link Copied! 🚀');
-                                                    });
-                                                } else {
-                                                    toast.error('Browser blocked copy.');
-                                                }
-                                            }}
-                                            className="rounded-[0.8rem] bg-white text-black hover:bg-slate-100 h-10 font-black text-[10px] uppercase tracking-widest gap-2.5 shadow-xl shadow-white/5 active:scale-95 transition-all w-full"
-                                        >
-                                            <Copy className="h-4 w-4" />
-                                            Copy Invite Link
-                                        </Button>
-                                        
-                                        <Button 
-                                            variant="default"
-                                            onClick={() => {
-                                                const code = referralCode || `RE-${customerPhone?.replace(/\D/g, '').slice(-4)}`;
-                                                const url = `${window.location.protocol}//${window.location.host}/customer/menu?id=${RESTAURANT_ID}&ref=${code}`;
-                                                const text = `Join me at this restaurant! 🔥 Use my code & we both get rewards! 🍔\n\n${url}`;
-                                                window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-                                            }}
-                                            className="rounded-[0.8rem] bg-[#25D366] text-white hover:bg-[#128C7E] h-10 font-black text-[10px] uppercase tracking-widest gap-2.5 shadow-xl shadow-green-500/20 active:scale-95 transition-all w-full"
-                                        >
-                                            <Bike className="h-4 w-4" />
-                                            Share via WhatsApp
-                                        </Button>
-                                    </div>
-                                </div>
-
-                                {/* 📊 Mini Stats & Claim */}
-                                <div className="grid grid-cols-2 gap-3 pb-2">
-                                    <div className="bg-white/5 p-3 rounded-[1.2rem] border border-white/10 text-center backdrop-blur-sm">
-                                        <p className="text-lg font-black text-white mb-0.5">{referralStats.invited}</p>
-                                        <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest leading-none">Dost Joined</p>
-                                    </div>
-                                    <div className="bg-white/5 p-3 rounded-[1.2rem] border border-white/10 text-center backdrop-blur-sm flex flex-col justify-center items-center">
-                                        {referralStats.unclaimedInvites > 0 ? (
-                                            <div className="w-full flex flex-col items-center">
-                                                <p className="text-sm font-black text-purple-400 mb-1">{referralStats.unclaimedEarned} Pending!</p>
-                                                <Button 
-                                                    onClick={handleClaimReferralPoints}
-                                                    disabled={isClaimingReferral}
-                                                    className="w-full h-6 text-[9px] uppercase tracking-wider font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-md p-0 m-0"
-                                                >
-                                                    {isClaimingReferral ? 'Claiming...' : 'Claim Now'}
-                                                </Button>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <p className="text-lg font-black text-purple-400 mb-0.5">{referralStats.earned}</p>
-                                                <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest leading-none">Points Won</p>
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </DialogContent>
-                    </Dialog>
-                </div>
-
-                <div className="absolute inset-0 flex flex-col justify-end p-6 md:p-10 bg-gradient-to-t from-black via-black/20 to-transparent">
-                    <div className="flex items-center gap-4 md:gap-8 transform group-hover:translate-x-2 transition-transform duration-500">
-                        {restaurant?.logo_url ? (
-                            <div className="h-20 w-20 md:h-28 md:w-28 rounded-3xl bg-white p-2 shadow-2xl border-4 border-white/20 overflow-hidden shrink-0">
-                                <img src={restaurant.logo_url} className="w-full h-full object-contain" alt="Logo" />
-                            </div>
-                        ) : (
-                            <div className="h-20 w-20 md:h-28 md:w-28 rounded-3xl bg-white/10 backdrop-blur-xl flex items-center justify-center border border-white/20 shrink-0">
-                                <Utensils className="w-10 h-10 text-white" />
-                            </div>
-                        )}
-                        <div>
-                            <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter leading-tight drop-shadow-lg">
-                                {restaurant?.name || 'Loading...'}
-                            </h1>
-                            {restaurant?.tagline && (
-                                <p className="text-sm md:text-lg text-white/80 font-medium italic mt-1 drop-shadow-md">
-                                    {restaurant.tagline}
-                                </p>
-                            )}
-                            <div className="flex gap-4 mt-4 text-[10px] md:text-xs">
-                                <div className="px-3 py-1 rounded-full bg-green-500/20 text-green-400 border border-green-500/30 flex items-center gap-1 backdrop-blur-md">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> OPEN NOW
-                                </div>
-                                <div className="px-3 py-1 rounded-full bg-white/10 text-white border border-white/20 flex items-center gap-1 backdrop-blur-md">
-                                    <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" /> 4.8 Ratings
+                                <div className="bg-white/5 p-3 rounded-[1.2rem] border border-white/10 text-center backdrop-blur-sm flex flex-col justify-center items-center">
+                                    {referralStats.unclaimedInvites > 0 ? (
+                                        <div className="w-full flex flex-col items-center">
+                                            <p className="text-sm font-black text-purple-400 mb-1">{referralStats.unclaimedEarned} Pending!</p>
+                                            <Button 
+                                                onClick={handleClaimReferralPoints}
+                                                disabled={isClaimingReferral}
+                                                className="w-full h-6 text-[9px] uppercase tracking-wider font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-md p-0 m-0"
+                                            >
+                                                {isClaimingReferral ? 'Claiming...' : 'Claim Now'}
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <p className="text-lg font-black text-purple-400 mb-0.5">{referralStats.earned}</p>
+                                            <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest leading-none">Points Won</p>
+                                        </>
+                                    )}
                                 </div>
                             </div>
                         </div>
-                    </div>
-                </div>
+                    </DialogContent>
+                </Dialog>
             </div>
 
-            {/* Categories - Sticky Top */}
-            <div className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm transition-all duration-300">
+            {/* Scrollable Content Area */}
+            <div className="relative z-10 px-4 pt-4">
+                {/* ✨ Featured Carousel (Now at the Very Top) */}
+                {!searchQuery && (
+                    <div className="mb-2 animate-in fade-in slide-in-from-top-4 duration-1000">
+                        <div className="transform scale-[1.02] sm:scale-100 origin-top">
+                            <FeaturedCarousel items={items} onAdd={handleItemClick} />
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Categories - Sticky Top (Now below Recommended) */}
+            <div className="sticky top-[3.5rem] z-40 bg-white/80 backdrop-blur-xl border-b border-gray-100/50 shadow-sm transition-all duration-300">
                 <CategoryTabs
                     categories={categories}
                     activeCategory={activeCategory}
@@ -778,51 +731,41 @@ function MenuContent() {
                 />
             </div>
 
-            {/* Scrollable Content */}
-            <div className="space-y-2">
-
-                {/* Featured Carousel (Only show if no search query & active category is 'all' or first one if 'all' isn't used) */}
-                {/* Actually, let's show it always at top unless searching */}
-                {!searchQuery && (
-                    <FeaturedCarousel items={items} onAdd={handleItemClick} />
-                )}
-
-                {/* Search Bar - Floating Style */}
-                {/* Search Bar - Standard Scrollable */}
-                <div className="px-4 pt-4 pb-2 space-y-3">
-                    <div className="max-w-xl mx-auto relative bg-white shadow-sm rounded-xl border border-gray-200 overflow-hidden group focus-within:ring-2 ring-orange-500/20 transition-all duration-300">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 group-focus-within:text-orange-500 transition-colors pointer-events-none" />
+            <div className="relative z-10 px-4 pt-8 pb-2">
+                {/* 🔍 Search Bar Section */}
+                <div className="max-w-2xl mx-auto space-y-6 mb-10">
+                    <div className="relative bg-white/70 backdrop-blur-md shadow-xl shadow-slate-200/50 rounded-2xl border border-white overflow-hidden group focus-within:ring-2 ring-indigo-500/20 transition-all duration-500">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors pointer-events-none" />
                         <Input
-                            placeholder="Search dishes..."
+                            placeholder="Discover your next favorite dish..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pl-10 h-10 bg-transparent border-0 focus-visible:ring-0 text-sm font-bold text-slate-900 placeholder:text-gray-400 placeholder:font-medium"
+                            className="pl-12 h-14 bg-transparent border-0 focus-visible:ring-0 text-base font-bold text-slate-950 placeholder:text-slate-400 placeholder:font-medium"
                         />
                     </div>
 
-                    {showDietaryToggle && restaurant?.dietary_type === 'both' && (
+                    {/* Dietary Filters (Veg/Non-Veg) */}
+                    {showDietaryToggle && !searchQuery && (
                         <div className="flex justify-center">
-                            <div className="bg-white p-0.5 rounded-full border shadow-sm flex gap-0.5 scale-90 origin-top">
-                                <button
-                                    onClick={() => setDietaryFilter('all')}
-                                    className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all ${dietaryFilter === 'all' ? 'bg-gray-900 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}
-                                >
-                                    All
-                                </button>
-                                <button
-                                    onClick={() => setDietaryFilter('veg')}
-                                    className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all flex items-center gap-1 ${dietaryFilter === 'veg' ? 'bg-green-100 text-green-700 shadow-inner' : 'text-gray-500 hover:bg-green-50'}`}
-                                >
-                                    <div className="w-1.5 h-1.5 rounded-full border border-green-600 bg-green-600" />
-                                    Veg
-                                </button>
-                                <button
-                                    onClick={() => setDietaryFilter('non-veg')}
-                                    className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all flex items-center gap-1 ${dietaryFilter === 'non-veg' ? 'bg-red-100 text-red-700 shadow-inner' : 'text-gray-500 hover:bg-red-50'}`}
-                                >
-                                    <div className="w-1.5 h-1.5 rounded-full border border-red-600 bg-red-600" />
-                                    Non-Veg
-                                </button>
+                            <div className="bg-white/80 backdrop-blur-md p-1 rounded-2xl border border-white shadow-sm flex gap-1">
+                                {(['all', 'veg', 'non-veg'] as const).map((type) => (
+                                    <button
+                                        key={type}
+                                        onClick={() => setDietaryFilter(type)}
+                                        className={cn(
+                                            "px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                                            dietaryFilter === type 
+                                                ? "bg-slate-900 text-white shadow-lg" 
+                                                : "text-slate-500 hover:bg-slate-100"
+                                        )}
+                                    >
+                                        <div className="flex items-center gap-1.5">
+                                            {type === 'veg' && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
+                                            {type === 'non-veg' && <div className="w-1.5 h-1.5 rounded-full bg-red-500" />}
+                                            {type}
+                                        </div>
+                                    </button>
+                                ))}
                             </div>
                         </div>
                     )}
