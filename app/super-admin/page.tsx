@@ -48,6 +48,8 @@ export default function SuperAdminPage() {
 
   const [selectedRestro, setSelectedRestro] = useState<any>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState<string>('');
 
   const handleNodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -233,6 +235,17 @@ export default function SuperAdminPage() {
                                     <div className="flex gap-2 mt-6 relative z-10">
                                         <button onClick={() => setSelectedRestro(restaurant)} className="flex-1 bg-purple-600 font-black py-3 rounded-xl text-[9px] uppercase shadow-lg text-white hover:bg-purple-500 transition-all">Terminal</button>
                                         <button onClick={() => { setEditingId(restaurant.id); setFormData({ name: restaurant.name || '', slug: restaurant.slug || '', custom_domain: restaurant.custom_domain || '', primary_color: restaurant.primary_color || '#ef4444', admin_passcode: restaurant.admin_passcode || '', whatsapp_number: restaurant.whatsapp_number || '', report_whatsapp_number: restaurant.report_whatsapp_number || '', whatsapp_token: restaurant.whatsapp_token || '', whatsapp_api_id: restaurant.whatsapp_api_id || '', whatsapp_api_url: restaurant.whatsapp_api_url || 'https://thinkaiq.in/api', logo_url: restaurant.logo_url || '', banner_url: restaurant.banner_url || '', coin_balance: restaurant.coin_balance || 0, webhook_url: restaurant.webhook_url || '' }); setIsModalOpen(true); }} className="px-4 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all"><Pencil size={14} className="text-gray-400" /></button>
+                                        <button 
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDeleteConfirmId(restaurant.id);
+                                                setDeleteConfirmName(restaurant.name);
+                                            }} 
+                                            className="px-4 h-11 bg-rose-500/10 hover:bg-rose-500/20 rounded-xl border border-rose-500/20 transition-all group/trash flex items-center justify-center"
+                                        >
+                                            <Trash2 size={16} className="text-rose-500 group-hover/trash:scale-125 transition-all" />
+                                        </button>
 
                                     </div>
                                 </div>
@@ -580,6 +593,48 @@ export default function SuperAdminPage() {
             </div>
         )}
 
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirmId && (
+            <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/98 p-4 backdrop-blur-3xl animate-in fade-in duration-300">
+                <div className="bg-[#111111] border border-white/10 w-full max-w-md p-10 rounded-[3rem] shadow-4xl text-center relative overflow-hidden">
+                    <div className="absolute inset-0 bg-rose-600/5 blur-[80px]" />
+                    <div className="w-20 h-20 bg-rose-600/20 rounded-3xl flex items-center justify-center mx-auto mb-8 border border-rose-500/20 animate-pulse">
+                        <Trash2 className="text-rose-500 w-10 h-10" />
+                    </div>
+                    <h2 className="text-2xl font-black italic uppercase tracking-tighter mb-4">Node Purge Protocol</h2>
+                    <p className="text-gray-500 text-xs leading-relaxed mb-10 px-4 uppercase tracking-widest font-bold opacity-60">
+                        Are you sure you want to permanently erase <span className="text-rose-500 font-black italic underline">"{deleteConfirmName}"</span>? All associated data, orders, and neural links will be terminated forever.
+                    </p>
+                    <div className="flex flex-col gap-3 relative z-10">
+                        <button 
+                            onClick={async () => {
+                                setIsLoading(true);
+                                try {
+                                    const { error } = await supabase.from('restaurants').delete().eq('id', deleteConfirmId);
+                                    if (!error) {
+                                        toast.success('Node purged successfully');
+                                        setDeleteConfirmId(null);
+                                        fetchRestaurants();
+                                    } else {
+                                        toast.error(`Purge Error: ${error.message}`);
+                                    }
+                                } catch (err) {
+                                    toast.error('Critical link failure');
+                                } finally {
+                                    setIsLoading(false);
+                                }
+                            }}
+                            disabled={isLoading}
+                            className="w-full py-5 bg-rose-600 text-white font-black rounded-2xl uppercase tracking-widest text-[10px] hover:bg-rose-500 transition-all shadow-xl shadow-rose-900/20"
+                        >
+                            {isLoading ? 'Executing Purge...' : 'Verify Destruction'}
+                        </button>
+                        <button onClick={() => setDeleteConfirmId(null)} className="w-full py-5 bg-white/5 text-gray-400 font-extrabold rounded-2xl uppercase tracking-widest text-[10px] hover:text-white transition-all border border-white/10">Abort Protocol</button>
+                    </div>
+                </div>
+            </div>
+        )}
 
         <style jsx>{`
             .custom-scrollbar::-webkit-scrollbar { width: 5px; }
