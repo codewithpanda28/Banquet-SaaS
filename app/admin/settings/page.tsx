@@ -631,27 +631,6 @@ export default function SettingsPage() {
                     </div>
                 </div>
                 <div className="space-y-2">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Cover Banner</p>
-                    <div className="relative h-28 w-full rounded-2xl bg-secondary/20 flex flex-col items-center justify-center overflow-hidden border border-border/50 hover:border-pink-500/50 transition-all group/banner cursor-pointer">
-                         {form.banner_url ? (
-                            <img src={form.banner_url} className="h-full w-full object-cover group-hover/banner:scale-105 transition-transform" alt="Banner" />
-                         ) : (
-                            <div className="text-center opacity-40">
-                                <ImagePlus className="h-10 w-10 mx-auto mb-1" />
-                                <span className="text-[10px] font-bold">UPLOAD BANNER</span>
-                            </div>
-                         )}
-                          <input 
-                            type="file" 
-                            accept="image/*" 
-                            className="absolute inset-0 opacity-0 cursor-pointer"
-                            onChange={(e) => handleImageUpload(e, 'banner')}
-                            disabled={isUploading}
-                        />
-                        {isUploading && <div className="absolute inset-0 bg-black/60 flex items-center justify-center"><Loader2 className="animate-spin text-white" /></div>}
-                    </div>
-                </div>
-                <div className="space-y-2">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Payment QR</p>
                     <div className="relative h-28 w-full rounded-2xl bg-secondary/10 flex flex-col items-center justify-center overflow-hidden border-2 border-dashed border-border/50 hover:border-blue-500/50 transition-all group/qr cursor-pointer">
                          {form.qr_code_url ? (

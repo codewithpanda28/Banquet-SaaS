@@ -6,16 +6,34 @@ import { Button } from "@/components/ui/button"
 import { Volume2, VolumeX, Settings, TrendingUp, Clock } from "lucide-react"
 import Link from "next/link"
 import { format } from "date-fns"
+import { supabase, RESTAURANT_ID } from "@/lib/supabase"
 
 export default function KitchenHeader() {
     const { isSoundEnabled, toggleSound, orders } = useKitchenStore()
     const [currentTime, setCurrentTime] = useState<Date | null>(null)
     const [mounted, setMounted] = useState(false)
+    const [restaurantName, setRestaurantName] = useState("Kitchen Display")
+    const [restaurantLogo, setRestaurantLogo] = useState<string | null>(null)
 
     useEffect(() => {
         setMounted(true)
         setCurrentTime(new Date())
         const timer = setInterval(() => setCurrentTime(new Date()), 1000)
+
+        // Fetch Restaurant Name & Logo
+        const fetchInfo = async () => {
+            const { data } = await supabase
+                .from('restaurants')
+                .select('name, logo_url')
+                .eq('id', RESTAURANT_ID)
+                .single()
+            if (data) {
+                setRestaurantName(data.name || "Kitchen Display")
+                setRestaurantLogo(data.logo_url)
+            }
+        }
+        fetchInfo()
+
         return () => clearInterval(timer)
     }, [])
 
@@ -29,12 +47,16 @@ export default function KitchenHeader() {
             {/* Left Side - Branding */}
             <div className="flex items-center gap-6">
                 <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-orange-500 shadow-lg">
-                        <span className="text-2xl">👨‍🍳</span>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-orange-500 shadow-lg overflow-hidden">
+                        {restaurantLogo ? (
+                            <img src={restaurantLogo} className="h-full w-full object-cover" alt="Logo" />
+                        ) : (
+                            <span className="text-2xl">👨‍🍳</span>
+                        )}
                     </div>
                     <div>
                         <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
-                            Kitchen Display
+                            {restaurantName}
                             <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
                                 <span className="relative flex h-2 w-2">
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -43,7 +65,7 @@ export default function KitchenHeader() {
                                 <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Live</span>
                             </div>
                         </h1>
-                        <p className="text-xs text-muted-foreground">Order Management System</p>
+                        <p className="text-xs text-muted-foreground uppercase tracking-widest font-bold">Kitchen Ops</p>
                     </div>
                 </div>
 

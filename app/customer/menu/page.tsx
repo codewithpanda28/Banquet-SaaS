@@ -892,51 +892,6 @@ function MenuContent() {
                     <div className="p-6 pt-2 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
                         {/* Integrated Progress & Points Card */}
                         {/* 🎫 Exclusive Coupons Section */}
-                        {availableCoupons.length > 0 && (
-                            <div className="space-y-4">
-                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 flex items-center justify-between">
-                                    Special Coupons 🎟️
-                                    <span className="text-amber-600 font-bold bg-amber-50 px-2 py-0.5 rounded-full">{availableCoupons.length} Active</span>
-                                </h3>
-                                <div className="space-y-3">
-                                    {availableCoupons.map((coupon) => (
-                                        <div 
-                                            key={coupon.id} 
-                                            onClick={() => {
-                                                navigator.clipboard.writeText(coupon.code);
-                                                toast.success('Coupon code copied! 📋');
-                                            }}
-                                            className="group relative p-4 rounded-[2rem] border border-amber-100 bg-amber-50/30 hover:bg-amber-50 cursor-pointer active:scale-95 transition-all"
-                                        >
-                                            <div className="flex items-center gap-4">
-                                                <div className="h-12 w-12 rounded-xl bg-white border border-amber-100 flex items-center justify-center shrink-0">
-                                                    <Percent className="h-5 w-5 text-amber-600" />
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 leading-none mb-1">
-                                                        {coupon.discount_type === 'percentage' ? `${coupon.discount_value}% OFF` : `₹${coupon.discount_value} OFF`}
-                                                    </p>
-                                                    <p className="font-black text-sm tracking-tight text-slate-900 truncate">
-                                                        {coupon.description
-                                                            ?.replace(/\[PRIVATE\]/g, '')
-                                                            ?.replace(/Loyal (VIP Reward|Coupon) for \d+/g, '')
-                                                            ?.replace(/[:\s]+$/, '')
-                                                            ?.replace(/^[:\s]+/, '')
-                                                            ?.trim() || 'Special Discount'}
-                                                    </p>
-                                                    <div className="flex items-center gap-2 mt-1.5">
-                                                        <span className="bg-white px-2 py-0.5 rounded-md border border-amber-100 font-mono text-xs font-black tracking-widest text-slate-800">
-                                                            {coupon.code}
-                                                        </span>
-                                                        <span className="text-[8px] font-bold text-amber-500 uppercase tracking-tighter">Tap to Copy</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
 
                         <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 shadow-inner space-y-4">
                             <div className="flex justify-between items-center">
