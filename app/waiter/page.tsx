@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
     UtensilsCrossed, ShoppingCart, Plus, Minus, Trash2, CheckCircle2,
-    Armchair, Search, User, Clock, ChefHat, Send, LogOut, RefreshCcw, XCircle, AlertCircle, ChevronRight, ShoppingBag
+    Armchair, Search, User, Clock, ChefHat, Send, LogOut, RefreshCcw, XCircle, AlertCircle, ChevronRight, ShoppingBag, Loader2, Printer, ChevronLeft
 } from 'lucide-react'
 import { supabase, getRestaurantId } from '@/lib/supabase'
 import { toast } from 'sonner'
@@ -927,7 +927,7 @@ export default function WaiterDashboard() {
                                                         </Button>
                                                     </div>
                                                 ) : (
-                                                    <Button variant="outline" className="h-14 w-14 rounded-2xl border-2 hover:bg-primary hover:text-white hover:border-primary transition-all group" onClick={() => addToCart(item)}>
+                                                    <Button variant="outline" className="h-14 w-14 rounded-2xl border-2 hover:bg-primary hover:text-black hover:border-primary transition-all group" onClick={() => addToCart(item)}>
                                                         <Plus className="h-6 w-6 group-hover:scale-125 transition-transform" />
                                                     </Button>
                                                 )}
@@ -998,31 +998,31 @@ export default function WaiterDashboard() {
 
                     {/* Confirm Dialog */}
                     <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
-                        <DialogContent className="sm:max-w-md rounded-[3rem] p-0 overflow-hidden border-0 shadow-2xl flex flex-col max-h-[90vh] [&>button:last-child]:text-slate-400 [&>button:last-child]:hover:text-white [&>button:last-child]:transition-colors">
+                        <DialogContent className="sm:max-w-md rounded-[2rem] p-0 overflow-hidden border-0 shadow-2xl flex flex-col max-h-[90vh] [&>button:last-child]:text-slate-400 [&>button:last-child]:hover:text-white [&>button:last-child]:transition-colors">
                             {/* Sticky Header */}
-                            <div className="bg-slate-900 p-8 text-white relative shrink-0">
-                                <Badge className="absolute top-8 right-8 bg-primary/20 text-primary border-0 font-semibold px-4 py-1">T{selectedTable?.table_number}</Badge>
-                                <ChefHat className="h-12 w-12 text-primary mb-6" />
-                                <DialogTitle className="text-3xl font-bold tracking-tight mb-2">Almost Done!</DialogTitle>
-                                <p className="text-slate-400 font-medium">Review the order before sending to kitchen</p>
+                            <div className="bg-slate-900 p-6 text-white relative shrink-0">
+                                <Badge className="absolute top-6 right-6 bg-primary/20 text-primary border-0 font-bold px-3 py-1 text-[10px] tracking-widest uppercase">T{selectedTable?.table_number}</Badge>
+                                <ChefHat className="h-10 w-10 text-primary mb-4" />
+                                <DialogTitle className="text-2xl font-black tracking-tight mb-1 uppercase italic">Almost Done!</DialogTitle>
+                                <p className="text-slate-400 text-xs font-semibold uppercase tracking-wider opacity-70">Review order details</p>
                             </div>
 
                             {/* Scrollable Body */}
-                            <div className="p-8 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
-                                <div className="p-5 bg-gray-50 rounded-[2rem] border border-gray-100 flex justify-between items-center">
+                            <div className="p-6 space-y-5 overflow-y-auto flex-1 custom-scrollbar">
+                                <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex justify-between items-center">
                                     <div>
-                                        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1">TOTAL PAYABLE</p>
-                                        <p className="text-3xl font-bold text-primary tracking-tighter">₹{cartTotal.toFixed(2)}</p>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">TOTAL PAYABLE</p>
+                                        <p className="text-2xl font-black text-primary tracking-tighter">₹{cartTotal.toFixed(2)}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-xs font-semibold text-gray-900 uppercase">Items: {cartCount}</p>
-                                        <p className="text-[10px] font-medium text-gray-400">Bill ID: AUTO</p>
+                                        <p className="text-[10px] font-bold text-gray-900 uppercase tracking-widest">Items: {cartCount}</p>
+                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest opacity-50">BILL ID: AUTO</p>
                                     </div>
                                 </div>
 
                                 <div className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Label className="text-[10px] font-semibold uppercase text-gray-400 tracking-widest px-1">Selected Waiter</Label>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-[10px] font-bold uppercase text-gray-400 tracking-widest px-1">Selected Waiter</Label>
                                         <Select
                                             value={staffId || 'guest'}
                                             onValueChange={(id) => {
@@ -1031,40 +1031,44 @@ export default function WaiterDashboard() {
                                                 if (s) setStaffName(s.name);
                                             }}
                                         >
-                                            <SelectTrigger className="h-14 bg-white border border-gray-100 rounded-2xl font-semibold">
+                                            <SelectTrigger className="h-12 bg-white border border-gray-100 rounded-xl font-bold text-sm shadow-sm ring-offset-0 focus:ring-2 focus:ring-primary/20">
                                                 <SelectValue placeholder="Select Waiter" />
                                             </SelectTrigger>
-                                            <SelectContent className="rounded-2xl border">
+                                            <SelectContent className="rounded-xl border">
                                                 {staffList.map(staff => (
-                                                    <SelectItem key={staff.id} value={staff.id} className="font-semibold">{staff.name}</SelectItem>
+                                                    <SelectItem key={staff.id} value={staff.id} className="font-bold text-xs uppercase tracking-tight">{staff.name}</SelectItem>
                                                 ))}
-                                                <SelectItem value="guest" className="font-semibold text-gray-400 outline-dashed">Guest Waiter</SelectItem>
+                                                <SelectItem value="guest" className="font-bold text-xs uppercase tracking-tight text-gray-400 italic">Guest Waiter</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label className="text-[10px] font-semibold uppercase text-gray-400 tracking-widest px-1">Cust. Name</Label>
-                                            <Input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Optional" className="h-14 rounded-2xl border font-semibold" />
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-[10px] font-bold uppercase text-gray-400 tracking-widest px-1">Cust. Name</Label>
+                                            <Input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="Walk-in" className="h-12 rounded-xl border border-gray-100 font-bold text-xs" />
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-[10px] font-semibold uppercase text-gray-400 tracking-widest px-1">Phone No.</Label>
-                                            <Input value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} placeholder="Optional" className="h-14 rounded-2xl border font-semibold" />
+                                        <div className="space-y-1.5">
+                                            <Label className="text-[10px] font-bold uppercase text-gray-400 tracking-widest px-1">Phone No.</Label>
+                                            <Input value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} placeholder="00000 00000" className="h-12 rounded-xl border border-gray-100 font-bold text-xs" />
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Sticky Footer Actions */}
-                            <div className="p-8 pt-4 border-t border-gray-100 flex flex-col gap-3 shrink-0 bg-white">
+                            <div className="p-6 pt-0 flex flex-col gap-2 shrink-0 bg-white">
                                 <Button
-                                    className="w-full h-16 rounded-[1.5rem] bg-primary hover:bg-primary/90 text-white font-bold text-lg shadow-xl shadow-primary/20"
+                                    className="w-full h-14 rounded-xl bg-primary hover:bg-slate-950 text-white font-black text-sm shadow-xl shadow-primary/20 uppercase tracking-widest gap-2 transition-all active:scale-95"
                                     onClick={placeOrder}
                                     disabled={isPlacing}
                                 >
+                                    {isPlacing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
                                     {isPlacing ? 'PLACING...' : 'CONFIRM & PRINT KOT'}
                                 </Button>
-                                <Button variant="ghost" className="w-full font-bold text-gray-400 uppercase tracking-widest text-[10px]" onClick={() => setIsConfirmOpen(false)}>Go Back</Button>
+                                <Button variant="ghost" className="w-full h-10 font-bold text-gray-400 uppercase tracking-widest text-[10px] hover:bg-gray-50 flex items-center justify-center" onClick={() => setIsConfirmOpen(false)}>
+                                    <ChevronLeft className="h-3 w-3 mr-1" />
+                                    Go Back
+                                </Button>
                             </div>
                         </DialogContent>
                     </Dialog>
