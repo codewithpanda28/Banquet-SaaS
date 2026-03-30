@@ -101,6 +101,14 @@ function MenuContent() {
             .maybeSingle()
         if (refSettings) setReferralSettings(refSettings)
 
+        // Fetch Tier Rewards (Always fetch so guests can see the Lalach Engine)
+        const { data: rewardsData } = await supabase
+            .from('loyalty_rewards')
+            .select('*')
+            .eq('restaurant_id', rid)
+            .order('threshold', { ascending: true })
+        if (rewardsData) setAvailableRewards(rewardsData)
+
         if (!customerPhone) return
         const cleanPhone = customerPhone.replace(/\D/g, '').slice(-10)
         const today = new Date();
@@ -154,14 +162,6 @@ function MenuContent() {
             }
         }
 
-        // Fetch Tier Rewards
-        const { data: rewardsData } = await supabase
-            .from('loyalty_rewards')
-            .select('*')
-            .eq('restaurant_id', rid)
-            .order('threshold', { ascending: true })
-        if (rewardsData) setAvailableRewards(rewardsData)
-        
         // 🎫 Fetch Private & Public Coupons for this specific session
         const { data: couponData } = await supabase
             .from('coupons')
@@ -616,96 +616,112 @@ function MenuContent() {
                         </div>
                     </Button>
                     <DialogContent className="p-0 border-none bg-slate-950 max-w-[320px] w-[90%] rounded-[2.5rem] overflow-hidden max-h-[90vh] flex flex-col shadow-2xl">
-                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-purple-500/10 pointer-events-none" />
-                        
-                        <div className="relative pt-6 pb-3 text-center border-b border-white/5 bg-white/[0.02] shrink-0">
-                            <div className="inline-flex items-center justify-center p-3 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl mb-2 shadow-2xl shadow-indigo-500/20">
-                                <Users className="h-5 w-5 text-white" />
+                        {!customerPhone ? (
+                            <div className="p-8 text-center flex flex-col items-center justify-center space-y-4 relative">
+                                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-purple-500/10 pointer-events-none" />
+                                <div className="h-20 w-20 bg-white/5 rounded-full flex items-center justify-center mb-2 shadow-inner border border-white/10 relative z-10">
+                                    <Phone className="h-8 w-8 text-indigo-400" />
+                                </div>
+                                <h3 className="text-2xl font-black text-white tracking-tight relative z-10">Unlock Referrals</h3>
+                                <p className="text-sm text-slate-400 font-medium relative z-10">Please place your first order or checkout to verify your phone number and unlock your unique referral code.</p>
+                                <Button className="w-full mt-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl h-14 font-black uppercase tracking-[0.2em] text-[11px] relative z-10 shadow-lg shadow-indigo-500/20" onClick={() => setIsReferDialogOpen(false)}>
+                                    Start Ordering
+                                </Button>
                             </div>
-                            <DialogTitle className="text-white text-xl font-black tracking-tight mb-0.5">Invite Friends</DialogTitle>
-                            <DialogDescription className="text-slate-400 text-[10px] max-w-[220px] mx-auto font-medium">
-                                Invite a friend & get <span className="text-white font-black bg-indigo-500/30 px-1.5 py-0.5 rounded-md border border-indigo-500/20">{renderReferReward()}</span> when they order!
-                            </DialogDescription>
-                        </div>
-
-                        <div className="p-4 space-y-4 relative overflow-y-auto flex-1 custom-scrollbar">
-                            <div className="bg-gradient-to-b from-white/[0.05] to-transparent border border-white/10 p-4 rounded-[1.5rem] text-center shadow-inner relative overflow-hidden group">
-                                <p className="text-[8px] font-black uppercase tracking-[0.4em] text-indigo-400 mb-2">Unique Code</p>
-                                <div className="text-2xl font-black text-white tracking-[0.2em] mb-4 select-all bg-black/40 py-2.5 rounded-lg border border-white/5 shadow-inner">
-                                    {referralCode || (customerPhone ? `RE-${customerPhone.replace(/\D/g, '').slice(-4)}` : 'GUEST')}
+                        ) : (
+                            <>
+                                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-purple-500/10 pointer-events-none" />
+                                
+                                <div className="relative pt-6 pb-3 text-center border-b border-white/5 bg-white/[0.02] shrink-0">
+                                    <div className="inline-flex items-center justify-center p-3 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl mb-2 shadow-2xl shadow-indigo-500/20">
+                                        <Users className="h-5 w-5 text-white" />
+                                    </div>
+                                    <DialogTitle className="text-white text-xl font-black tracking-tight mb-0.5">Invite Friends</DialogTitle>
+                                    <DialogDescription className="text-slate-400 text-[10px] max-w-[220px] mx-auto font-medium">
+                                        Invite a friend & get <span className="text-white font-black bg-indigo-500/30 px-1.5 py-0.5 rounded-md border border-indigo-500/20">{renderReferReward()}</span> when they order!
+                                    </DialogDescription>
                                 </div>
 
-                                <div className="grid grid-cols-1 gap-2.5">
-                                    <Button 
-                                        variant="default"
-                                        onClick={() => {
-                                            const code = referralCode || `RE-${customerPhone?.replace(/\D/g, '').slice(-4)}`;
-                                            const url = `${window.location.protocol}//${window.location.host}/customer/menu?id=${RESTAURANT_ID}&ref=${code}`;
-                                            
-                                            if (navigator.clipboard && navigator.clipboard.writeText) {
-                                                navigator.clipboard.writeText(url).then(() => {
-                                                    toast.success('Link Copied! 🚀');
-                                                }).catch(() => {
-                                                    const el = document.createElement('textarea');
-                                                    el.value = url;
-                                                    document.body.appendChild(el);
-                                                    el.select();
-                                                    document.execCommand('copy');
-                                                    document.body.removeChild(el);
-                                                    toast.success('Link Copied! 🚀');
-                                                });
-                                            } else {
-                                                toast.error('Browser blocked copy.');
-                                            }
-                                        }}
-                                        className="rounded-[0.8rem] bg-white text-black hover:bg-slate-100 h-10 font-black text-[10px] uppercase tracking-widest gap-2.5 shadow-xl shadow-white/5 active:scale-95 transition-all w-full"
-                                    >
-                                        <Copy className="h-4 w-4" />
-                                        Copy Invite Link
-                                    </Button>
-                                    
-                                    <Button 
-                                        variant="default"
-                                        onClick={() => {
-                                            const code = referralCode || `RE-${customerPhone?.replace(/\D/g, '').slice(-4)}`;
-                                            const url = `${window.location.protocol}//${window.location.host}/customer/menu?id=${RESTAURANT_ID}&ref=${code}`;
-                                            const text = `Join me at this restaurant! 🔥 Use my code & we both get rewards! 🍔\n\n${url}`;
-                                            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-                                        }}
-                                        className="rounded-[0.8rem] bg-[#25D366] text-white hover:bg-[#128C7E] h-10 font-black text-[10px] uppercase tracking-widest gap-2.5 shadow-xl shadow-green-500/20 active:scale-95 transition-all w-full"
-                                    >
-                                        <Bike className="h-4 w-4" />
-                                        Share via WhatsApp
-                                    </Button>
-                                </div>
-                            </div>
+                                <div className="p-4 space-y-4 relative overflow-y-auto flex-1 custom-scrollbar">
+                                    <div className="bg-gradient-to-b from-white/[0.05] to-transparent border border-white/10 p-4 rounded-[1.5rem] text-center shadow-inner relative overflow-hidden group">
+                                        <p className="text-[8px] font-black uppercase tracking-[0.4em] text-indigo-400 mb-2">Unique Code</p>
+                                        <div className="text-2xl font-black text-white tracking-[0.2em] mb-4 select-all bg-black/40 py-2.5 rounded-lg border border-white/5 shadow-inner">
+                                            {referralCode || (customerPhone ? `RE-${customerPhone.replace(/\D/g, '').slice(-4)}` : 'GUEST')}
+                                        </div>
 
-                            <div className="grid grid-cols-2 gap-3 pb-2">
-                                <div className="bg-white/5 p-3 rounded-[1.2rem] border border-white/10 text-center backdrop-blur-sm">
-                                    <p className="text-lg font-black text-white mb-0.5">{referralStats.invited}</p>
-                                    <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest leading-none">Dost Joined</p>
-                                </div>
-                                <div className="bg-white/5 p-3 rounded-[1.2rem] border border-white/10 text-center backdrop-blur-sm flex flex-col justify-center items-center">
-                                    {referralStats.unclaimedInvites > 0 ? (
-                                        <div className="w-full flex flex-col items-center">
-                                            <p className="text-sm font-black text-purple-400 mb-1">{referralStats.unclaimedEarned} Pending!</p>
+                                        <div className="grid grid-cols-1 gap-2.5">
                                             <Button 
-                                                onClick={handleClaimReferralPoints}
-                                                disabled={isClaimingReferral}
-                                                className="w-full h-6 text-[9px] uppercase tracking-wider font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-md p-0 m-0"
+                                                variant="default"
+                                                onClick={() => {
+                                                    const code = referralCode || `RE-${customerPhone?.replace(/\D/g, '').slice(-4)}`;
+                                                    const url = `${window.location.protocol}//${window.location.host}/customer/menu?id=${RESTAURANT_ID}&ref=${code}`;
+                                                    
+                                                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                                                        navigator.clipboard.writeText(url).then(() => {
+                                                            toast.success('Link Copied! 🚀');
+                                                        }).catch(() => {
+                                                            const el = document.createElement('textarea');
+                                                            el.value = url;
+                                                            document.body.appendChild(el);
+                                                            el.select();
+                                                            document.execCommand('copy');
+                                                            document.body.removeChild(el);
+                                                            toast.success('Link Copied! 🚀');
+                                                        });
+                                                    } else {
+                                                        toast.error('Browser blocked copy.');
+                                                    }
+                                                }}
+                                                className="rounded-[0.8rem] bg-white text-black hover:bg-slate-100 h-10 font-black text-[10px] uppercase tracking-widest gap-2.5 shadow-xl shadow-white/5 active:scale-95 transition-all w-full"
                                             >
-                                                {isClaimingReferral ? 'Claiming...' : 'Claim Now'}
+                                                <Copy className="h-4 w-4" />
+                                                Copy Invite Link
+                                            </Button>
+                                            
+                                            <Button 
+                                                variant="default"
+                                                onClick={() => {
+                                                    const code = referralCode || `RE-${customerPhone?.replace(/\D/g, '').slice(-4)}`;
+                                                    const url = `${window.location.protocol}//${window.location.host}/customer/menu?id=${RESTAURANT_ID}&ref=${code}`;
+                                                    const text = `Join me at this restaurant! 🔥 Use my code & we both get rewards! 🍔\n\n${url}`;
+                                                    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                                                }}
+                                                className="rounded-[0.8rem] bg-[#25D366] text-white hover:bg-[#128C7E] h-10 font-black text-[10px] uppercase tracking-widest gap-2.5 shadow-xl shadow-green-500/20 active:scale-95 transition-all w-full"
+                                            >
+                                                <Bike className="h-4 w-4" />
+                                                Share via WhatsApp
                                             </Button>
                                         </div>
-                                    ) : (
-                                        <>
-                                            <p className="text-lg font-black text-purple-400 mb-0.5">{referralStats.earned}</p>
-                                            <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest leading-none">Points Won</p>
-                                        </>
-                                    )}
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3 pb-2">
+                                        <div className="bg-white/5 p-3 rounded-[1.2rem] border border-white/10 text-center backdrop-blur-sm">
+                                            <p className="text-lg font-black text-white mb-0.5">{referralStats.invited}</p>
+                                            <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest leading-none">Dost Joined</p>
+                                        </div>
+                                        <div className="bg-white/5 p-3 rounded-[1.2rem] border border-white/10 text-center backdrop-blur-sm flex flex-col justify-center items-center">
+                                            {referralStats.unclaimedInvites > 0 ? (
+                                                <div className="w-full flex flex-col items-center">
+                                                    <p className="text-sm font-black text-purple-400 mb-1">{referralStats.unclaimedEarned} Pending!</p>
+                                                    <Button 
+                                                        onClick={handleClaimReferralPoints}
+                                                        disabled={isClaimingReferral}
+                                                        className="w-full h-6 text-[9px] uppercase tracking-wider font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-md p-0 m-0"
+                                                    >
+                                                        {isClaimingReferral ? 'Claiming...' : 'Claim Now'}
+                                                    </Button>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <p className="text-lg font-black text-purple-400 mb-0.5">{referralStats.earned}</p>
+                                                    <p className="text-[7px] font-bold text-slate-500 uppercase tracking-widest leading-none">Points Won</p>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
+                            </>
+                        )}
                     </DialogContent>
                 </Dialog>
             </div>

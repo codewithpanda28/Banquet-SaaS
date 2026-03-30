@@ -343,22 +343,25 @@ export function AdminHeader() {
                 // 1. Deduct from Restaurant Admin Coins (Restaurant Cost)
                 const { data: restData } = await supabase
                     .from('restaurants')
-                    .select('coin_balance, name')
+                    .select('coin_balance, name, coin_deduction_per_order')
                     .eq('id', restId)
                     .single()
                 
                 if (restData) {
                     const currentRestCoins = Number(restData.coin_balance) || 0
-                    const { data: updatedRest, error: restHeaderUpdateError } = await supabase
-                        .from('restaurants')
-                        .update({ coin_balance: Math.max(0, currentRestCoins - 5) })
-                        .eq('id', restId)
-                        .select();
+                    const deductAmount = restData.coin_deduction_per_order !== undefined ? Number(restData.coin_deduction_per_order) : 5
                     
-                    if (restHeaderUpdateError) {
-                        toast.error(`Admin Coin Deduction Failed: ${restHeaderUpdateError.message}`);
+                    const { data: updatedRest, error: restUpdateError } = await supabase
+                        .from('restaurants')
+                        .update({ coin_balance: Math.max(0, currentRestCoins - deductAmount) })
+                        .eq('id', restId)
+                        .select()
+
+                    if (restUpdateError) {
+                        toast.error(`Admin Coin Deduction Failed: ${restUpdateError.message}`)
                     } else if (updatedRest && updatedRest.length > 0) {
                         setRestaurantBalance(updatedRest[0].coin_balance)
+                        toast.success(`Deducted ${deductAmount} coins from ${restData.name} for this order`)
                     }
                 }
 

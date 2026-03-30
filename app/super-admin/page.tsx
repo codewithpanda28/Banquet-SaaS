@@ -43,7 +43,7 @@ export default function SuperAdminPage() {
 
   // Form State
   const [formData, setFormData] = useState({
-    name: '', slug: '', custom_domain: '', primary_color: '#ef4444', admin_passcode: '', whatsapp_number: '', report_whatsapp_number: '', whatsapp_token: '', whatsapp_api_id: '', whatsapp_api_url: 'https://thinkaiq.in/api', logo_url: '', banner_url: '', coin_balance: 0, webhook_url: ''
+    name: '', slug: '', custom_domain: '', primary_color: '#ef4444', admin_passcode: '', whatsapp_number: '', report_whatsapp_number: '', whatsapp_token: '', whatsapp_api_id: '', whatsapp_api_url: 'https://thinkaiq.in/api', logo_url: '', banner_url: '', coin_balance: 0, webhook_url: '', coin_deduction_per_order: 5
   });
 
   const [selectedRestro, setSelectedRestro] = useState<any>(null);
@@ -71,7 +71,7 @@ export default function SuperAdminPage() {
         }
         setIsModalOpen(false);
         setEditingId(null);
-        setFormData({ name: '', slug: '', custom_domain: '', primary_color: '#ef4444', admin_passcode: '', whatsapp_number: '', report_whatsapp_number: '', whatsapp_token: '', whatsapp_api_id: '', whatsapp_api_url: 'https://thinkaiq.in/api', logo_url: '', banner_url: '', coin_balance: 0, webhook_url: '' });
+        setFormData({ name: '', slug: '', custom_domain: '', primary_color: '#ef4444', admin_passcode: '', whatsapp_number: '', report_whatsapp_number: '', whatsapp_token: '', whatsapp_api_id: '', whatsapp_api_url: 'https://thinkaiq.in/api', logo_url: '', banner_url: '', coin_balance: 0, webhook_url: '', coin_deduction_per_order: 5 });
         fetchRestaurants();
     } catch (error: any) {
         toast.error(error.message || 'Transmission failed');
@@ -218,7 +218,7 @@ export default function SuperAdminPage() {
                             <div><h1 className="text-3xl font-black italic tracking-tighter mb-1">Platform Nodes</h1><p className="text-[10px] text-purple-500 font-bold uppercase tracking-widest">{restaurants.length} Neural Links Identified</p></div>
                             <div className="flex gap-3">
                                 <input type="text" placeholder="Locate node..." className="bg-white/5 border border-white/10 rounded-xl py-3 px-6 w-48 text-sm focus:ring-1 focus:ring-purple-500 outline-none" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                                <button onClick={() => { setEditingId(null); setFormData({ name: '', slug: '', custom_domain: '', primary_color: '#ef4444', admin_passcode: '', whatsapp_number: '', report_whatsapp_number: '', whatsapp_token: '', whatsapp_api_id: '', whatsapp_api_url: 'https://thinkaiq.in/api', logo_url: '', banner_url: '', coin_balance: 0, webhook_url: '' }); setIsModalOpen(true); }} className="bg-white text-black font-black px-6 py-3 rounded-xl flex items-center gap-2 text-xs transition-all shadow-xl hover:scale-105"><Plus size={16} /> Deploy Node</button>
+                                <button onClick={() => { setEditingId(null); setFormData({ name: '', slug: '', custom_domain: '', primary_color: '#ef4444', admin_passcode: '', whatsapp_number: '', report_whatsapp_number: '', whatsapp_token: '', whatsapp_api_id: '', whatsapp_api_url: 'https://thinkaiq.in/api', logo_url: '', banner_url: '', coin_balance: 0, webhook_url: '', coin_deduction_per_order: 5 }); setIsModalOpen(true); }} className="bg-white text-black font-black px-6 py-3 rounded-xl flex items-center gap-2 text-xs transition-all shadow-xl hover:scale-105"><Plus size={16} /> Deploy Node</button>
                             </div>
                         </header>
                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -234,7 +234,7 @@ export default function SuperAdminPage() {
                                     </div>
                                     <div className="flex gap-2 mt-6 relative z-10">
                                         <button onClick={() => setSelectedRestro(restaurant)} className="flex-1 bg-purple-600 font-black py-3 rounded-xl text-[9px] uppercase shadow-lg text-white hover:bg-purple-500 transition-all">Terminal</button>
-                                        <button onClick={() => { setEditingId(restaurant.id); setFormData({ name: restaurant.name || '', slug: restaurant.slug || '', custom_domain: restaurant.custom_domain || '', primary_color: restaurant.primary_color || '#ef4444', admin_passcode: restaurant.admin_passcode || '', whatsapp_number: restaurant.whatsapp_number || '', report_whatsapp_number: restaurant.report_whatsapp_number || '', whatsapp_token: restaurant.whatsapp_token || '', whatsapp_api_id: restaurant.whatsapp_api_id || '', whatsapp_api_url: restaurant.whatsapp_api_url || 'https://thinkaiq.in/api', logo_url: restaurant.logo_url || '', banner_url: restaurant.banner_url || '', coin_balance: restaurant.coin_balance || 0, webhook_url: restaurant.webhook_url || '' }); setIsModalOpen(true); }} className="px-4 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all"><Pencil size={14} className="text-gray-400" /></button>
+                                        <button onClick={() => { setEditingId(restaurant.id); setFormData({ name: restaurant.name || '', slug: restaurant.slug || '', custom_domain: restaurant.custom_domain || '', primary_color: restaurant.primary_color || '#ef4444', admin_passcode: restaurant.admin_passcode || '', whatsapp_number: restaurant.whatsapp_number || '', report_whatsapp_number: restaurant.report_whatsapp_number || '', whatsapp_token: restaurant.whatsapp_token || '', whatsapp_api_id: restaurant.whatsapp_api_id || '', whatsapp_api_url: restaurant.whatsapp_api_url || 'https://thinkaiq.in/api', logo_url: restaurant.logo_url || '', banner_url: restaurant.banner_url || '', coin_balance: restaurant.coin_balance || 0, webhook_url: restaurant.webhook_url || '', coin_deduction_per_order: restaurant.coin_deduction_per_order !== undefined ? restaurant.coin_deduction_per_order : 5 }); setIsModalOpen(true); }} className="px-4 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all"><Pencil size={14} className="text-gray-400" /></button>
                                         <button 
                                             type="button"
                                             onClick={(e) => {
@@ -535,9 +535,13 @@ export default function SuperAdminPage() {
                                     <label className="text-[9px] uppercase font-black text-gray-500 ml-2">Primary Color</label>
                                     <input type="color" className="w-full h-12 bg-black border border-white/10 p-1 rounded-xl outline-none cursor-pointer" value={formData.primary_color} onChange={(e) => setFormData({...formData, primary_color: e.target.value})} />
                                 </div>
-                                <div className="space-y-1 md:col-span-2">
+                                <div className="space-y-1">
                                     <label className="text-[9px] uppercase font-black text-gray-500 ml-2">Initial Coin Balance</label>
                                     <input type="number" className="w-full bg-black border border-white/10 p-4 rounded-xl outline-none focus:border-purple-500 transition-all text-sm" value={formData.coin_balance} onChange={(e) => setFormData({...formData, coin_balance: parseInt(e.target.value) || 0})} />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[9px] uppercase font-black text-orange-500 ml-2">Deduction / Order</label>
+                                    <input type="number" className="w-full bg-black border border-orange-500/30 p-4 rounded-xl outline-none focus:border-orange-500 transition-all text-sm font-black text-orange-400" value={formData.coin_deduction_per_order} onChange={(e) => setFormData({...formData, coin_deduction_per_order: parseInt(e.target.value) || 0})} />
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

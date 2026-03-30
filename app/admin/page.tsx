@@ -739,15 +739,16 @@ export default function AdminDashboard() {
                 // We fetch first to ensure we have the latest balance for safety
                 const { data: restData } = await supabase
                     .from('restaurants')
-                    .select('coin_balance, name')
+                    .select('coin_balance, name, coin_deduction_per_order')
                     .eq('id', restId)
                     .single();
 
                 if (restData) {
                     const currentRestCoins = Number(restData.coin_balance) || 0;
+                    const deductAmount = restData.coin_deduction_per_order !== undefined ? Number(restData.coin_deduction_per_order) : 5;
                     const { data: updatedRest, error: restUpdateError } = await supabase
                         .from('restaurants')
-                        .update({ coin_balance: Math.max(0, currentRestCoins - 5) })
+                        .update({ coin_balance: Math.max(0, currentRestCoins - deductAmount) })
                         .eq('id', restId)
                         .select();
 
@@ -758,8 +759,8 @@ export default function AdminDashboard() {
                         console.error('⚠️ [Admin Wallet Security]: Update successful but 0 rows affected. RLS block suspected.');
                         toast.warning(`Security: Coins not deducted (matched 0 rows). Verify ID: ${restId.substring(0,8)}...`);
                     } else {
-                        console.log('✅ [Admin Coins] Deducted 5 coins successfully. New balance:', updatedRest[0].coin_balance);
-                        toast.success(`Deducted 5 coins from ${restData.name}`);
+                        console.log(`✅ [Admin Coins] Deducted ${deductAmount} coins successfully. New balance:`, updatedRest[0].coin_balance);
+                        toast.success(`Deducted ${deductAmount} coins from ${restData.name}`);
                         // Notify header to refresh balance
                         window.dispatchEvent(new CustomEvent('refresh-admin-balance'));
                     }
