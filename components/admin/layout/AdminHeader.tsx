@@ -339,7 +339,8 @@ export function AdminHeader() {
             // --- LOYALTY & ADMIN COINS LOGIC ---
             if ((method === 'cash' || method === 'upi' || method === 'mixed') && Number(total) > 200) {
                 const restId = String(RESTAURANT_ID);
-                
+                let deductAmount = 5;
+
                 // 1. Deduct from Restaurant Admin Coins (Restaurant Cost)
                 const { data: restData } = await supabase
                     .from('restaurants')
@@ -349,7 +350,9 @@ export function AdminHeader() {
                 
                 if (restData) {
                     const currentRestCoins = Number(restData.coin_balance) || 0
-                    const deductAmount = restData.coin_deduction_per_order !== undefined ? Number(restData.coin_deduction_per_order) : 5
+                    if (restData.coin_deduction_per_order !== undefined && restData.coin_deduction_per_order !== null) {
+                        deductAmount = Number(restData.coin_deduction_per_order);
+                    }
                     
                     const { data: updatedRest, error: restUpdateError } = await supabase
                         .from('restaurants')
@@ -375,7 +378,7 @@ export function AdminHeader() {
 
                     if (customerData) {
                         const currentBalance = Number(customerData.wallet_balance) || 0;
-                        const deduction = 5;
+                        const deduction = deductAmount;
                         
                         // A. Deduct balance
                         await supabase

@@ -734,7 +734,8 @@ export default function AdminDashboard() {
             // Only deduct if order > 200 and payment is Cash/UPI/Mixed
             if ((method === 'cash' || method === 'upi' || method === 'mixed') && Number(selectedOrder.total) > 200) {
                 const restId = String(RESTAURANT_ID);
-                
+                let deductAmount = 5;
+
                 // 1. Deduct from Restaurant Admin Coins (The Platform Fee)
                 // We fetch first to ensure we have the latest balance for safety
                 const { data: restData } = await supabase
@@ -745,7 +746,9 @@ export default function AdminDashboard() {
 
                 if (restData) {
                     const currentRestCoins = Number(restData.coin_balance) || 0;
-                    const deductAmount = restData.coin_deduction_per_order !== undefined ? Number(restData.coin_deduction_per_order) : 5;
+                    if (restData.coin_deduction_per_order !== undefined && restData.coin_deduction_per_order !== null) {
+                        deductAmount = Number(restData.coin_deduction_per_order);
+                    }
                     const { data: updatedRest, error: restUpdateError } = await supabase
                         .from('restaurants')
                         .update({ coin_balance: Math.max(0, currentRestCoins - deductAmount) })
@@ -777,7 +780,8 @@ export default function AdminDashboard() {
 
                     if (customerData) {
                         const currentBalance = Number(customerData.wallet_balance) || 0;
-                        const deduction = 5;
+                        // Use the dynamic deduction rate set by Super Admin
+                        const deduction = deductAmount;
 
                         // A. Deduct balance
                         await supabase
@@ -1167,7 +1171,7 @@ export default function AdminDashboard() {
                                 </CardTitle>
                                 <Badge className="bg-amber-100 text-amber-700 border-none font-bold text-[9px] uppercase tracking-widest px-2 animate-pulse">Live Ledger</Badge>
                             </div>
-                            <CardDescription className="text-xs text-gray-500">Manage 5rs loyalty settlements</CardDescription>
+                            <CardDescription className="text-xs text-gray-500">Manage per-order loyalty settlements</CardDescription>
                         </CardHeader>
                         <CardContent className="relative z-10 px-0 pt-2">
                             <ScrollArea className="h-[320px] px-6">
