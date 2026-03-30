@@ -53,11 +53,16 @@ export default function TableBookingPage() {
 
     async function fetchAll() {
         setLoading(true)
-        const today = startOfDay(new Date()).toISOString()
+        const thirtyDaysAgo = new Date()
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+        
         const [{ data: tablesData }, { data: bookingsData }] = await Promise.all([
             supabase.from('restaurant_tables').select('*').eq('restaurant_id', RESTAURANT_ID).order('table_number'),
             supabase.from('table_bookings').select('*, restaurant_tables(table_number, table_name, capacity)')
-                .eq('restaurant_id', RESTAURANT_ID).gte('booking_date', today.split('T')[0]).order('booking_date').order('booking_time')
+                .eq('restaurant_id', RESTAURANT_ID)
+                .gte('booking_date', thirtyDaysAgo.toISOString().split('T')[0])
+                .order('booking_date', { ascending: false }) // Show newest first
+                .order('booking_time')
         ])
         setTables(tablesData || [])
         setBookings(bookingsData || [])
@@ -135,6 +140,7 @@ export default function TableBookingPage() {
 
     const todayBookings = filteredBookings.filter(b => b.booking_date === format(new Date(), 'yyyy-MM-dd'))
     const upcomingBookings = filteredBookings.filter(b => b.booking_date > format(new Date(), 'yyyy-MM-dd'))
+    const pastBookings = filteredBookings.filter(b => b.booking_date < format(new Date(), 'yyyy-MM-dd'))
 
     const statusColor = (s: string) => s === 'confirmed' ? 'bg-blue-100 text-blue-700' : s === 'seated' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
 
@@ -231,10 +237,10 @@ export default function TableBookingPage() {
                     </div>
                 </CardHeader>
                 <CardContent className="p-0">
-                    {todayBookings.length === 0 && upcomingBookings.length === 0 ? (
+                    {todayBookings.length === 0 && upcomingBookings.length === 0 && pastBookings.length === 0 ? (
                         <div className="text-center py-12 text-gray-400">
                             <CalendarCheck className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                            <p>No upcoming bookings</p>
+                            <p>No actual bookings found</p>
                         </div>
                     ) : (
                         <div className="divide-y divide-gray-50">
@@ -248,6 +254,12 @@ export default function TableBookingPage() {
                                 <div className="px-4 py-2 bg-blue-50 text-xs font-bold text-blue-700 uppercase tracking-wider">Upcoming</div>
                             )}
                             {upcomingBookings.map(b => (
+                                <BookingRow key={b.id} booking={b} onCancel={cancelBooking} onSeated={markSeated} statusColor={statusColor} />
+                            ))}
+                            {pastBookings.length > 0 && (
+                                <div className="px-4 py-2 bg-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">Past (Last 30 Days) / Testing</div>
+                            )}
+                            {pastBookings.map(b => (
                                 <BookingRow key={b.id} booking={b} onCancel={cancelBooking} onSeated={markSeated} statusColor={statusColor} />
                             ))}
                         </div>
