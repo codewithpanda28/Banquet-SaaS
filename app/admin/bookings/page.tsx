@@ -126,6 +126,13 @@ export default function TableBookingPage() {
         else { toast.success('Booking cancelled'); fetchAll() }
     }
 
+    async function deleteBooking(id: string) {
+        if (!confirm('Are you sure you want to permanently delete this booking?')) return
+        const { error } = await supabase.from('table_bookings').delete().eq('id', id)
+        if (error) toast.error('Failed to delete')
+        else { toast.success('Booking permanently deleted'); fetchAll() }
+    }
+
     async function markSeated(id: string, tableId: string) {
         await supabase.from('table_bookings').update({ status: 'seated' }).eq('id', id)
         await supabase.from('restaurant_tables').update({ status: 'occupied' }).eq('id', tableId)
@@ -248,19 +255,19 @@ export default function TableBookingPage() {
                                 <div className="px-4 py-2 bg-green-50 text-xs font-bold text-green-700 uppercase tracking-wider">Today</div>
                             )}
                             {todayBookings.map(b => (
-                                <BookingRow key={b.id} booking={b} onCancel={cancelBooking} onSeated={markSeated} statusColor={statusColor} />
+                                <BookingRow key={b.id} booking={b} onCancel={cancelBooking} onSeated={markSeated} onDelete={deleteBooking} statusColor={statusColor} />
                             ))}
                             {upcomingBookings.length > 0 && (
                                 <div className="px-4 py-2 bg-blue-50 text-xs font-bold text-blue-700 uppercase tracking-wider">Upcoming</div>
                             )}
                             {upcomingBookings.map(b => (
-                                <BookingRow key={b.id} booking={b} onCancel={cancelBooking} onSeated={markSeated} statusColor={statusColor} />
+                                <BookingRow key={b.id} booking={b} onCancel={cancelBooking} onSeated={markSeated} onDelete={deleteBooking} statusColor={statusColor} />
                             ))}
                             {pastBookings.length > 0 && (
                                 <div className="px-4 py-2 bg-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider">Past (Last 30 Days) / Testing</div>
                             )}
                             {pastBookings.map(b => (
-                                <BookingRow key={b.id} booking={b} onCancel={cancelBooking} onSeated={markSeated} statusColor={statusColor} />
+                                <BookingRow key={b.id} booking={b} onCancel={cancelBooking} onSeated={markSeated} onDelete={deleteBooking} statusColor={statusColor} />
                             ))}
                         </div>
                     )}
@@ -374,8 +381,8 @@ export default function TableBookingPage() {
     )
 }
 
-function BookingRow({ booking, onCancel, onSeated, statusColor }: {
-    booking: Booking; onCancel: (id: string) => void; onSeated: (id: string, tableId: string) => void;
+function BookingRow({ booking, onCancel, onSeated, onDelete, statusColor }: {
+    booking: Booking; onCancel: (id: string) => void; onSeated: (id: string, tableId: string) => void; onDelete: (id: string) => void;
     statusColor: (s: string) => string
 }) {
     return (
@@ -395,7 +402,7 @@ function BookingRow({ booking, onCancel, onSeated, statusColor }: {
                     <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{booking.booking_time}</span>
                 </div>
             </div>
-            <div className="flex gap-2 shrink-0">
+            <div className="flex gap-2 shrink-0 items-center">
                 {booking.status === 'confirmed' && (
                     <Button size="sm" className="bg-green-600 text-white text-xs h-8" onClick={() => onSeated(booking.id, booking.table_id)}>
                         <CheckCircle2 className="h-3 w-3 mr-1" /> Seat
@@ -406,6 +413,9 @@ function BookingRow({ booking, onCancel, onSeated, statusColor }: {
                         <XCircle className="h-3 w-3 mr-1" /> Cancel
                     </Button>
                 )}
+                <Button size="icon" variant="ghost" className="text-gray-400 hover:text-red-700 hover:bg-red-50 h-8 w-8 ml-1" onClick={() => onDelete(booking.id)} title="Permenantly Delete">
+                    <Trash2 className="h-4 w-4" />
+                </Button>
             </div>
         </div>
     )
