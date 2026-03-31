@@ -129,48 +129,72 @@ export default function BillsPage() {
             sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
             const cutoffDate = sixtyDaysAgo.toISOString()
 
+            // Fetch old completed orders
             const { data: oldOrders, error: fetchErr } = await supabase
                 .from('orders')
-                .select(`*, customers (name, phone), order_items (*)`)
+                .select(`
+                    id, 
+                    bill_id, 
+                    total, 
+                    subtotal, 
+                    tax, 
+                    sgst_amount, 
+                    cgst_amount, 
+                    payment_method, 
+                    status, 
+                    created_at, 
+                    customer_name,
+                    customer_phone,
+                    customers (name, phone)
+                `)
                 .eq('restaurant_id', RESTAURANT_ID)
+                .eq('status', 'completed')
                 .lte('created_at', cutoffDate)
 
             if (fetchErr) throw fetchErr
 
             if (!oldOrders || oldOrders.length === 0) {
-                toast.success('No bills older than 60 days to archive!')
+                toast.error('No bills older than 60 days found to archive.')
                 return
             }
 
-            const csvRows = [['Bill ID', 'Customer', 'Phone', 'Subtotal', 'SGST', 'CGST', 'Total', 'Payment', 'Status', 'Date']]
-            oldOrders.forEach((o: any) => {
+            // CSV Generation with Escaping
+            const headers = ['Bill ID', 'Customer', 'Phone', 'Subtotal', 'SGST', 'CGST', 'Total', 'Payment', 'Status', 'Date']
+            const rows = oldOrders.map((o: any) => {
                 const cust = Array.isArray(o.customers) ? o.customers[0] : o.customers
-                csvRows.push([
-                    o.bill_id,
-                    cust?.name || 'Walk-in',
-                    cust?.phone || '',
-                    o.subtotal?.toString() || '',
-                    o.sgst_amount?.toString() || '',
-                    o.cgst_amount?.toString() || '',
-                    o.total?.toString() || '',
+                return [
+                    o.bill_id || '',
+                    cust?.name || o.customer_name || 'Walk-in',
+                    cust?.phone || o.customer_phone || '',
+                    o.subtotal || '',
+                    o.sgst_amount || 0,
+                    o.cgst_amount || 0,
+                    o.total || '',
                     o.payment_method || '',
                     o.status || '',
                     format(parseDate(o.created_at), 'dd/MM/yyyy HH:mm')
-                ])
+                ]
             })
 
-            const csvContent = csvRows.map(r => r.join(',')).join('\n')
-            const blob = new Blob([csvContent], { type: 'text/csv' })
+            const csvContent = [
+                headers.join(','),
+                ...rows.map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(','))
+            ].join('\n')
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
             const url = URL.createObjectURL(blob)
             const link = document.createElement('a')
-            link.href = url
-            link.download = `archive-${format(new Date(), 'yyyy-MM-dd')}.csv`
+            link.setAttribute('href', url)
+            link.setAttribute('download', `archived_bills_${format(new Date(), 'yyyyMMdd_HHmm')}.csv`)
+            link.style.visibility = 'hidden'
+            document.body.appendChild(link)
             link.click()
+            document.body.removeChild(link)
             URL.revokeObjectURL(url)
 
             setArchivedCount(oldOrders.length)
             setShowArchiveConfirm(true)
-            toast.success(`Exported ${oldOrders.length} records.`)
+            toast.success(`Exported ${oldOrders.length} records. Check your downloads.`)
         } catch (error) {
             console.error('Archiving error:', error)
             toast.error('Failed to create archive')
@@ -298,6 +322,124 @@ export default function BillsPage() {
         handlePrintBills(selectedOrderData)
     }
 
+    const exportToCSV = () => {
+        if (filteredOrders.length === 0) {
+            toast.error('No data to export')
+            return
+        }
+
+        const headers = ['Bill ID', 'Customer', 'Phone', 'Amount', 'Tax', 'Payment', 'Time', 'Date']
+        const rows = filteredOrders.map(o => {
+            const cust = Array.isArray(o.customers) ? o.customers[0] : o.customers
+            return [
+                o.bill_id || '',
+                cust?.name || 'Walk-in',
+                cust?.phone || '',
+                o.total || '',
+                o.tax || 0,
+                o.payment_method || '',
+                format(parseDate(o.created_at), 'hh:mm a'),
+                format(parseDate(o.created_at), 'dd/MM/yyyy')
+            ]
+        })
+
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(','))
+        ].join('\n')
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.setAttribute('href', url)
+        link.setAttribute('download', `bill_history_${dateFilter}.csv`)
+        link.style.visibility = 'hidden'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+
+        toast.success('Bill history downloaded as CSV!')
+    }
+
+    const exportLast60Days = async () => {
+        try {
+            setLoading(true)
+            const sixtyDaysAgo = new Date()
+            sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
+            const cutoffDate = sixtyDaysAgo.toISOString()
+
+            const { data: recentOrders, error } = await supabase
+                .from('orders')
+                .select(`
+                    bill_id, 
+                    total, 
+                    subtotal,
+                    tax, 
+                    sgst_amount,
+                    cgst_amount,
+                    payment_method, 
+                    created_at, 
+                    customer_name,
+                    customer_phone,
+                    customers (name, phone)
+                `)
+                .eq('restaurant_id', RESTAURANT_ID)
+                .eq('status', 'completed')
+                .gte('created_at', cutoffDate)
+                .order('created_at', { ascending: false })
+
+            if (error) throw error
+
+            if (!recentOrders || recentOrders.length === 0) {
+                toast.error('No bills found in the last 60 days.')
+                return
+            }
+
+            const headers = ['Bill ID', 'Customer', 'Phone', 'Subtotal', 'SGST', 'CGST', 'Tax', 'Amount', 'Payment', 'Date', 'Time']
+            const rows = recentOrders.map((o: any) => {
+                const cust = Array.isArray(o.customers) ? o.customers[0] : o.customers
+                const date = parseDate(o.created_at)
+                return [
+                    o.bill_id || '',
+                    cust?.name || o.customer_name || 'Guest',
+                    cust?.phone || o.customer_phone || '',
+                    o.subtotal || o.total,
+                    o.sgst_amount || 0,
+                    o.cgst_amount || 0,
+                    o.tax || 0,
+                    o.total || 0,
+                    o.payment_method || '',
+                    format(date, 'dd/MM/yyyy'),
+                    format(date, 'hh:mm a')
+                ]
+            })
+
+            const csvContent = [
+                headers.join(','),
+                ...rows.map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(','))
+            ].join('\n')
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+            const url = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.setAttribute('href', url)
+            link.setAttribute('download', `last_60_days_bills_${format(new Date(), 'yyyyMMdd')}.csv`)
+            link.style.visibility = 'hidden'
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            URL.revokeObjectURL(url)
+
+            toast.success(`Successfully exported ${recentOrders.length} bills from the last 60 days!`)
+        } catch (error) {
+            console.error('Export error:', error)
+            toast.error('Failed to export recent bills')
+        } finally {
+            setLoading(false)
+        }
+    }
+
     if (loading) {
         return (
             <div className="flex min-h-[400px] items-center justify-center">
@@ -313,23 +455,37 @@ export default function BillsPage() {
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <PageHeader title="Bills History" description="View and download closed bills for your records">
                 <div className="flex gap-4">
-                    <Button 
-                        onClick={handleArchiveAndCleanup} 
-                        disabled={isArchiving}
-                        variant="outline"
-                        className="border-orange-200 bg-orange-50/50 text-orange-700 hover:bg-orange-100 hover:text-orange-800 font-bold"
-                    >
-                        {isArchiving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DatabaseZap className="mr-2 h-4 w-4" />}
-                        Archive & Cleanup (60d+)
-                    </Button>
-                    <div className="h-10 w-px bg-gray-200 mx-2" />
-                    {selectedBills.length > 0 && (
-                        <Button onClick={downloadSelected} className="bg-primary hover:bg-primary/90 text-white font-bold shadow-lg shadow-primary/20">
-                            <Download className="mr-2 h-4 w-4" />
-                            Download Selected ({selectedBills.length})
+                    <div className="flex flex-col gap-2">
+                        <Button 
+                            onClick={handleArchiveAndCleanup} 
+                            disabled={isArchiving}
+                            variant="outline"
+                            size="sm"
+                            className="h-8 border-orange-200 bg-orange-50/50 text-orange-700 hover:bg-orange-100 hover:text-orange-800 text-[10px] font-bold"
+                        >
+                            {isArchiving ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <Archive className="mr-2 h-3 w-3" />}
+                            Cleanup Old (60d+)
                         </Button>
-                    )}
-                    <div className="relative">
+                        <Button 
+                            onClick={exportLast60Days}
+                            variant="outline"
+                            size="sm"
+                            className="h-8 border-blue-200 bg-blue-50/50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 text-[10px] font-bold"
+                        >
+                            <Download className="mr-2 h-3 w-3" />
+                            Export Last 60 Days
+                        </Button>
+                    </div>
+                    <div className="h-16 w-px bg-gray-200 mx-2 self-center" />
+                    <div className="flex flex-col gap-2">
+                        {selectedBills.length > 0 && (
+                            <Button onClick={downloadSelected} size="sm" className="h-8 bg-primary/10 border border-primary/20 text-primary hover:bg-primary/20 font-bold shadow-sm text-[10px]">
+                                <Printer className="mr-2 h-3 w-3" />
+                                Print Selected ({selectedBills.length})
+                            </Button>
+                        )}
+                    </div>
+                    <div className="relative self-center">
                         <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary" />
                         <Input 
                             type="date" 
@@ -451,19 +607,48 @@ export default function BillsPage() {
 
             {/* Details Dialog */}
             <Dialog open={!!selectedOrder} onOpenChange={(open) => !open && setSelectedOrder(null)}>
-                <DialogContent className="max-w-md p-0 overflow-hidden rounded-3xl border-none shadow-2xl">
+                <DialogContent className="max-w-md p-0 overflow-hidden rounded-3xl border-none shadow-2xl [&>button]:hidden">
                    {selectedOrder && (
                        <div className="bg-white">
                            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-                               <div><h3 className="text-xl font-bold text-gray-900">Bill Details</h3><p className="text-xs text-gray-500">{selectedOrder.bill_id}</p></div>
-                               <Button variant="ghost" size="icon" onClick={() => setSelectedOrder(null)}><XCircle className="h-5 w-5 text-gray-400" /></Button>
+                               <div>
+                                   <DialogTitle className="text-xl font-bold text-gray-900 line-clamp-1">Bill Details</DialogTitle>
+                                   <p className="text-xs text-gray-500">{selectedOrder.bill_id}</p>
+                               </div>
+                               <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={() => setSelectedOrder(null)}>
+                                  <XCircle className="h-10 w-10 text-gray-400" />
+                                </Button>
                            </div>
                            <div className="p-6 space-y-6">
+                               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 mb-6">
+                                   <div className="flex items-center gap-3 mb-3">
+                                       <div className="h-10 w-10 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100">
+                                           <User className="h-5 w-5 text-gray-400" />
+                                       </div>
+                                       <div>
+                                           <p className="text-[10px] font-bold uppercase text-gray-400 tracking-wider">Customer Information</p>
+                                           <h4 className="font-bold text-gray-900 leading-none mt-1">
+                                               {(Array.isArray(selectedOrder.customers) ? selectedOrder.customers[0] : selectedOrder.customers)?.name || selectedOrder.customer_name || 'Walk-in Guest'}
+                                           </h4>
+                                       </div>
+                                   </div>
+                                   <div className="grid grid-cols-2 gap-4 text-[11px] font-medium text-gray-500 bg-white/50 p-2 rounded-xl">
+                                       <div className="flex items-center gap-2">
+                                           <Smartphone className="h-3 w-3" />
+                                           <span>{(Array.isArray(selectedOrder.customers) ? selectedOrder.customers[0] : selectedOrder.customers)?.phone || selectedOrder.customer_phone || 'No phone'}</span>
+                                       </div>
+                                       <div className="flex items-center gap-2">
+                                           <Wallet className="h-3 w-3" />
+                                           <span className="uppercase">{selectedOrder.payment_method || 'Cash'}</span>
+                                       </div>
+                                   </div>
+                               </div>
+
                                <div className="space-y-4">
                                    {selectedOrder.order_items?.map((item: any) => (
                                        <div key={item.id} className="flex justify-between items-center text-sm">
                                            <div className="flex gap-3 items-center"><span className="h-6 w-6 bg-gray-100 rounded-full flex items-center justify-center text-[10px] font-bold">{item.quantity}</span><span>{item.item_name}</span></div>
-                                           <span className="font-bold">₹{item.total.toFixed(2)}</span>
+                                           <span className="font-bold text-gray-900">₹{item.total.toFixed(2)}</span>
                                        </div>
                                    ))}
                                </div>
@@ -482,11 +667,11 @@ export default function BillsPage() {
 
             {/* Archive Confirm */}
             <Dialog open={showArchiveConfirm} onOpenChange={setShowArchiveConfirm}>
-                <DialogContent className="max-w-md p-8 rounded-[2rem]">
+                <DialogContent className="max-w-md p-8 rounded-[2rem] [&>button]:hidden">
                     <div className="flex flex-col items-center text-center space-y-6">
                         <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center"><AlertTriangle className="h-10 w-10 text-orange-600" /></div>
                         <div className="space-y-2">
-                            <h3 className="text-2xl font-black text-gray-900">Archive Downloaded!</h3>
+                            <DialogTitle className="text-2xl font-black text-gray-900">Archive Downloaded!</DialogTitle>
                             <p className="text-gray-500 font-medium">Exported <span className="text-orange-600 font-bold">{archivedCount}</span> old records.</p>
                             <p className="text-xs text-orange-600 bg-orange-50 p-3 rounded-xl font-bold mt-4">IMPORTANT: Would you like to PERMANENTLY remove these records from the live database now?</p>
                         </div>

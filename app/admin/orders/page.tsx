@@ -53,7 +53,7 @@ export default function OrdersPage() {
     const [manualCart, setManualCart] = useState<any[]>([])
     const [manualOrderType, setManualOrderType] = useState<string>('dine_in')
     const [manualTableId, setManualTableId] = useState<string>('')
-    const [manualCustomer, setManualCustomer] = useState({ name: '', phone: '' })
+    const [manualCustomer, setManualCustomer] = useState({ name: '', phone: '', address: '' })
     const [menuSearch, setMenuSearch] = useState('')
     const [selectedCategory, setSelectedCategory] = useState<string>('all')
     const [taxRates, setTaxRates] = useState<{sgst: number, cgst: number}>({ sgst: 2.5, cgst: 2.5 })
@@ -153,7 +153,7 @@ export default function OrdersPage() {
             // Reset modal state on close
             setManualCart([])
             setManualTableId('')
-            setManualCustomer({ name: '', phone: '' })
+            setManualCustomer({ name: '', phone: '', address: '' })
         }
     }, [isManualOrderOpen])
 
@@ -177,6 +177,8 @@ export default function OrdersPage() {
                 .select('*')
                 .eq('restaurant_id', RESTAURANT_ID)
                 .eq('is_active', true)
+                .eq('status', 'available')
+                .order('table_number', { ascending: true })
 
             const { data: restaurant } = await supabase
                 .from('restaurants')
@@ -264,7 +266,8 @@ export default function OrdersPage() {
                         .insert([{
                             restaurant_id: RESTAURANT_ID,
                             name: manualCustomer.name || 'Guest',
-                            phone: manualCustomer.phone
+                            phone: manualCustomer.phone,
+                            address: manualCustomer.address
                         }])
                         .select()
                         .single()
@@ -288,6 +291,7 @@ export default function OrdersPage() {
                     cgst_amount: cgstAmount,
                     tax: sgstAmount + cgstAmount,
                     total: total,
+                    delivery_address: manualOrderType === 'home_delivery' ? manualCustomer.address : null,
                     notes: 'Manual Admin Entry'
                 }])
                 .select()
@@ -1085,52 +1089,66 @@ export default function OrdersPage() {
             </Dialog>
 
             <Dialog open={isManualOrderOpen} onOpenChange={setIsManualOrderOpen}>
-                <DialogContent className="max-w-[95vw] sm:max-w-[1200px] w-full rounded-[2.5rem] border-none shadow-2xl p-0 overflow-hidden bg-white h-[90vh] max-h-[90vh] flex flex-col">
+                <DialogContent className="max-w-[95vw] sm:max-w-[1200px] w-full rounded-[2.5rem] border-none shadow-2xl p-0 overflow-hidden bg-white h-[90vh] max-h-[90vh] flex flex-col [&>button]:hidden">
                     <div className="flex flex-col h-full bg-white flex-1 overflow-hidden">
                         {/* Improved Header */}
-                        <DialogHeader className="p-8 pb-6 bg-gradient-to-r from-gray-900 to-slate-800 text-white flex-row items-center justify-between space-y-0 relative overflow-hidden">
+                        <DialogHeader className="p-6 bg-gradient-to-r from-slate-900 to-slate-800 text-white flex-row items-center justify-between space-y-0 relative overflow-hidden shrink-0 border-b border-white/5">
                             <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 rounded-full blur-[100px] -z-10" />
-                            <div className="relative z-10">
-                                <h2 className="text-3xl font-bold tracking-tight leading-none mb-2 underline decoration-primary decoration-4 underline-offset-8">Quick Billing</h2>
-                                <p className="text-gray-400 text-sm font-medium">Create and process manual orders for walk-in guests</p>
-                            </div>
                             
-                            <div className="flex gap-4 items-center bg-black/20 backdrop-blur-md p-3 rounded-2xl border border-white/10 shadow-inner">
-                                <div className="flex flex-col gap-1">
-                                    <Label className="text-[10px] font-bold uppercase text-gray-300 ml-1">Service Type</Label>
-                                    <Select value={manualOrderType} onValueChange={(v: any) => setManualOrderType(v)}>
-                                        <SelectTrigger className="w-[140px] h-10 border-white/10 bg-white/10 hover:bg-white/20 focus:ring-0 text-sm font-semibold text-white rounded-xl transition-colors">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="dine_in">🍽️ Dine In</SelectItem>
-                                            <SelectItem value="take_away">🥡 Takeaway</SelectItem>
-                                            <SelectItem value="home_delivery">🚚 Delivery</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                            <div className="relative z-10">
+                                <div className="space-y-1">
+                                    <DialogTitle className="text-2xl font-black tracking-tight leading-none underline decoration-primary decoration-4 underline-offset-4 text-white">Quick Billing</DialogTitle>
+                                    <p className="text-gray-400 text-[10px] font-bold uppercase tracking-widest opacity-80">Manual Entry Dashboard</p>
                                 </div>
-                                {manualOrderType === 'dine_in' && (
-                                    <div className="flex flex-col gap-1 pl-4 border-l border-white/10">
-                                        <Label className="text-[10px] font-bold uppercase text-gray-300 ml-1">Assign Table</Label>
-                                        <Select value={manualTableId} onValueChange={setManualTableId}>
-                                            <SelectTrigger className="w-[120px] h-10 border-white/10 bg-white/10 hover:bg-white/20 focus:ring-0 text-sm font-semibold text-white rounded-xl transition-colors">
-                                                <SelectValue placeholder="Select" />
+                            </div>
+
+                            <div className="relative z-20 flex items-center gap-4">
+                                <div className="hidden md:flex gap-4 items-center bg-white/5 backdrop-blur-md p-1.5 px-4 rounded-2xl border border-white/10 shadow-xl overflow-hidden group">
+                                    <div className="flex flex-col">
+                                        <Label className="text-[9px] font-black uppercase text-primary mb-1 ml-1 tracking-widest">Service</Label>
+                                        <Select value={manualOrderType} onValueChange={(v: any) => setManualOrderType(v)}>
+                                            <SelectTrigger className="w-[130px] h-9 border-0 bg-transparent hover:bg-white/5 focus:ring-0 text-xs font-bold text-white rounded-lg transition-all px-2 [&>span]:text-white">
+                                                <SelectValue />
                                             </SelectTrigger>
-                                            <SelectContent>
-                                                {availableTables.map(t => (
-                                                    <SelectItem key={t.id} value={t.id}>Table {t.table_number}</SelectItem>
-                                                ))}
+                                            <SelectContent className="bg-slate-900 border-white/10 text-white">
+                                                <SelectItem value="dine_in">🍽️ Dine In</SelectItem>
+                                                <SelectItem value="take_away">🥡 Takeaway</SelectItem>
+                                                <SelectItem value="home_delivery">🚚 Delivery</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                )}
+                                    {manualOrderType === 'dine_in' && (
+                                        <div className="flex flex-col pl-4 border-l border-white/10">
+                                            <Label className="text-[9px] font-black uppercase text-primary mb-1 ml-1 tracking-widest">Table</Label>
+                                            <Select value={manualTableId} onValueChange={setManualTableId}>
+                                                <SelectTrigger className="w-[110px] h-9 border-0 bg-transparent hover:bg-white/5 focus:ring-0 text-xs font-bold text-white rounded-lg transition-all px-2 [&>span]:text-white">
+                                                    <SelectValue placeholder="Select" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-slate-900 border-white/10 text-white">
+                                                    {availableTables.map(t => (
+                                                        <SelectItem key={t.id} value={t.id}>Table {t.table_number}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-10 w-10 text-white hover:bg-white/10 rounded-full transition-all"
+                                    onClick={() => setIsManualOrderOpen(false)}
+                                >
+                                    <XCircle className="h-6 w-6" />
+                                </Button>
                             </div>
                         </DialogHeader>
 
                         <div className="flex-1 flex overflow-hidden h-full">
                             {/* Left: Menu Area */}
                             <div className="flex-1 flex flex-col h-full border-r border-gray-100 overflow-hidden relative">
-                                <div className="p-8 pb-4 shrink-0">
+                                <div className="p-6 pb-3 shrink-0">
                                     <div className="flex gap-3 items-center mb-6 overflow-x-auto no-scrollbar pb-2">
                                         <Button
                                             variant={selectedCategory === 'all' ? 'default' : 'outline'}
@@ -1161,7 +1179,7 @@ export default function OrdersPage() {
                                     </div>
                                 </div>
 
-                                <div className="p-8 pt-2 overflow-y-auto custom-scrollbar flex-1 min-h-0 bg-white">
+                                <div className="p-6 pt-2 overflow-y-auto custom-scrollbar flex-1 min-h-0 bg-white">
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
                                         {menuItems
                                             .filter(item => (selectedCategory === 'all' || item.category_id === selectedCategory))
@@ -1223,6 +1241,16 @@ export default function OrdersPage() {
                                                 value={manualCustomer.phone}
                                                 onChange={(e) => setManualCustomer({ ...manualCustomer, phone: e.target.value })}
                                             />
+                                            {manualOrderType === 'home_delivery' && (
+                                                <div className="col-span-2">
+                                                    <Input
+                                                        placeholder="Full Delivery Address"
+                                                        className="bg-white border-gray-200 h-10 text-xs rounded-lg font-medium focus:ring-primary shadow-sm"
+                                                        value={manualCustomer.address}
+                                                        onChange={(e) => setManualCustomer({ ...manualCustomer, address: e.target.value })}
+                                                    />
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -1237,47 +1265,49 @@ export default function OrdersPage() {
                                                 <p className="text-sm font-semibold text-gray-400 leading-tight">Your cart is <br/>empty</p>
                                             </div>
                                         ) : (
-                                            <div className="space-y-0 overflow-y-auto custom-scrollbar flex-1 min-h-0 pr-2 pb-4">
+                                            <div className="space-y-3 overflow-y-auto custom-scrollbar flex-1 min-h-0 pr-2 pb-4">
                                                 {manualCart.map(item => {
                                                     const price = item.discounted_price || item.price;
                                                     const total = price * item.quantity;
                                                     return (
-                                                        <div key={item.id} className="flex flex-col py-3.5 border-b border-gray-200 last:border-0 group">
+                                                        <div key={item.id} className="flex flex-col p-3 bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md transition-all duration-200 group relative">
                                                             <div className="flex justify-between items-start gap-3">
                                                                 <div className="flex-1">
-                                                                    <div className="flex items-center gap-2">
+                                                                    <div className="flex items-center gap-2 mb-1">
                                                                         <div className={cn(
                                                                             "h-2 w-2 rounded-full shrink-0",
                                                                             item.is_veg ? "bg-green-500" : "bg-red-500"
                                                                         )} />
-                                                                        <h5 className="text-sm font-semibold text-gray-800 leading-tight">{item.name}</h5>
+                                                                        <h5 className="text-sm font-bold text-gray-900 leading-tight">{item.name}</h5>
                                                                     </div>
-                                                                    <p className="text-[11px] font-medium text-gray-500 mt-1.5 ml-4">₹{price.toFixed(2)} × {item.quantity}</p>
+                                                                    <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wider">₹{price.toFixed(2)} / unit</p>
                                                                 </div>
                                                                 <div className="text-right shrink-0">
-                                                                    <p className="text-sm font-bold text-gray-900">₹{total.toFixed(2)}</p>
+                                                                    <p className="text-[10px] font-bold text-gray-400 uppercase mb-0.5">Item Total</p>
+                                                                    <p className="text-md font-black text-primary">₹{total.toFixed(2)}</p>
                                                                 </div>
                                                             </div>
-                                                            <div className="flex justify-between items-center mt-3 ml-4">
+                                                            <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-50">
                                                                 <button 
-                                                                    className="text-[10px] font-bold text-gray-400 hover:text-red-500 uppercase tracking-wider transition-colors"
+                                                                    className="h-8 pr-3 pl-1 flex items-center gap-1.5 text-[10px] font-black text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg uppercase tracking-wider transition-all"
                                                                     onClick={() => removeFromManualCart(item.id)}
                                                                 >
+                                                                    <XCircle className="h-3.5 w-3.5" />
                                                                     Remove
                                                                 </button>
-                                                                <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">
+                                                                <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-xl p-1 shadow-inner">
                                                                     <button 
-                                                                        className="h-7 w-7 rounded-md bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-100 hover:text-gray-900 active:scale-95 transition-all" 
+                                                                        className="h-7 w-7 rounded-lg bg-white border border-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-50 hover:text-gray-900 active:scale-95 transition-all shadow-sm" 
                                                                         onClick={() => item.quantity === 1 ? removeFromManualCart(item.id) : updateManualQuantity(item.id, -1)}
                                                                     >
-                                                                        <span className="text-lg font-medium leading-none mb-0.5">−</span>
+                                                                        <span className="text-lg font-black mt-[-2px]">−</span>
                                                                     </button>
-                                                                    <span className="text-xs font-bold w-6 text-center text-gray-900">{item.quantity}</span>
+                                                                    <span className="text-sm font-black w-7 text-center text-gray-900">{item.quantity}</span>
                                                                     <button 
-                                                                        className="h-7 w-7 rounded-md bg-green-50 flex items-center justify-center text-green-700 hover:bg-green-100 active:scale-95 transition-all" 
+                                                                        className="h-7 w-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary hover:bg-primary/20 active:scale-95 transition-all shadow-sm" 
                                                                         onClick={() => updateManualQuantity(item.id, 1)}
                                                                     >
-                                                                        <span className="text-lg font-medium leading-none mb-0.5">+</span>
+                                                                        <span className="text-lg font-black mt-[-2px]">+</span>
                                                                     </button>
                                                                 </div>
                                                             </div>
