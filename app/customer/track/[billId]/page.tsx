@@ -310,8 +310,12 @@ export default function TrackOrderPage() {
                                             <span className="font-mono font-bold">₹{order.subtotal.toFixed(2)}</span>
                                         </div>
                                         <div className="flex justify-between items-center text-sm">
-                                            <span className="text-slate-500">Tax</span>
-                                            <span className="font-mono font-bold">₹{order.tax?.toFixed(2) || '0.00'}</span>
+                                            <span className="text-slate-500">SGST ({order.sgst_percentage || 2.5}%)</span>
+                                            <span className="font-mono font-bold">₹{(order.sgst_amount || 0).toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="text-slate-500">CGST ({order.cgst_percentage || 2.5}%)</span>
+                                            <span className="font-mono font-bold">₹{(order.cgst_amount || 0).toFixed(2)}</span>
                                         </div>
                                     </motion.div>
                                 )}

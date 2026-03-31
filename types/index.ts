@@ -1,7 +1,7 @@
 export type OrderType = 'dine_in' | 'take_away' | 'home_delivery';
 export type OrderStatus = 'pending_confirmation' | 'pending' | 'confirmed' | 'preparing' | 'ready' | 'served' | 'completed' | 'cancelled';
 export type PaymentStatus = 'pending' | 'paid';
-export type PaymentMethod = 'cash' | 'upi';
+export type PaymentMethod = 'cash' | 'upi' | 'mixed';
 export type TableStatus = 'available' | 'occupied' | 'reserved';
 
 export interface Restaurant {
@@ -19,6 +19,8 @@ export interface Restaurant {
     qr_code_url: string | null;
     is_open: boolean;
     tax_percentage: number;
+    sgst_percentage: number;
+    cgst_percentage: number;
     delivery_charge: number;
     min_order_amount: number;
     avg_preparation_time: number;
@@ -117,12 +119,22 @@ export interface Order {
     total_amount: number;
     discount_amount: number;
     tax_amount: number;
+    sgst_amount: number;
+    cgst_amount: number;
+    sgst_percentage?: number;
+    cgst_percentage?: number;
     final_amount: number;
+    subtotal: number;
+    tax: number;
+    total: number;
+    discount: number;
+    estimated_time?: number;
     notes: string | null;
     created_at: string;
     updated_at: string;
     customers?: Customer;
-    order_items?: OrderItem[];
+    order_items?: (OrderItem & { item_name?: string })[];
+    restaurant_tables?: { table_number: number };
 }
 
 export interface OrderItem {
@@ -133,6 +145,9 @@ export interface OrderItem {
     price: number;
     subtotal: number;
     notes: string | null;
+    item_name?: string;
+    total?: number;
+    special_instructions?: string;
     menu_items?: MenuItem;
 }
 

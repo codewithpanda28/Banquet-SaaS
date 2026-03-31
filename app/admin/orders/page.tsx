@@ -16,7 +16,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { Search, Download, Eye, Printer, ShoppingBag, Truck, Utensils, Clock, MapPin, User, Phone, DollarSign, Smartphone, XCircle, UtensilsCrossed, Users, CheckCircle2, Calendar } from 'lucide-react'
+import { Search, Download, Eye, Printer, ShoppingBag, Truck, Utensils, Clock, MapPin, User, Phone, DollarSign, Smartphone, XCircle, UtensilsCrossed, Users, CheckCircle2, Calendar, Wallet, Loader2, Plus } from 'lucide-react'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 import { Order } from '@/types'
 import { format } from 'date-fns'
@@ -46,6 +46,17 @@ export default function OrdersPage() {
     const [selectedApproval, setSelectedApproval] = useState<any>(null)
     const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false)
     const [isProcessingApproval, setIsProcessingApproval] = useState(false)
+    const [isManualOrderOpen, setIsManualOrderOpen] = useState(false)
+    const [categories, setCategories] = useState<any[]>([])
+    const [menuItems, setMenuItems] = useState<any[]>([])
+    const [availableTables, setAvailableTables] = useState<any[]>([])
+    const [manualCart, setManualCart] = useState<any[]>([])
+    const [manualOrderType, setManualOrderType] = useState<string>('dine_in')
+    const [manualTableId, setManualTableId] = useState<string>('')
+    const [manualCustomer, setManualCustomer] = useState({ name: '', phone: '' })
+    const [menuSearch, setMenuSearch] = useState('')
+    const [selectedCategory, setSelectedCategory] = useState<string>('all')
+    const [taxRates, setTaxRates] = useState<{sgst: number, cgst: number}>({ sgst: 2.5, cgst: 2.5 })
 
     useEffect(() => {
         fetchOrders()
@@ -136,8 +147,191 @@ export default function OrdersPage() {
     }, [])
 
     useEffect(() => {
-        filterOrders()
-    }, [orders, searchTerm, orderTypeFilter, activeTab])
+        if (isManualOrderOpen) {
+            fetchManualOrderData()
+        } else {
+            // Reset modal state on close
+            setManualCart([])
+            setManualTableId('')
+            setManualCustomer({ name: '', phone: '' })
+        }
+    }, [isManualOrderOpen])
+
+    async function fetchManualOrderData() {
+        try {
+            const { data: cats } = await supabase
+                .from('menu_categories')
+                .select('*')
+                .eq('restaurant_id', RESTAURANT_ID)
+                .eq('is_active', true)
+                .order('sort_order', { ascending: true })
+
+            const { data: items } = await supabase
+                .from('menu_items')
+                .select('*')
+                .eq('restaurant_id', RESTAURANT_ID)
+                .eq('is_available', true)
+
+            const { data: tables } = await supabase
+                .from('restaurant_tables')
+                .select('*')
+                .eq('restaurant_id', RESTAURANT_ID)
+                .eq('is_active', true)
+
+            const { data: restaurant } = await supabase
+                .from('restaurants')
+                .select('sgst_percentage, cgst_percentage')
+                .eq('id', RESTAURANT_ID)
+                .single()
+
+            setCategories(cats || [])
+            setMenuItems(items || [])
+            setAvailableTables(tables || [])
+            if (restaurant) {
+                setTaxRates({ 
+                    sgst: Number(restaurant.sgst_percentage) || 2.5, 
+                    cgst: Number(restaurant.cgst_percentage) || 2.5 
+                })
+            }
+        } catch (error) {
+            console.error('Error fetching manual order data:', error)
+        }
+    }
+
+    const addToManualCart = (item: any) => {
+        setManualCart(prev => {
+            const existing = prev.find(i => i.id === item.id)
+            if (existing) {
+                return prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i)
+            }
+            return [...prev, { ...item, quantity: 1 }]
+        })
+        toast.success(`Added ${item.name}`)
+    }
+
+    const removeFromManualCart = (itemId: string) => {
+        setManualCart(prev => prev.filter(i => i.id !== itemId))
+    }
+
+    const updateManualQuantity = (itemId: string, delta: number) => {
+        setManualCart(prev => prev.map(i => {
+            if (i.id === itemId) {
+                const newQty = Math.max(1, i.quantity + delta)
+                return { ...i, quantity: newQty }
+            }
+            return i
+        }))
+    }
+
+    async function handlePlaceManualOrder() {
+        if (manualCart.length === 0) {
+            toast.error('Select items first')
+            return
+        }
+
+        try {
+            setProcessingPayment(true)
+
+            // 1. Calculate totals
+            const subtotal = manualCart.reduce((acc, item) => {
+                const price = item.discounted_price || item.price
+                return acc + (price * item.quantity)
+            }, 0)
+
+            const sgstRate = taxRates.sgst
+            const cgstRate = taxRates.cgst
+            const sgstAmount = (subtotal * sgstRate) / 100
+            const cgstAmount = (subtotal * cgstRate) / 100
+            const total = subtotal + sgstAmount + cgstAmount
+
+            const billId = `BILL${format(new Date(), 'yyyyMMdd')}${Math.floor(Math.random() * 10000)}`
+
+            // 2. Create customer if phone provided
+            let customerId = null
+            if (manualCustomer.phone) {
+                const { data: existingCust } = await supabase
+                    .from('customers')
+                    .select('id')
+                    .eq('phone', manualCustomer.phone)
+                    .eq('restaurant_id', RESTAURANT_ID)
+                    .maybeSingle()
+
+                if (existingCust) {
+                    customerId = existingCust.id
+                } else {
+                    const { data: newCust } = await supabase
+                        .from('customers')
+                        .insert([{
+                            restaurant_id: RESTAURANT_ID,
+                            name: manualCustomer.name || 'Guest',
+                            phone: manualCustomer.phone
+                        }])
+                        .select()
+                        .single()
+                    customerId = newCust?.id
+                }
+            }
+
+            // 3. Insert Order
+            const { data: newOrder, error: orderErr } = await supabase
+                .from('orders')
+                .insert([{
+                    bill_id: billId,
+                    restaurant_id: RESTAURANT_ID,
+                    customer_id: customerId,
+                    table_id: manualTableId || null,
+                    order_type: manualOrderType,
+                    status: 'pending', // Auto accepted
+                    payment_status: 'pending',
+                    subtotal: subtotal,
+                    sgst_amount: sgstAmount,
+                    cgst_amount: cgstAmount,
+                    tax: sgstAmount + cgstAmount,
+                    total: total,
+                    notes: 'Manual Admin Entry'
+                }])
+                .select()
+                .single()
+
+            if (orderErr) throw orderErr
+
+            // 4. Insert Order Items
+            const orderItemsPayload = manualCart.map(item => ({
+                order_id: newOrder.id,
+                menu_item_id: item.id,
+                item_name: item.name,
+                quantity: item.quantity,
+                price: item.discounted_price || item.price,
+                total: (item.discounted_price || item.price) * item.quantity
+            }))
+
+            const { error: itemsErr } = await supabase
+                .from('order_items')
+                .insert(orderItemsPayload)
+
+            if (itemsErr) throw itemsErr
+
+            // 5. Mark table occupied if dine-in
+            if (manualOrderType === 'dine_in' && manualTableId) {
+                await supabase
+                    .from('restaurant_tables')
+                    .update({ status: 'occupied' })
+                    .eq('id', manualTableId)
+            }
+
+            toast.success('Manual Order Placed! 🚀')
+            setIsManualOrderOpen(false)
+            fetchOrders()
+            
+            // Auto open for print/view
+            handleViewOrder(newOrder.id)
+        } catch (error) {
+            console.error('Error placing manual order:', error)
+            toast.error('Placement failed')
+        } finally {
+            setProcessingPayment(false)
+        }
+    }
 
     async function fetchOrders(showLoading = true) {
         try {
@@ -180,18 +374,12 @@ export default function OrdersPage() {
         }
     }
 
+    useEffect(() => {
+        filterOrders()
+    }, [orders, searchTerm, orderTypeFilter])
+
     function filterOrders() {
         let filtered = [...orders]
-
-        if (activeTab === 'active') {
-            filtered = filtered.filter((o) =>
-                ['pending_confirmation', 'pending', 'confirmed', 'preparing', 'ready', 'served'].includes(o.status)
-            )
-        } else if (activeTab === 'completed') {
-            filtered = filtered.filter((o) => o.status === 'completed')
-        } else if (activeTab === 'cancelled') {
-            filtered = filtered.filter((o) => o.status === 'cancelled')
-        }
 
         if (orderTypeFilter !== 'all') {
             filtered = filtered.filter((o) => o.order_type === orderTypeFilter)
@@ -321,7 +509,11 @@ export default function OrdersPage() {
                     </table>
                     
                     <div class="total">
-                        <p>Total: ₹${order.total.toFixed(2)}</p>
+                        <p>Subtotal: ₹${(order.subtotal || order.total - (order.tax || 0)).toFixed(2)}</p>
+                        <p>SGST (${order.sgst_percentage || 2.5}%): ₹${(order.sgst_amount || 0).toFixed(2)}</p>
+                        <p>CGST (${order.cgst_percentage || 2.5}%): ₹${(order.cgst_amount || 0).toFixed(2)}</p>
+                        ${order.discount > 0 ? `<p>Discount: -₹${order.discount.toFixed(2)}</p>` : ''}
+                        <p><strong>Total: ₹${order.total.toFixed(2)}</strong></p>
                     </div>
                     <div class="footer">
                         <p>Thank get for dining with us!</p>
@@ -365,7 +557,7 @@ export default function OrdersPage() {
         }
     }
 
-    async function handlePayment(method: 'cash' | 'upi') {
+    async function handlePayment(method: 'cash' | 'upi' | 'mixed') {
         if (!selectedOrder) return
 
         try {
@@ -456,6 +648,67 @@ export default function OrdersPage() {
         )
     }
 
+    const renderOrders = (tab: string) => {
+        const list = tab === 'active' ? 
+            filteredOrders.filter(o => ['pending_confirmation', 'pending', 'confirmed', 'preparing', 'ready', 'served'].includes(o.status)) :
+            filteredOrders.filter(o => o.status === tab)
+
+        if (list.length === 0) {
+            return (
+                <div className="flex flex-col items-center justify-center p-12 glass-card rounded-3xl border-dashed border-2 bg-gray-50/50">
+                    <ShoppingBag className="h-12 w-12 text-gray-300 mb-4" />
+                    <p className="text-xl font-medium text-gray-500">No {tab} orders found</p>
+                </div>
+            )
+        }
+
+        return list.map((order: any) => (
+            <div
+                key={order.id}
+                className="glass-card p-0 rounded-2xl border border-gray-100 overflow-hidden group hover:border-green-500/50 hover:shadow-lg transition-all duration-300 bg-white mb-4"
+            >
+                <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 relative">
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-green-500 to-transparent" />
+                    <div className="flex-1 space-y-3">
+                        <div className="flex items-center gap-3">
+                            <h3 className="text-2xl font-black tracking-tight text-gray-900">{order.bill_id}</h3>
+                            {getStatusBadge(order.status)}
+                            <Badge variant="secondary" className="bg-gray-100 text-gray-700 border-0">
+                                {order.order_type.replace('_', ' ')}
+                            </Badge>
+                        </div>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-gray-500">
+                            <div className="flex items-center gap-2">
+                                <User className="h-4 w-4 text-green-600" />
+                                <span className="font-medium text-gray-900">{(Array.isArray(order.customers) ? order.customers[0]?.name : order.customers?.name) || order.customer_name || 'Guest'}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Clock className="h-4 w-4 text-green-600" />
+                                <span>{format(parseDate(order.created_at), 'hh:mm a')}</span>
+                            </div>
+                            {order.restaurant_tables && (
+                                <div className="flex items-center gap-2">
+                                    <MapPin className="h-4 w-4 text-green-600" />
+                                    <span>T-{Array.isArray(order.restaurant_tables) ? order.restaurant_tables[0]?.table_number : order.restaurant_tables.table_number}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-6 border-l border-gray-100 pl-6 border-dashed">
+                        <div className="text-right">
+                            <p className="text-[10px] uppercase font-bold text-gray-400">Total</p>
+                            <p className="text-3xl font-black text-gray-900">₹{Number(order.total).toFixed(2)}</p>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <Button size="sm" className="bg-green-50 text-green-700 hover:bg-green-600 hover:text-white font-bold" onClick={() => handleViewOrder(order.id)}>View</Button>
+                            <Button size="sm" variant="ghost" onClick={() => handlePrintOrder(order)}>Print</Button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        ))
+    }
+
     if (loading) {
         return (
             <div className="flex min-h-[400px] items-center justify-center">
@@ -473,10 +726,19 @@ export default function OrdersPage() {
                 title="Orders Management"
                 description="Track and manage all your restaurant orders in real-time"
             >
-                <Button variant="outline" onClick={exportOrders} className="glass-panel hover:bg-white/20 border-primary/20 bg-primary/5">
-                    <Download className="mr-2 h-4 w-4 text-primary" />
-                    Export CSV
-                </Button>
+                <div className="flex gap-3">
+                    <Button 
+                        onClick={() => setIsManualOrderOpen(true)} 
+                        className="bg-primary hover:bg-primary/90 text-white font-bold shadow-lg shadow-primary/20"
+                    >
+                        <UtensilsCrossed className="mr-2 h-4 w-4" />
+                        Manual Order
+                    </Button>
+                    <Button variant="outline" onClick={exportOrders} className="glass-panel hover:bg-white/20 border-primary/20 bg-primary/5">
+                        <Download className="mr-2 h-4 w-4 text-primary" />
+                        Export CSV
+                    </Button>
+                </div>
             </PageHeader>
 
             {/* Filters */}
@@ -529,100 +791,14 @@ export default function OrdersPage() {
                     </TabsList>
                 </div>
 
-                <TabsContent value={activeTab} className="space-y-4">
-                    {filteredOrders.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center p-12 glass-card rounded-3xl border-dashed border-2 bg-gray-50/50">
-                            <ShoppingBag className="h-12 w-12 text-gray-300 mb-4" />
-                            <p className="text-xl font-medium text-gray-500">No orders found</p>
-                            <p className="text-sm text-gray-400">Try changing filters or wait for new orders</p>
-                        </div>
-                    ) : (
-                        filteredOrders.map((order: any) => (
-                            <div
-                                key={order.id}
-                                className="glass-card p-0 rounded-2xl border border-gray-100 overflow-hidden group hover:border-green-500/50 hover:shadow-lg transition-all duration-300 bg-white"
-                            >
-                                <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-6 relative">
-                                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-green-500 to-transparent" />
-
-                                    {/* Left Side: Info */}
-                                    <div className="flex-1 space-y-3">
-                                        <div className="flex items-center gap-3">
-                                            <h3 className="text-2xl font-black tracking-tight text-gray-900">{order.bill_id}</h3>
-                                            {order.status === 'pending_confirmation' && (
-                                                <Badge className="bg-red-600 text-white animate-bounce text-[10px] font-black">
-                                                    NEW ACTION REQUIRED
-                                                </Badge>
-                                            )}
-                                            {getStatusBadge(order.status)}
-                                            <Badge variant="secondary" className="bg-gray-100 text-gray-700 border-0">
-                                                {order.order_type === 'dine_in' && <Utensils className="h-3 w-3 mr-1" />}
-                                                {order.order_type === 'takeaway' && <ShoppingBag className="h-3 w-3 mr-1" />}
-                                                {order.order_type === 'delivery' && <Truck className="h-3 w-3 mr-1" />}
-                                                {order.order_type.replace('_', ' ')}
-                                            </Badge>
-                                        </div>
-
-                                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 text-sm text-gray-500">
-                                            <div className="flex items-center gap-2">
-                                                <User className="h-4 w-4 text-green-600" />
-                                                <span className="font-medium text-gray-900">
-                                                    {(Array.isArray(order.customers) ? order.customers[0]?.name : order.customers?.name) || order.customer_name || 'Walk-in'}
-                                                </span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <Clock className="h-4 w-4 text-green-600" />
-                                                <span>{format(parseDate(order.created_at), 'hh:mm a')}</span>
-                                            </div>
-                                            {order.restaurant_tables && (
-                                                <div className="flex items-center gap-2">
-                                                    <MapPin className="h-4 w-4 text-green-600" />
-                                                    <span>Table {(Array.isArray(order.restaurant_tables) ? order.restaurant_tables[0]?.table_number : order.restaurant_tables.table_number)}</span>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {order.special_instructions && (
-                                            <div className="flex items-start gap-2 text-xs bg-yellow-50 text-yellow-800 p-2 rounded-lg border border-yellow-100 max-w-md">
-                                                <span className="font-bold shrink-0">Note:</span>
-                                                <span className="italic">{order.special_instructions}</span>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Right Side: Actions & Price */}
-                                    <div className="flex items-center gap-6 border-l border-gray-100 pl-6 border-dashed">
-                                        <div className="text-right">
-                                            <p className="text-[10px] uppercase font-bold text-gray-400 tracking-widest">Total Amount</p>
-                                            <p className="text-3xl font-black text-gray-900">₹{Number(order.total).toFixed(2)}</p>
-                                            <div className="flex items-center justify-end gap-1 mt-1">
-                                                <span className={cn("h-2 w-2 rounded-full", order.payment_status === 'paid' ? "bg-green-500" : "bg-red-500")} />
-                                                <p className="text-xs font-medium text-gray-500 uppercase">{order.payment_status}</p>
-                                            </div>
-                                        </div>
-
-                                        <div className="flex flex-col gap-2">
-                                            <Button
-                                                size="sm"
-                                                className="bg-green-50 text-green-700 hover:bg-green-600 hover:text-white font-bold transition-all shadow-none border border-green-200"
-                                                onClick={() => handleViewOrder(order.id)}
-                                            >
-                                                <Eye className="h-4 w-4 mr-2" /> View
-                                            </Button>
-                                            <Button
-                                                size="sm"
-                                                variant="ghost"
-                                                className="text-gray-500 hover:text-gray-900 hover:bg-gray-100"
-                                                onClick={() => handlePrintOrder(order)}
-                                            >
-                                                <Printer className="h-4 w-4 mr-2" /> Print
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        ))
-                    )}
+                <TabsContent value="active" className="space-y-4">
+                    {renderOrders('active')}
+                </TabsContent>
+                <TabsContent value="completed" className="space-y-4">
+                    {renderOrders('completed')}
+                </TabsContent>
+                <TabsContent value="cancelled" className="space-y-4">
+                    {renderOrders('cancelled')}
                 </TabsContent>
             </Tabs>
 
@@ -736,8 +912,22 @@ export default function OrdersPage() {
                                         <div className="bg-gray-50 p-4 border-t border-gray-200">
                                             <div className="flex justify-between items-center text-sm mb-1">
                                                 <span className="text-gray-500 font-medium">Subtotal</span>
-                                                <span className="font-semibold text-gray-900">₹{selectedOrder.total.toFixed(2)}</span>
+                                                <span className="font-semibold text-gray-900">₹{(selectedOrder.subtotal || selectedOrder.total - (selectedOrder.tax || 0)).toFixed(2)}</span>
                                             </div>
+                                            <div className="flex justify-between items-center text-sm mb-1">
+                                                <span className="text-gray-500 font-medium">SGST</span>
+                                                <span className="font-semibold text-gray-900">₹{(selectedOrder.sgst_amount || 0).toFixed(2)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-sm mb-1">
+                                                <span className="text-gray-500 font-medium">CGST</span>
+                                                <span className="font-semibold text-gray-900">₹{(selectedOrder.cgst_amount || 0).toFixed(2)}</span>
+                                            </div>
+                                            {selectedOrder.discount > 0 && (
+                                                <div className="flex justify-between items-center text-sm mb-1 text-green-600">
+                                                    <span className="font-medium">Discount</span>
+                                                    <span className="font-semibold">-₹{selectedOrder.discount.toFixed(2)}</span>
+                                                </div>
+                                            )}
                                             <div className="flex justify-between items-center pt-3 border-t border-gray-200 mt-2">
                                                 <span className="text-base font-bold text-gray-900">Grand Total</span>
                                                 <span className="text-2xl font-black text-gray-900">₹{selectedOrder.total.toFixed(2)}</span>
@@ -781,20 +971,27 @@ export default function OrdersPage() {
                                                 </Button>
                                             </div>
                                         ) : (
-                                            <div className="grid grid-cols-2 gap-3">
+                                            <div className="grid grid-cols-3 gap-3">
                                                 <Button
                                                     className="h-11 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm"
                                                     onClick={() => handlePayment('cash')}
                                                     disabled={processingPayment}
                                                 >
-                                                    <DollarSign className="mr-2 h-4 w-4" /> Collect Cash
+                                                    <DollarSign className="mr-2 h-4 w-4" /> Cash
                                                 </Button>
                                                 <Button
                                                     className="h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm"
                                                     onClick={() => handlePayment('upi')}
                                                     disabled={processingPayment}
                                                 >
-                                                    <Smartphone className="mr-2 h-4 w-4" /> Collect UPI
+                                                    <Smartphone className="mr-2 h-4 w-4" /> UPI
+                                                </Button>
+                                                <Button
+                                                    className="h-11 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-sm"
+                                                    onClick={() => handlePayment('mixed')}
+                                                    disabled={processingPayment}
+                                                >
+                                                    <Wallet className="mr-2 h-4 w-4" /> Mixed
                                                 </Button>
                                             </div>
                                         )}
@@ -847,9 +1044,23 @@ export default function OrdersPage() {
                             </div>
                         </div>
 
-                        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                            <span className="text-lg font-black text-gray-900">Grand Total</span>
-                            <span className="text-2xl font-black text-red-600">₹{selectedApproval?.total?.toFixed(2)}</span>
+                        <div className="space-y-2 pt-4 border-t border-gray-100">
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-gray-500 font-medium">Subtotal</span>
+                                <span className="font-bold text-gray-900">₹{(selectedApproval?.subtotal || (selectedApproval?.total || 0) - (selectedApproval?.tax || 0)).toFixed(2)}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-gray-500 font-medium">SGST ({selectedApproval?.sgst_percentage || 2.5}%)</span>
+                                <span className="font-bold text-gray-900">₹{(selectedApproval?.sgst_amount || 0).toFixed(2)}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-gray-500 font-medium">CGST ({selectedApproval?.cgst_percentage || 2.5}%)</span>
+                                <span className="font-bold text-gray-900">₹{(selectedApproval?.cgst_amount || 0).toFixed(2)}</span>
+                            </div>
+                            <div className="flex items-center justify-between pt-2 border-t border-dashed border-gray-200">
+                                <span className="text-lg font-black text-gray-900">Grand Total</span>
+                                <span className="text-2xl font-black text-red-600">₹{selectedApproval?.total?.toFixed(2)}</span>
+                            </div>
                         </div>
                     </div>
 
@@ -869,6 +1080,256 @@ export default function OrdersPage() {
                         >
                             REJECT
                         </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isManualOrderOpen} onOpenChange={setIsManualOrderOpen}>
+                <DialogContent className="max-w-[95vw] sm:max-w-[1200px] w-full rounded-[2.5rem] border-none shadow-2xl p-0 overflow-hidden bg-white h-[90vh] max-h-[90vh] flex flex-col">
+                    <div className="flex flex-col h-full bg-white flex-1 overflow-hidden">
+                        {/* Improved Header */}
+                        <DialogHeader className="p-8 pb-6 bg-gradient-to-r from-gray-900 to-slate-800 text-white flex-row items-center justify-between space-y-0 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-primary/20 rounded-full blur-[100px] -z-10" />
+                            <div className="relative z-10">
+                                <h2 className="text-3xl font-bold tracking-tight leading-none mb-2 underline decoration-primary decoration-4 underline-offset-8">Quick Billing</h2>
+                                <p className="text-gray-400 text-sm font-medium">Create and process manual orders for walk-in guests</p>
+                            </div>
+                            
+                            <div className="flex gap-4 items-center bg-black/20 backdrop-blur-md p-3 rounded-2xl border border-white/10 shadow-inner">
+                                <div className="flex flex-col gap-1">
+                                    <Label className="text-[10px] font-bold uppercase text-gray-300 ml-1">Service Type</Label>
+                                    <Select value={manualOrderType} onValueChange={(v: any) => setManualOrderType(v)}>
+                                        <SelectTrigger className="w-[140px] h-10 border-white/10 bg-white/10 hover:bg-white/20 focus:ring-0 text-sm font-semibold text-white rounded-xl transition-colors">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="dine_in">🍽️ Dine In</SelectItem>
+                                            <SelectItem value="take_away">🥡 Takeaway</SelectItem>
+                                            <SelectItem value="home_delivery">🚚 Delivery</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                {manualOrderType === 'dine_in' && (
+                                    <div className="flex flex-col gap-1 pl-4 border-l border-white/10">
+                                        <Label className="text-[10px] font-bold uppercase text-gray-300 ml-1">Assign Table</Label>
+                                        <Select value={manualTableId} onValueChange={setManualTableId}>
+                                            <SelectTrigger className="w-[120px] h-10 border-white/10 bg-white/10 hover:bg-white/20 focus:ring-0 text-sm font-semibold text-white rounded-xl transition-colors">
+                                                <SelectValue placeholder="Select" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {availableTables.map(t => (
+                                                    <SelectItem key={t.id} value={t.id}>Table {t.table_number}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
+                            </div>
+                        </DialogHeader>
+
+                        <div className="flex-1 flex overflow-hidden h-full">
+                            {/* Left: Menu Area */}
+                            <div className="flex-1 flex flex-col h-full border-r border-gray-100 overflow-hidden relative">
+                                <div className="p-8 pb-4 shrink-0">
+                                    <div className="flex gap-3 items-center mb-6 overflow-x-auto no-scrollbar pb-2">
+                                        <Button
+                                            variant={selectedCategory === 'all' ? 'default' : 'outline'}
+                                            onClick={() => setSelectedCategory('all')}
+                                            className="rounded-2xl h-11 px-6 font-semibold text-sm transition-all shadow-sm shrink-0"
+                                        >
+                                            All Menu
+                                        </Button>
+                                        {categories.map(cat => (
+                                            <Button
+                                                key={cat.id}
+                                                variant={selectedCategory === cat.id ? 'default' : 'outline'}
+                                                onClick={() => setSelectedCategory(cat.id)}
+                                                className="rounded-2xl h-11 px-6 font-semibold text-sm whitespace-nowrap shadow-sm shrink-0"
+                                            >
+                                                {cat.name}
+                                            </Button>
+                                        ))}
+                                    </div>
+                                    <div className="relative">
+                                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+                                        <Input
+                                            placeholder="Search items by name or price..."
+                                            className="pl-12 h-14 bg-gray-50 border-gray-200 rounded-2xl text-lg font-medium focus:bg-white"
+                                            value={menuSearch}
+                                            onChange={(e) => setMenuSearch(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="p-8 pt-2 overflow-y-auto custom-scrollbar flex-1 min-h-0 bg-white">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-12">
+                                        {menuItems
+                                            .filter(item => (selectedCategory === 'all' || item.category_id === selectedCategory))
+                                            .filter(item => item.name.toLowerCase().includes(menuSearch.toLowerCase()))
+                                            .map(item => (
+                                                <Card 
+                                                    key={item.id} 
+                                                    className="group cursor-pointer hover:border-primary border-2 border-transparent transition-all shadow-md hover:shadow-xl bg-white overflow-hidden relative active:scale-95 flex flex-col h-full"
+                                                    onClick={() => addToManualCart(item)}
+                                                >
+                                                    {item.image_url && (
+                                                        <div className="h-36 w-full bg-gray-100 relative overflow-hidden shrink-0">
+                                                            <img 
+                                                                src={item.image_url} 
+                                                                alt={item.name} 
+                                                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                            />
+                                                        </div>
+                                                    )}
+                                                    
+                                                    <CardContent className={cn("p-5 flex-1 flex flex-col relative", item.image_url ? "pt-4" : "")}>
+                                                        <div className="flex justify-between items-start mb-3 gap-3">
+                                                            <div className="flex gap-2 items-start mt-1">
+                                                                <div className={cn(
+                                                                    "h-3 w-3 rounded-full shadow-sm shrink-0 mt-1.5",
+                                                                    item.is_veg ? "bg-green-500 border-2 border-green-200" : "bg-red-500 border-2 border-red-200"
+                                                                )} />
+                                                                <h4 className="font-semibold text-gray-800 text-base leading-tight line-clamp-2">{item.name}</h4>
+                                                            </div>
+                                                            <span className="font-bold text-xl text-gray-900 shrink-0">₹{item.discounted_price || item.price}</span>
+                                                        </div>
+                                                        <p className="text-xs text-gray-400 font-medium line-clamp-2 mt-auto pt-2">{item.description}</p>
+                                                    </CardContent>
+
+                                                    <div className="absolute top-3 right-3 p-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-primary text-white rounded-lg shadow-lg">
+                                                        <Plus className="h-4 w-4" />
+                                                    </div>
+                                                </Card>
+                                            ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Right: Cart Area */}
+                            <div className="w-full md:w-[380px] lg:w-[420px] shrink-0 bg-gray-50 flex flex-col h-full border-l border-gray-100 overflow-hidden relative z-10 shadow-[-4px_0_24px_-10px_rgba(0,0,0,0.05)]">
+                                <div className="flex flex-col flex-1 min-h-0 p-6 pb-0">
+                                    <div className="space-y-2 shrink-0 mb-4">
+                                        <Label className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Guest Information</Label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <Input
+                                                placeholder="Customer Name"
+                                                className="bg-white border-gray-200 h-9 text-xs rounded-lg font-medium focus:ring-primary shadow-sm"
+                                                value={manualCustomer.name}
+                                                onChange={(e) => setManualCustomer({ ...manualCustomer, name: e.target.value })}
+                                            />
+                                            <Input
+                                                placeholder="Phone Number"
+                                                className="bg-white border-gray-200 h-9 text-xs rounded-lg font-medium focus:ring-primary shadow-sm"
+                                                value={manualCustomer.phone}
+                                                onChange={(e) => setManualCustomer({ ...manualCustomer, phone: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col flex-1 overflow-hidden min-h-0">
+                                        <Label className="text-[11px] font-bold uppercase tracking-widest text-gray-400 shrink-0 mb-3">Current Bill Items ({manualCart.length})</Label>
+                                        
+                                        {manualCart.length === 0 ? (
+                                            <div className="flex-1 border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center text-center p-6 bg-white/50">
+                                                <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm mb-3 border border-gray-100">
+                                                    <UtensilsCrossed className="h-6 w-6 text-gray-300" />
+                                                </div>
+                                                <p className="text-sm font-semibold text-gray-400 leading-tight">Your cart is <br/>empty</p>
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-0 overflow-y-auto custom-scrollbar flex-1 min-h-0 pr-2 pb-4">
+                                                {manualCart.map(item => {
+                                                    const price = item.discounted_price || item.price;
+                                                    const total = price * item.quantity;
+                                                    return (
+                                                        <div key={item.id} className="flex flex-col py-3.5 border-b border-gray-200 last:border-0 group">
+                                                            <div className="flex justify-between items-start gap-3">
+                                                                <div className="flex-1">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className={cn(
+                                                                            "h-2 w-2 rounded-full shrink-0",
+                                                                            item.is_veg ? "bg-green-500" : "bg-red-500"
+                                                                        )} />
+                                                                        <h5 className="text-sm font-semibold text-gray-800 leading-tight">{item.name}</h5>
+                                                                    </div>
+                                                                    <p className="text-[11px] font-medium text-gray-500 mt-1.5 ml-4">₹{price.toFixed(2)} × {item.quantity}</p>
+                                                                </div>
+                                                                <div className="text-right shrink-0">
+                                                                    <p className="text-sm font-bold text-gray-900">₹{total.toFixed(2)}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex justify-between items-center mt-3 ml-4">
+                                                                <button 
+                                                                    className="text-[10px] font-bold text-gray-400 hover:text-red-500 uppercase tracking-wider transition-colors"
+                                                                    onClick={() => removeFromManualCart(item.id)}
+                                                                >
+                                                                    Remove
+                                                                </button>
+                                                                <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-0.5 shadow-sm">
+                                                                    <button 
+                                                                        className="h-7 w-7 rounded-md bg-gray-50 flex items-center justify-center text-gray-600 hover:bg-gray-100 hover:text-gray-900 active:scale-95 transition-all" 
+                                                                        onClick={() => item.quantity === 1 ? removeFromManualCart(item.id) : updateManualQuantity(item.id, -1)}
+                                                                    >
+                                                                        <span className="text-lg font-medium leading-none mb-0.5">−</span>
+                                                                    </button>
+                                                                    <span className="text-xs font-bold w-6 text-center text-gray-900">{item.quantity}</span>
+                                                                    <button 
+                                                                        className="h-7 w-7 rounded-md bg-green-50 flex items-center justify-center text-green-700 hover:bg-green-100 active:scale-95 transition-all" 
+                                                                        onClick={() => updateManualQuantity(item.id, 1)}
+                                                                    >
+                                                                        <span className="text-lg font-medium leading-none mb-0.5">+</span>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                                {/* Spacer to prevent scroll cutoff bug */}
+                                                <div className="h-6 w-full shrink-0"></div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="shrink-0 bg-gray-50 px-6 pb-6 pt-4 border-t border-gray-200 space-y-3">
+                                    <div className="space-y-1.5 px-1">
+                                        <div className="flex justify-between items-center text-[11px] font-semibold text-gray-500">
+                                            <span className="uppercase tracking-wider">Subtotal</span>
+                                            <span className="text-gray-900 font-bold">₹{manualCart.reduce((acc, item) => acc + (item.discounted_price || item.price) * item.quantity, 0).toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-[10px] font-semibold text-gray-400">
+                                            <span className="uppercase tracking-wider">SGST ({taxRates.sgst}%)</span>
+                                            <span className="text-gray-600">₹{(manualCart.reduce((acc, item) => acc + (item.discounted_price || item.price) * item.quantity, 0) * (taxRates.sgst / 100)).toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-[10px] font-semibold text-gray-400">
+                                            <span className="uppercase tracking-wider">CGST ({taxRates.cgst}%)</span>
+                                            <span className="text-gray-600">₹{(manualCart.reduce((acc, item) => acc + (item.discounted_price || item.price) * item.quantity, 0) * (taxRates.cgst / 100)).toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-end pt-3 mt-1 border-t border-dashed border-gray-200">
+                                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-none mb-1">Payable</p>
+                                            <p className="text-2xl font-bold text-gray-900 tracking-tight leading-none">
+                                                ₹{(
+                                                    manualCart.reduce((acc, item) => acc + (item.discounted_price || item.price) * item.quantity, 0) 
+                                                    * (1 + (taxRates.sgst + taxRates.cgst) / 100)
+                                                ).toFixed(2)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <Button 
+                                        className="w-full h-14 rounded-2xl bg-primary hover:bg-primary/90 text-white font-bold text-base shadow-lg hover:shadow-primary/30 transition-all flex items-center justify-center gap-2 active:scale-95 disabled:grayscale disabled:opacity-50"
+                                        onClick={handlePlaceManualOrder}
+                                        disabled={manualCart.length === 0 || processingPayment}
+                                    >
+                                        {processingPayment ? <Loader2 className="h-6 w-6 animate-spin" /> : (
+                                            <>
+                                                <Printer className="h-5 w-5" />
+                                                Print & Settle
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </DialogContent>
             </Dialog>

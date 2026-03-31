@@ -31,7 +31,8 @@ import {
     ChefHat,
     Crown,
     HelpCircle,
-    Share2
+    Share2,
+    ReceiptText
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { supabase, getRestaurantId } from '@/lib/supabase'
@@ -40,6 +41,7 @@ const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/admin' },
     { icon: ShoppingBag, label: 'Orders', href: '/admin/orders' },
     { icon: UtensilsCrossed, label: 'Menu', href: '/admin/menu' },
+    { icon: ReceiptText, label: 'Bills History', href: '/admin/bills' },
     { icon: Armchair, label: 'Tables', href: '/admin/tables' },
     { icon: ConciergeBell, label: 'Waiter Activity', href: '/admin/waiters' },
     { icon: Users, label: 'Customers', href: '/admin/customers' },

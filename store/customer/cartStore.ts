@@ -15,6 +15,8 @@ interface CartState {
     coupon: Coupon | null
     usedCoupons: string[]  // Track coupon codes already used by this customer
     joinExisting: boolean | null // null = undecided, true = join group, false = separate
+    sgst_rate: number
+    cgst_rate: number
 
     addItem: (item: MenuItem, quantity: number, instructions: string) => void
     removeItem: (cartId: string) => void
@@ -30,9 +32,12 @@ interface CartState {
     clearCart: () => void
     isCouponUsed: (code: string) => boolean
     setJoinExisting: (value: boolean | null) => void
+    setTaxRates: (sgst: number, cgst: number) => void
 
     getSubtotal: () => number
     getTax: () => number
+    getSGST: () => number
+    getCGST: () => number
     getDeliveryCharge: () => number
     getDiscount: () => number
     getTotal: () => number
@@ -55,6 +60,8 @@ export const useCartStore = create<CartState>()(
             coupon: null,
             usedCoupons: [],
             joinExisting: null,
+            sgst_rate: 2.5,
+            cgst_rate: 2.5,
 
             addItem: (item, quantity, instructions) => {
                 // 🔥 DIFFERENTIAL PRICING: Only 1st item of Reward is free/discounted
@@ -128,6 +135,7 @@ export const useCartStore = create<CartState>()(
                 set({ customerName: name, customerPhone: phone, deliveryAddress: address }),
             setSpecialInstructions: (text) => set({ specialInstructions: text }),
             setJoinExisting: (value) => set({ joinExisting: value }),
+            setTaxRates: (sgst, cgst) => set({ sgst_rate: sgst, cgst_rate: cgst }),
 
             applyCoupon: (coupon) => {
                 // Just set the coupon - don't mark as used yet (that happens after order is placed)
@@ -155,8 +163,19 @@ export const useCartStore = create<CartState>()(
             },
 
             getTax: () => {
-                // simple 5% tax logic
-                return (get().getSubtotal() - get().getDiscount()) * 0.05
+                const { sgst_rate, cgst_rate, getSubtotal, getDiscount } = get()
+                const taxableAmount = getSubtotal() - getDiscount()
+                return (taxableAmount * (sgst_rate + cgst_rate)) / 100
+            },
+
+            getSGST: () => {
+                const { sgst_rate, getSubtotal, getDiscount } = get()
+                return ((getSubtotal() - getDiscount()) * sgst_rate) / 100
+            },
+
+            getCGST: () => {
+                const { cgst_rate, getSubtotal, getDiscount } = get()
+                return ((getSubtotal() - getDiscount()) * cgst_rate) / 100
             },
 
             getDeliveryCharge: () => {
@@ -188,7 +207,8 @@ export const useCartStore = create<CartState>()(
             getTotal: () => {
                 const subtotal = get().getSubtotal()
                 const discount = get().getDiscount()
-                const tax = (subtotal - discount) * 0.05 // Tax on discounted amount? Usually yes.
+                const { sgst_rate, cgst_rate } = get()
+                const tax = (subtotal - discount) * (sgst_rate + cgst_rate) / 100
                 const delivery = get().getDeliveryCharge()
 
                 return Math.max(0, subtotal - discount + tax + delivery)

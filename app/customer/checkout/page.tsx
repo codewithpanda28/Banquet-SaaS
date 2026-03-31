@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCartStore } from '@/store/cartStore'
 import { ArrowLeft, Wallet, QrCode, ShoppingBag, Ticket, X, Percent, User, Phone, MapPin, ChevronRight, Loader2, CheckCircle2 } from 'lucide-react'
@@ -39,6 +39,8 @@ export default function CheckoutPage() {
         tableNumber,
         getSubtotal,
         getTax,
+        getSGST,
+        getCGST,
         getDeliveryCharge,
         getTotal,
         getDiscount,
@@ -48,7 +50,8 @@ export default function CheckoutPage() {
         applyCoupon,
         removeCoupon,
         markCouponUsed,
-        joinExisting
+        joinExisting,
+        setTaxRates
     } = useCartStore()
     const { addNotification } = useNotificationStore()
 
@@ -66,8 +69,16 @@ export default function CheckoutPage() {
     const subtotal = getSubtotal()
     const discount = getDiscount()
     const tax = getTax()
+    const sgst = getSGST()
+    const cgst = getCGST()
     const delivery = getDeliveryCharge()
     const total = getTotal()
+
+    useEffect(() => {
+        if (restaurant) {
+            setTaxRates(restaurant.sgst_percentage || 2.5, restaurant.cgst_percentage || 2.5)
+        }
+    }, [restaurant, setTaxRates])
 
     const handleApplyCoupon = async () => {
         const trimmedCode = couponCode.trim().toUpperCase()
@@ -349,7 +360,9 @@ export default function CheckoutPage() {
                     .update({
                         total: existingTotal + total,
                         subtotal: existingSubtotal + subtotal,
-                        tax: ((existingSubtotal + subtotal - discount) * 0.05),
+                        tax: tax + (existingOrderId ? (existingSubtotal * (restaurant?.tax_percentage || 5) / 100) : 0), // Simplified for now
+                        sgst_amount: sgst,
+                        cgst_amount: cgst,
                         discount: (discount || 0),
                         status: (existingStatus === 'pending_confirmation' || existingStatus === 'completed' || existingStatus === 'cancelled')
                             ? 'pending_confirmation'
@@ -376,6 +389,8 @@ export default function CheckoutPage() {
                     payment_method: paymentMethod,
                     subtotal: parseFloat(subtotal.toString()) || 0,
                     tax: parseFloat(tax.toString()) || 0,
+                    sgst_amount: parseFloat(sgst.toString()) || 0,
+                    cgst_amount: parseFloat(cgst.toString()) || 0,
                     discount: parseFloat(discount.toString()) || 0,
                     delivery_charge: parseFloat(delivery.toString()) || 0,
                     total: parseFloat(total.toString()) || 0,
@@ -840,8 +855,12 @@ export default function CheckoutPage() {
                                     </div>
                                 )}
                                 <div className="flex justify-between">
-                                    <span className="text-slate-500">Tax (5%)</span>
-                                    <span className="font-medium text-slate-900">₹{tax.toFixed(2)}</span>
+                                    <span className="text-slate-500">SGST ({restaurant?.sgst_percentage || '2.5'}%)</span>
+                                    <span className="font-medium text-slate-900">₹{sgst.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">CGST ({restaurant?.cgst_percentage || '2.5'}%)</span>
+                                    <span className="font-medium text-slate-900">₹{cgst.toFixed(2)}</span>
                                 </div>
                                 {orderType === 'home_delivery' && (
                                     <div className="flex justify-between">

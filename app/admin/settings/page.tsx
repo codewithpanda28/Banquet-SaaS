@@ -27,6 +27,8 @@ export default function SettingsPage() {
         address: '',
         city: '',
         tax_percentage: '',
+        sgst_percentage: '',
+        cgst_percentage: '',
         delivery_charge: '',
         min_order_amount: '',
         avg_preparation_time: '',
@@ -78,6 +80,8 @@ export default function SettingsPage() {
                     address: data.address || '',
                     city: data.city || '',
                     tax_percentage: data.tax_percentage?.toString() || '',
+                    sgst_percentage: data.sgst_percentage?.toString() || '2.5',
+                    cgst_percentage: data.cgst_percentage?.toString() || '2.5',
                     delivery_charge: data.delivery_charge?.toString() || '',
                     min_order_amount: data.min_order_amount?.toString() || '',
                     avg_preparation_time: data.avg_preparation_time?.toString() || '',
@@ -162,6 +166,8 @@ export default function SettingsPage() {
                 address: form.address,
                 city: form.city,
                 tax_percentage: parseFloat(form.tax_percentage) || 0,
+                sgst_percentage: parseFloat(form.sgst_percentage) || 0,
+                cgst_percentage: parseFloat(form.cgst_percentage) || 0,
                 delivery_charge: parseFloat(form.delivery_charge) || 0,
                 min_order_amount: parseFloat(form.min_order_amount) || 0,
                 avg_preparation_time: parseInt(form.avg_preparation_time) || 15,
@@ -422,12 +428,32 @@ export default function SettingsPage() {
                         <CardContent className="grid gap-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="tax" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tax (%)</Label>
+                                    <Label htmlFor="tax" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Total Tax (%)</Label>
                                     <Input
                                         id="tax"
                                         type="number"
                                         value={form.tax_percentage}
                                         onChange={(e) => setForm({ ...form, tax_percentage: e.target.value })}
+                                        className="bg-secondary/20 border-border/50 h-11"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="sgst" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">SGST (%)</Label>
+                                    <Input
+                                        id="sgst"
+                                        type="number"
+                                        value={form.sgst_percentage}
+                                        onChange={(e) => setForm({ ...form, sgst_percentage: e.target.value })}
+                                        className="bg-secondary/20 border-border/50 h-11"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="cgst" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">CGST (%)</Label>
+                                    <Input
+                                        id="cgst"
+                                        type="number"
+                                        value={form.cgst_percentage}
+                                        onChange={(e) => setForm({ ...form, cgst_percentage: e.target.value })}
                                         className="bg-secondary/20 border-border/50 h-11"
                                     />
                                 </div>

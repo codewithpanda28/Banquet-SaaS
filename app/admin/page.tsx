@@ -98,6 +98,7 @@ export default function AdminDashboard() {
     const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false)
     const [isProcessingApproval, setIsProcessingApproval] = useState(false)
     const [isLoyaltyRulesOpen, setIsLoyaltyRulesOpen] = useState(false)
+    const [restaurant, setRestaurant] = useState<any>(null)
     const [loyaltyRule, setLoyaltyRule] = useState({ threshold: 500, reward: 'Free Dessert', image: '', ratio: 10 })
     const [isUploadingLoyaltyImage, setIsUploadingLoyaltyImage] = useState(false)
     
@@ -172,6 +173,15 @@ export default function AdminDashboard() {
                 setLoading(false)
                 return
             }
+
+            // Fetch Restaurant Data (for tax rates)
+            const { data: restInfo } = await supabase
+                .from('restaurants')
+                .select('*')
+                .eq('id', currentRid)
+                .single()
+            
+            if (restInfo) setRestaurant(restInfo)
 
             // Fetch Revenue
             const { data: revenueData } = await supabase
@@ -1390,8 +1400,22 @@ export default function AdminDashboard() {
                                         <div className="bg-gray-50 p-4 border-t border-gray-200">
                                             <div className="flex justify-between items-center text-sm mb-1">
                                                 <span className="text-gray-500 font-medium">Subtotal</span>
-                                                <span className="font-semibold text-gray-900">₹{selectedOrder.total.toFixed(2)}</span>
+                                                <span className="font-semibold text-gray-900">₹{(selectedOrder.subtotal || selectedOrder.total - (selectedOrder.tax || 0)).toFixed(2)}</span>
                                             </div>
+                                            <div className="flex justify-between items-center text-sm mb-1">
+                                                <span className="text-gray-500 font-medium">SGST ({selectedOrder.sgst_percentage || restaurant?.sgst_percentage || 2.5}%)</span>
+                                                <span className="font-semibold text-gray-900">₹{(selectedOrder.sgst_amount || 0).toFixed(2)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-sm mb-1">
+                                                <span className="text-gray-500 font-medium">CGST ({selectedOrder.cgst_percentage || restaurant?.cgst_percentage || 2.5}%)</span>
+                                                <span className="font-semibold text-gray-900">₹{(selectedOrder.cgst_amount || 0).toFixed(2)}</span>
+                                            </div>
+                                            {selectedOrder.discount > 0 && (
+                                                <div className="flex justify-between items-center text-sm mb-1 text-green-600">
+                                                    <span className="font-medium">Discount</span>
+                                                    <span className="font-semibold">-₹{selectedOrder.discount.toFixed(2)}</span>
+                                                </div>
+                                            )}
                                             <div className="flex justify-between items-center pt-3 border-t border-gray-200 mt-2">
                                                 <span className="text-base font-bold text-gray-900">Grand Total</span>
                                                 <span className="text-2xl font-black text-gray-900">₹{selectedOrder.total.toFixed(2)}</span>

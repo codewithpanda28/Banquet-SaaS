@@ -35,16 +35,25 @@ export function CartSidebar() {
         getTotal,
         getSubtotal,
         getTax,
+        getSGST,
+        getCGST,
         clearCart,
         coupon,
         applyCoupon,
         removeCoupon,
-        getDiscount
+        getDiscount,
+        setTaxRates
     } = useCartStore()
     const router = useRouter()
 
     const [couponCode, setCouponCode] = useState('')
     const [verifying, setVerifying] = useState(false)
+
+    useEffect(() => {
+        if (restaurant) {
+            setTaxRates(restaurant.sgst_percentage || 2.5, restaurant.cgst_percentage || 2.5)
+        }
+    }, [restaurant, setTaxRates])
 
     useEffect(() => {
         if (isCartOpen) {
@@ -59,6 +68,8 @@ export function CartSidebar() {
 
     const subtotal = getSubtotal()
     const tax = getTax()
+    const sgst = getSGST()
+    const cgst = getCGST()
     const discount = getDiscount()
     const total = getTotal()
 
@@ -231,8 +242,12 @@ export function CartSidebar() {
                                     {/* Coupon section removed as per user request */}
 
                                     <div className="flex justify-between text-muted-foreground font-medium">
-                                        <span>Tax (5%)</span>
-                                        <span>₹{tax.toFixed(2)}</span>
+                                        <span>SGST ({restaurant?.sgst_percentage || '2.5'}%)</span>
+                                        <span>₹{sgst.toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-muted-foreground font-medium">
+                                        <span>CGST ({restaurant?.cgst_percentage || '2.5'}%)</span>
+                                        <span>₹{cgst.toFixed(2)}</span>
                                     </div>
                                     <div className="flex justify-between font-black text-xl pt-2 border-t border-dashed mt-2 text-primary">
                                         <span>Total</span>
