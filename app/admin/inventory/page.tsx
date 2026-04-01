@@ -176,64 +176,49 @@ export default function InventoryPage() {
                 const reader = new FileReader()
                 reader.onload = () => {
                     const result = reader.result as string
-                    // Remove "data:image/jpeg;base64," prefix and keep only base64 data
                     resolve(result.split(',')[1])
                 }
                 reader.onerror = reject
                 reader.readAsDataURL(file)
             })
 
-            // Step 2: Send image to n8n scan-bill webhook
-            const webhookUrl = process.env.NEXT_PUBLIC_SCAN_BILL_WEBHOOK_URL!
-            const response = await fetch(webhookUrl, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    file_name: file.name,
-                    file_type: file.type,
-                    file_size: file.size,
-                    image_base64: base64,
-                    restaurant_id: RESTAURANT_ID,
-                    timestamp: new Date().toISOString()
-                })
-            })
+            // Step 2: Use triggerAutomationWebhook for consistency and proxying
+            // This sends to /api/webhook which then forwards to n8n
+            console.log('📡 Sending bill scan request to internal proxy...');
+            const response = await triggerAutomationWebhook('inventory-upload' as any, {
+                file_name: file.name,
+                file_type: file.type,
+                file_size: file.size,
+                image_base64: base64,
+                restaurant_id: RESTAURANT_ID,
+                timestamp: new Date().toISOString()
+            });
 
-            if (!response.ok) {
-                throw new Error(`Webhook failed with status: ${response.status}`)
+            if (response.error || response.success === false) {
+                console.error('❌ Proxy reported error:', response);
+                throw new Error(response.detail || response.error || 'Webhook trigger failed');
             }
 
-            const data = await response.json()
+            // The actual data from n8n is nested in response.result (if using our proxy) 
+            // or just in response if it's a direct response from older versions
+            const data = response.result || response;
 
             // Step 3: Parse response — n8n should return { items: [{name, qty, unit, price}] }
-            // Support multiple response formats from n8n
             let extractedItems: { name: string, qty: number, unit: string, price: number }[] = []
 
-            if (Array.isArray(data)) {
-                // If n8n returns an array directly
-                extractedItems = data.map((item: any) => ({
+            const rawItems = Array.isArray(data) ? data : (data.items || []);
+
+            if (Array.isArray(rawItems) && rawItems.length > 0) {
+                extractedItems = rawItems.map((item: any) => ({
                     name: item.name || item.item_name || item.product || '',
                     qty: parseFloat(item.qty || item.quantity || item.amount || 0),
                     unit: item.unit || item.uom || 'kg',
                     price: parseFloat(item.price || item.rate || item.cost || item.unit_price || 0)
                 })).filter(item => item.name)
-            } else if (data.items && Array.isArray(data.items)) {
-                extractedItems = data.items.map((item: any) => ({
-                    name: item.name || item.item_name || item.product || '',
-                    qty: parseFloat(item.qty || item.quantity || item.amount || 0),
-                    unit: item.unit || item.uom || 'kg',
-                    price: parseFloat(item.price || item.rate || item.cost || item.unit_price || 0)
-                })).filter((item: any) => item.name)
-            } else if (data[0]?.items && Array.isArray(data[0].items)) {
-                // n8n sometimes wraps in array: [{items: [...]}]
-                extractedItems = data[0].items.map((item: any) => ({
-                    name: item.name || item.item_name || item.product || '',
-                    qty: parseFloat(item.qty || item.quantity || item.amount || 0),
-                    unit: item.unit || item.uom || 'kg',
-                    price: parseFloat(item.price || item.rate || item.cost || item.unit_price || 0)
-                })).filter((item: any) => item.name)
             }
 
             if (extractedItems.length === 0) {
+                console.warn('⚠️ No items extracted from response:', data);
                 toast.error('Koi item nahi mila bill mein. Please clear photo upload karo.')
                 setScanning(false)
                 return
@@ -244,11 +229,10 @@ export default function InventoryPage() {
             toast.success(`Bill scan hua! ${extractedItems.length} items mile 🎉`)
 
         } catch (err: any) {
-            console.error('Bill scan error:', err)
-            toast.error('Bill scan failed. Webhook se data nahi aaya. Console check karo.')
+            console.error('❌ Bill scan critical error:', err)
+            toast.error(`Bill scan failed: ${err.message || 'Server connection error'}`)
         } finally {
             setScanning(false)
-            // Reset file input so same file can be re-uploaded
             if (fileRef.current) fileRef.current.value = ''
         }
     }

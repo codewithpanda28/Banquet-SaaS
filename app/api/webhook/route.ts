@@ -60,8 +60,10 @@ export async function POST(req: NextRequest) {
       timestamp: new Date().toISOString()
     };
 
-    // Determine target URL: Database value preferred, fallback to known working n8n
-    const webhook_url = config?.webhook_url || 'https://n8n.thinkaiq.in/webhook/46b5d7e4-98bf-485f-83d1-f5ec0f40f0a2';
+    // 🚀 [WEBHOOK] UNIVERSAL ROUTING (Send everything to ONE n8n endpoint)
+    // 💡 Tip: n8n covers branching via 'action' field
+    const webhook_url = config?.webhook_url || 'https://n8n.srv1114630.hstgr.cloud/webhook-test/restaurant';
+    
     console.log(`🚀 [WEBHOOK] Forwarding ${actionName} -> ${webhook_url}`);
 
     try {
