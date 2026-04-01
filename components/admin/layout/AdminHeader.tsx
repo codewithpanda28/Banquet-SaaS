@@ -368,40 +368,6 @@ export function AdminHeader() {
                     }
                 }
 
-                // 2. Handle Customer Side Settlement
-                if (selectedDetail.data.customer_id) {
-                    const { data: customerData } = await supabase
-                        .from('customers')
-                        .select('wallet_balance')
-                        .eq('id', selectedDetail.data.customer_id)
-                        .maybeSingle();
-
-                    if (customerData) {
-                        const currentBalance = Number(customerData.wallet_balance) || 0;
-                        const deduction = deductAmount;
-                        
-                        // A. Deduct balance
-                        await supabase
-                            .from('customers')
-                            .update({ 
-                                wallet_balance: currentBalance - deduction,
-                                updated_at: new Date().toISOString()
-                            })
-                            .eq('id', selectedDetail.data.customer_id);
-
-                        // B. Record Transaction for Ledger
-                        await supabase
-                            .from('wallet_transactions')
-                            .insert([{
-                                customer_id: selectedDetail.data.customer_id,
-                                restaurant_id: RESTAURANT_ID,
-                                amount: deduction,
-                                type: 'debit',
-                                reason: `Loyalty Settlement (Order > ₹200)`,
-                                order_id: selectedDetail.data.id
-                            }]);
-                    }
-                }
             }
             // -----------------------------------
 

@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { triggerAutomationWebhook } from '@/lib/webhook'
 import { incrementCouponUsage } from '@/actions/coupon'
 import { Coupon } from '@/types'
 import { format } from 'date-fns'
@@ -428,6 +427,26 @@ export default function CheckoutPage() {
 
             if (itemsError) throw itemsError
 
+            // 📡 Prepare Webhook Data for Payment Confirmation Step
+            // This ensures webhook runs when user clicks 'Completed Payment' or 'Pay Cash', 
+            // NOT when they just click 'Place Order' in Checkout.
+            try {
+                const webhookData = {
+                    bill_id: billId,
+                    customer_name: name,
+                    customer_phone: phone,
+                    total_amount: total,
+                    order_type: orderType,
+                    table_number: tableNumber,
+                    restaurant_id: rid,
+                    items: items.map(i => ({ name: i.name, quantity: i.quantity, price:(i.discounted_price || i.price) }))
+                };
+                sessionStorage.setItem(`webhook_pending_${billId}`, JSON.stringify(webhookData));
+                console.log('📡 [Checkout] Webhook data stored for bill:', billId);
+            } catch (err) {
+                console.error('❌ [Checkout] Failed to store webhook data:', err);
+            }
+
             // Background tasks
             if (coupon && !existingOrderId) {
                 incrementCouponUsage(coupon.id).catch(e => console.error('Coupon increment error:', e));
@@ -449,11 +468,8 @@ export default function CheckoutPage() {
             // Wait a bit for the toast to be readable on mobile
             setTimeout(() => {
                 clearCart()
-                if (paymentMethod === 'upi' && total > 0) {
-                    router.push(`/customer/payment/upi?billId=${billId}&amount=${total.toFixed(2)}`)
-                } else {
-                    router.push(`/customer/order-confirmed/${billId}`)
-                }
+                // Redirect to payment/confirmation page so user can trigger webhook manually
+                router.push(`/customer/payment/upi?billId=${billId}&amount=${total.toFixed(2)}&method=${paymentMethod}`)
             }, 500)
 
         } catch (err: any) {

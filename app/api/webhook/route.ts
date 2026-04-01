@@ -20,11 +20,11 @@ export async function POST(req: NextRequest) {
       .eq('id', restaurant_id)
       .maybeSingle();
 
-    // 📱 Phone Normalization
+    // 📱 Phone Normalization (Ensures digits-only for WhatsApp APIs)
     let cleanPhone = body.phone || body.customer_phone || (body.customer && body.customer.phone) || '';
     if (cleanPhone) {
-        cleanPhone = String(cleanPhone).replace(/\D/g, '');
-        if (cleanPhone.length === 10) cleanPhone = '+91' + cleanPhone;
+        cleanPhone = String(cleanPhone).replace(/\D/g, ''); // Removes all non-digits (including +)
+        if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone; // Add 91 if missing
     }
 
     // 🌐 Dynamic Origin Detection
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     // 🔗 Construction of the universal Feedback/Review URL
     const billIdVal = body.billId || body.bill_id || body.orderId || '';
     const custName = body.customerName || body.customer_name || body.name || 'Guest';
-    const itemsStr = body.itemsOrdered || body.items || '';
+    const itemsStr = body.itemsOrdered || (Array.isArray(body.items) ? body.items.map((i: any) => i.name || i.item_name).join(', ') : body.items) || '';
 
     const feedbackUrl = `${baseUrl}/customer/review?id=${restaurant_id}&billId=${billIdVal}&name=${encodeURIComponent(custName)}&phone=${encodeURIComponent(cleanPhone)}&items=${encodeURIComponent(itemsStr)}`;
 
@@ -43,14 +43,20 @@ export async function POST(req: NextRequest) {
     const finalData = {
       ...body,
       action: actionName,
+      customer_name: custName,
+      customerName: custName,
+      phone: cleanPhone,
+      customer_phone: cleanPhone,
+      orderId: billIdVal, 
+      bill_id: billIdVal,
       restaurant_id,
       restaurant_name: config?.name || body.restaurant_name || 'Restaurant',
+      itemsOrdered: itemsStr, 
       feedback_url: feedbackUrl,
-      customer_phone: cleanPhone,
+      google_review_url: config?.google_review_url || 'https://g.page/review',
       api_url: config?.whatsapp_api_url || 'https://thinkaiq.in/api',
       api_id: config?.whatsapp_api_id || 'bd54faee-23fd-4dfb-8f1c-fda0e6c8af53',
       api_token: config?.whatsapp_token || '',
-      google_review_url: config?.google_review_url || 'https://g.page/review',
       timestamp: new Date().toISOString()
     };
 

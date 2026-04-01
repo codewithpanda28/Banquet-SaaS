@@ -701,13 +701,30 @@ export default function AdminDashboard() {
         const upiValue = method === 'mixed' ? (overrideAmounts?.upi || 0) : (method === 'upi' ? total : 0)
 
         try {
-            // 🏅 [SAAS] LOYALTY POINTS LOGIC (DYNAMIC RATIO)
-            if ((method === 'cash' || method === 'upi' || method === 'mixed') && selectedOrder.customer_id) {
+            // 💰 [SAAS] ADMIN COIN DEDUCTION (Platform Fee - Restaurant only)
+            if ((method === 'cash' || method === 'upi' || method === 'mixed') && Number(selectedOrder.total) > 200) {
+                const restId = String(RESTAURANT_ID);
+                const { data: restData } = await supabase
+                    .from('restaurants')
+                    .select('coin_balance, coin_deduction_per_order')
+                    .eq('id', restId)
+                    .single();
+
+                if (restData) {
+                    const deductAmount = Number(restData.coin_deduction_per_order || 5);
+                    await supabase
+                        .from('restaurants')
+                        .update({ coin_balance: Math.max(0, (Number(restData.coin_balance) || 0) - deductAmount) })
+                        .eq('id', restId);
+                    
+                    window.dispatchEvent(new CustomEvent('refresh-admin-balance'));
+                }
+            }
+
+            // 🏅 [SAAS] LOYALTY POINTS LOGIC (Updated to awarding only)
+            if (selectedOrder.customer_id) {
                 const pointsToEarn = Math.floor(Number(selectedOrder.total) / (loyaltyRule.ratio || 10));
                 if (pointsToEarn > 0) {
-                    console.log(`🏅 [Loyalty] Awarding ${pointsToEarn} points to customer...`);
-                    
-                    // 1. Fetch current points
                     const { data: customerData } = await supabase
                         .from('customers')
                         .select('loyalty_points')
@@ -716,14 +733,11 @@ export default function AdminDashboard() {
 
                     if (customerData) {
                         const newPoints = (Number(customerData.loyalty_points) || 0) + pointsToEarn;
-                        
-                        // 2. Update points
                         await supabase
                             .from('customers')
                             .update({ loyalty_points: newPoints })
                             .eq('id', selectedOrder.customer_id);
 
-                        // 3. Record Loyalty History
                         await supabase
                             .from('loyalty_history')
                             .insert([{
@@ -734,87 +748,6 @@ export default function AdminDashboard() {
                                 reason: `Points Earned (Order #${selectedOrder.bill_id})`,
                                 order_id: selectedOrder.id
                             }]);
-                            
-                        toast.success(`Loyalty Points Earned: +${pointsToEarn} 🏅`);
-                    }
-                }
-            }
-
-            // 💰 [SAAS] COIN WALLET LOGIC
-            // Only deduct if order > 200 and payment is Cash/UPI/Mixed
-            if ((method === 'cash' || method === 'upi' || method === 'mixed') && Number(selectedOrder.total) > 200) {
-                const restId = String(RESTAURANT_ID);
-                let deductAmount = 5;
-
-                // 1. Deduct from Restaurant Admin Coins (The Platform Fee)
-                // We fetch first to ensure we have the latest balance for safety
-                const { data: restData } = await supabase
-                    .from('restaurants')
-                    .select('coin_balance, name, coin_deduction_per_order')
-                    .eq('id', restId)
-                    .single();
-
-                if (restData) {
-                    const currentRestCoins = Number(restData.coin_balance) || 0;
-                    if (restData.coin_deduction_per_order !== undefined && restData.coin_deduction_per_order !== null) {
-                        deductAmount = Number(restData.coin_deduction_per_order);
-                    }
-                    const { data: updatedRest, error: restUpdateError } = await supabase
-                        .from('restaurants')
-                        .update({ coin_balance: Math.max(0, currentRestCoins - deductAmount) })
-                        .eq('id', restId)
-                        .select();
-
-                    if (restUpdateError) {
-                        console.error('❌ [Admin Wallet Error]:', restUpdateError);
-                        toast.error(`Admin Coin Deduction Failed: ${restUpdateError.message}. Check RLS Policies.`);
-                    } else if (!updatedRest || updatedRest.length === 0) {
-                        console.error('⚠️ [Admin Wallet Security]: Update successful but 0 rows affected. RLS block suspected.');
-                        toast.warning(`Security: Coins not deducted (matched 0 rows). Verify ID: ${restId.substring(0,8)}...`);
-                    } else {
-                        console.log(`✅ [Admin Coins] Deducted ${deductAmount} coins successfully. New balance:`, updatedRest[0].coin_balance);
-                        toast.success(`Deducted ${deductAmount} coins from ${restData.name}`);
-                        // Notify header to refresh balance
-                        window.dispatchEvent(new CustomEvent('refresh-admin-balance'));
-                    }
-                }
-
-                // 2. Handle Customer Side Settlement
-                if (selectedOrder.customer_id) {
-                    // Fetch customer current balance
-                    const { data: customerData } = await supabase
-                        .from('customers')
-                        .select('wallet_balance')
-                        .eq('id', selectedOrder.customer_id)
-                        .maybeSingle();
-
-                    if (customerData) {
-                        const currentBalance = Number(customerData.wallet_balance) || 0;
-                        // Use the dynamic deduction rate set by Super Admin
-                        const deduction = deductAmount;
-
-                        // A. Deduct balance
-                        await supabase
-                            .from('customers')
-                            .update({ 
-                                wallet_balance: currentBalance - deduction,
-                                updated_at: new Date().toISOString()
-                            })
-                            .eq('id', selectedOrder.customer_id);
-
-                        // B. Record Transaction with Bill details for the Hub Ledger
-                        await supabase
-                            .from('wallet_transactions')
-                            .insert([{
-                                customer_id: selectedOrder.customer_id,
-                                restaurant_id: RESTAURANT_ID,
-                                amount: deduction,
-                                type: 'debit',
-                                reason: `Loyalty Settlement (Order > ₹200)`,
-                                order_id: selectedOrder.id
-                            }]);
-                            
-                            toast.success(`Loyalty Points Applied: -₹${deduction} from Wallet`);
                     }
                 }
             }
@@ -1330,11 +1263,11 @@ export default function AdminDashboard() {
                                             <p className="text-sm text-gray-500 font-medium">{selectedOrder.customers?.phone || 'No Phone'}</p>
                                             
                                             <div className="mt-3 flex flex-wrap gap-2">
-                                                {selectedOrder.customers?.wallet_balance !== undefined && (
+                                                {selectedOrder.customers?.wallet_balance > 0 && (
                                                     <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-50 rounded-full border border-amber-100">
                                                         <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
                                                         <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest">
-                                                            Wallet: ₹{Number(selectedOrder.customers.wallet_balance).toFixed(0)}
+                                                            Wallet Balance: ₹{Number(selectedOrder.customers.wallet_balance).toFixed(0)}
                                                         </p>
                                                     </div>
                                                 )}
