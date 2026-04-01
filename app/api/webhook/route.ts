@@ -57,9 +57,9 @@ export async function POST(req: Request) {
         let rawPhone = body.phone || body.customer.phone;
         let cleanPhone = rawPhone.replace(/\D/g, ''); // Remove everything but digits
         
-        // If it's a 10-digit number, assume it's Indian and add 91
+        // If it's a 10-digit number, assume it's Indian and add +91
         if (cleanPhone.length === 10) {
-            cleanPhone = '91' + cleanPhone;
+            cleanPhone = '+91' + cleanPhone;
         }
 
         if (body.phone) body.phone = cleanPhone;
@@ -72,12 +72,20 @@ export async function POST(req: Request) {
       whatsapp_api_url = whatsapp_api_url.replace(/\/$/, '') + '/api';
     }
 
+    const origin = process.env.NEXT_PUBLIC_APP_URL || 'https://admin.thegoldbiryani.com';
+    const baseUrl = origin.replace(/\/$/, '');
+    
+    // 🔗 DYNAMIC FEEDBACK LINK (For 1-tap SEO Reviews)
+    const feedbackUrl = `${baseUrl}/customer/review?id=${restaurant_id}&name=${encodeURIComponent(body.customerName || body.name || '')}&phone=${encodeURIComponent(body.phone || '')}&items=${encodeURIComponent(body.itemsOrdered || body.items || '')}`;
+
     const finalData = {
       ...body,
       action: body.action || body.path || 'unknown',
       restaurant_id,
       restaurant_name: config?.name || body.restaurant_name || 'Restaurant',
       // Dynamic Config Injection
+      feedback_url: feedbackUrl, // 🚀 SEO Booster: Link for n8n to send
+      itemsOrdered: body.itemsOrdered || body.items || '',
       api_url: whatsapp_api_url,
       api_id: config?.whatsapp_api_id || 'bd54faee-23fd-4dfb-8f1c-fda0e6c8af53',
       api_token: config?.whatsapp_token || '',
