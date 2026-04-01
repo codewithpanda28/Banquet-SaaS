@@ -2,10 +2,9 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { PageHeader } from '@/components/admin/layout/PageHeader'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import {
     Star,
     MessageSquare,
@@ -13,12 +12,13 @@ import {
     RefreshCw,
     Search,
     Smartphone,
-    QrCode
+    Download
 } from 'lucide-react'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 import { format } from 'date-fns'
-import { QRCodeSVG } from 'qrcode.react'
+import { QRCodeCanvas } from 'qrcode.react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 interface ReviewLog {
     id: string
@@ -31,18 +31,27 @@ interface ReviewLog {
 
 export default function ReviewTerminalPage() {
     const [reviewLogs, setReviewLogs] = useState<ReviewLog[]>([])
+    const [restaurant, setRestaurant] = useState<any>(null)
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
+    const [mounted, setMounted] = useState(false)
+
+    useEffect(() => {
+        setMounted(true)
+    }, [])
 
     const fetchReviews = useCallback(async () => {
         try {
             setLoading(true)
             const { data } = await supabase
-                .from('review_logs')
+                .from('customer_reviews')
                 .select('*')
                 .eq('restaurant_id', RESTAURANT_ID)
                 .order('created_at', { ascending: false })
             setReviewLogs(data || [])
+            
+            const { data: restro } = await supabase.from('restaurants').select('name').eq('id', RESTAURANT_ID).single()
+            if (restro) setRestaurant(restro)
         } catch (error) {
             console.error('Error fetching reviews:', error)
         } finally {
@@ -69,6 +78,17 @@ export default function ReviewTerminalPage() {
         return { total, avgRating: sum / total, highRatings }
     }, [reviewLogs])
 
+    const handleDownload = () => {
+        const canvas = document.getElementById('feedback-qr') as HTMLCanvasElement
+        if (!canvas) return
+        const url = canvas.toDataURL('image/png')
+        const link = document.createElement('a')
+        link.download = `feedback-qr-${restaurant?.name || 'terminal'}.png`
+        link.href = url
+        link.click()
+        toast.success('QR Code Downloaded!')
+    }
+
     const RatingStars = ({ rating }: { rating: number }) => {
         return (
             <div className="flex gap-0.5">
@@ -83,35 +103,11 @@ export default function ReviewTerminalPage() {
         )
     }
 
+    if (!mounted) return null
+
     return (
         <div className="space-y-6 pb-20 animate-in fade-in duration-500 bg-slate-50/20 min-h-screen">
-            {/* Global Print Styles */}
-            <style jsx global>{`
-                @media print {
-                    body {
-                        background: white !important;
-                    }
-                    nav, aside, button, header, .no-print, [role="banner"], [role="navigation"] {
-                        display: none !important;
-                    }
-                    .print-section {
-                        display: block !important;
-                        position: absolute;
-                        top: 50% !important;
-                        left: 50% !important;
-                        transform: translate(-50%, -50%) scale(1.5) !important;
-                        border: none !important;
-                        box-shadow: none !important;
-                        width: auto !important;
-                    }
-                    .main-content {
-                        margin: 0 !important;
-                        padding: 0 !important;
-                    }
-                }
-            `}</style>
-
-            <div className="no-print">
+            <div className="font-sans">
                 <PageHeader
                     title="Review Automation"
                     description="Monitor feedback and manage live terminal"
@@ -122,8 +118,8 @@ export default function ReviewTerminalPage() {
                 </PageHeader>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                <div className="lg:col-span-8 space-y-6 no-print">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start font-sans">
+                <div className="lg:col-span-8 space-y-6">
                     <div className="grid grid-cols-3 gap-4">
                         {[
                             { label: 'Total Logs', value: stats.total, icon: MessageSquare, color: 'text-indigo-600', bg: 'bg-indigo-50/50' },
@@ -144,9 +140,7 @@ export default function ReviewTerminalPage() {
 
                     <Card className="border border-indigo-50 shadow-sm rounded-2xl overflow-hidden bg-white">
                         <CardHeader className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-6 border-b border-slate-50">
-                            <div>
-                                <CardTitle className="text-xl font-bold text-slate-900 italic">Review Repository</CardTitle>
-                            </div>
+                            <CardTitle className="text-xl font-bold text-slate-900 italic">Review Repository</CardTitle>
                             <div className="relative w-full md:w-64">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
                                 <Input 
@@ -159,7 +153,7 @@ export default function ReviewTerminalPage() {
                         </CardHeader>
                         <CardContent className="p-0">
                             {loading ? (
-                                <div className="p-12 text-center text-slate-300">Syncing...</div>
+                                <div className="p-12 text-center text-slate-300 font-bold uppercase tracking-widest text-[10px]">Syncing...</div>
                             ) : filteredLogs.length === 0 ? (
                                 <div className="text-center py-12 text-slate-200 uppercase font-black tracking-widest text-[10px]">No Signals Logged</div>
                             ) : (
@@ -173,12 +167,13 @@ export default function ReviewTerminalPage() {
                                                     {log.rating}
                                                 </div>
                                             </div>
-                                            <div className="flex-1 min-w-0 space-y-1">
+                                            <div className="flex-1 min-w-0 space-y-2">
                                                 <div className="flex items-center gap-2">
-                                                    <p className="font-bold text-sm text-slate-900">{log.customer_name}</p>
+                                                    <p className="font-bold text-sm text-slate-900">{log.customer_name || 'Guest'}</p>
                                                     <RatingStars rating={log.rating} />
+                                                    {log.customer_phone && <span className="text-[10px] text-slate-400 font-medium">({log.customer_phone})</span>}
                                                 </div>
-                                                <p className="text-[11px] text-slate-500 italic bg-white p-3 rounded-xl border border-indigo-50 shadow-sm leading-snug">{log.feedback || 'No comment provided'}</p>
+                                                <p className="text-[11px] text-slate-500 bg-white p-3 rounded-xl border border-indigo-50 shadow-sm leading-relaxed">{log.feedback || 'No comment provided'}</p>
                                             </div>
                                             <div className="shrink-0 text-[10px] text-slate-400 font-bold uppercase tracking-widest">{format(new Date(log.created_at), 'HH:mm')}</div>
                                         </div>
@@ -190,33 +185,35 @@ export default function ReviewTerminalPage() {
                 </div>
 
                 <div className="lg:col-span-4 h-full sticky top-32">
-                    <Card className="print-section border border-indigo-50 shadow-sm rounded-3xl bg-white overflow-hidden flex flex-col">
-                        <div className="bg-slate-900 p-6 text-white flex flex-col items-center text-center no-print-visible">
+                    <Card className="border border-indigo-50 shadow-sm rounded-3xl bg-white overflow-hidden flex flex-col">
+                        <div className="bg-slate-900 p-6 text-white flex flex-col items-center text-center">
                             <Star className="h-6 w-6 text-amber-500 fill-amber-500 mb-2 animate-pulse" />
-                            <h2 className="text-xl font-bold italic">Feedback Unit</h2>
+                            <h2 className="text-xl font-bold italic uppercase tracking-tighter">Feedback Unit</h2>
                         </div>
                         
                         <CardContent className="p-8 flex flex-col items-center gap-8">
-                            <div className="bg-white p-6 rounded-3xl shadow-2xl shadow-indigo-500/10 border-2 border-slate-50 group transition-transform duration-500">
-                                <QRCodeSVG 
-                                    value={`${typeof window !== 'undefined' ? window.location.protocol : 'https:'}//${typeof window !== 'undefined' ? window.location.host : ''}/customer/review?id=${RESTAURANT_ID}`}
-                                    size={180}
+                            <div className="bg-white p-6 rounded-3xl shadow-2xl shadow-indigo-500/10 border-2 border-slate-50 group">
+                                <QRCodeCanvas 
+                                    id="feedback-qr"
+                                    value={`${window.location.protocol}//${window.location.host}/customer/review?id=${RESTAURANT_ID}`}
+                                    size={1024}
+                                    style={{ width: '100%', height: 'auto' }}
                                     level="H"
                                     includeMargin
                                 />
                             </div>
 
-                            <div className="space-y-4 w-full no-print">
+                            <div className="space-y-4 w-full">
                                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 flex items-center gap-4">
                                     <Smartphone className="h-6 w-6 text-indigo-600 shrink-0" />
-                                    <p className="text-[10px] font-medium text-slate-500 leading-snug italic truncate">Scan & rate terminal live.</p>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase leading-snug">Terminal Live</p>
                                 </div>
                                 <Button 
                                     className="w-full h-12 rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-[10px] uppercase tracking-widest shadow-lg"
-                                    onClick={() => window.print()}
+                                    onClick={handleDownload}
                                 >
-                                    <QrCode className="h-4 w-4 mr-3" />
-                                    Export & Print
+                                    <Download className="h-4 w-4 mr-3" />
+                                    Download QR Code
                                 </Button>
                             </div>
                         </CardContent>
