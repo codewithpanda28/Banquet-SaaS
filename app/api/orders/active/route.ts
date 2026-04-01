@@ -46,7 +46,7 @@ export async function GET(request: Request) {
 
         let query = supabaseAdmin
             .from('orders')
-            .select('id, bill_id, total, subtotal, status, payment_status, table_id, customer_id')
+            .select('id, bill_id, total, subtotal, tax, sgst_amount, cgst_amount, status, payment_status, table_id, customer_id')
             .eq('restaurant_id', rid)
             .eq('payment_status', 'pending')
             .neq('status', 'cancelled')

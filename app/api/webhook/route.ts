@@ -38,7 +38,7 @@ export async function POST(req: Request) {
     const tenantCookie = cookies.split('; ').find(row => row.startsWith('tenant_id='));
     const cookieId = tenantCookie ? tenantCookie.split('=')[1] : null;
 
-    const restaurant_id = body.restaurant_id || req.headers.get('x-restaurant-id') || cookieId;
+    const restaurant_id = body.restaurant_id || body.restaurantId || req.headers.get('x-restaurant-id') || cookieId;
 
     if (!restaurant_id) {
       console.warn(`⚠️ [WEBHOOK] No tenant identity found for action: ${body.action}`)
@@ -52,13 +52,36 @@ export async function POST(req: Request) {
       .eq('id', restaurant_id)
       .maybeSingle();
 
+    // 🏹 PHONE SANITIZATION: Ensure WhatsApp format (Prepend 91 for India if missing)
+    if (body.phone || (body.customer && body.customer.phone)) {
+        let rawPhone = body.phone || body.customer.phone;
+        let cleanPhone = rawPhone.replace(/\D/g, ''); // Remove everything but digits
+        
+        // If it's a 10-digit number, assume it's Indian and add 91
+        if (cleanPhone.length === 10) {
+            cleanPhone = '91' + cleanPhone;
+        }
+
+        if (body.phone) body.phone = cleanPhone;
+        if (body.customer && body.customer.phone) body.customer.phone = cleanPhone;
+        console.log(`📱 [WEBHOOK] Normalized Phone: ${rawPhone} -> ${cleanPhone}`);
+    }
+
+    let whatsapp_api_url = config?.whatsapp_api_url || 'https://thinkaiq.in/api';
+    if (whatsapp_api_url.includes('thinkaiq.in') && !whatsapp_api_url.endsWith('/api') && !whatsapp_api_url.endsWith('/api/')) {
+      whatsapp_api_url = whatsapp_api_url.replace(/\/$/, '') + '/api';
+    }
+
     const finalData = {
       ...body,
       action: body.action || body.path || 'unknown',
       restaurant_id,
       restaurant_name: config?.name || body.restaurant_name || 'Restaurant',
       // Dynamic Config Injection
-      whatsapp_api_url: config?.whatsapp_api_url || 'https://thinkaiq.in/api',
+      api_url: whatsapp_api_url,
+      api_id: config?.whatsapp_api_id || 'bd54faee-23fd-4dfb-8f1c-fda0e6c8af53',
+      api_token: config?.whatsapp_token || '',
+      whatsapp_api_url,
       whatsapp_api_id: config?.whatsapp_api_id || 'bd54faee-23fd-4dfb-8f1c-fda0e6c8af53',
       whatsapp_token: config?.whatsapp_token || '',
       google_review_url: config?.google_review_url || 'https://g.page/review',

@@ -22,7 +22,7 @@ import { Order } from '@/types'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { triggerPaymentWebhook } from '@/lib/webhook'
+import { triggerPaymentWebhook, triggerAutomationWebhook } from '@/lib/webhook'
 
 // Helper to robustly parse dates primarily from UTC
 const parseDate = (dateString: string) => {
@@ -246,7 +246,39 @@ export default function OrdersPage() {
             const cgstAmount = (subtotal * cgstRate) / 100
             const total = subtotal + sgstAmount + cgstAmount
 
-            const billId = `BILL${format(new Date(), 'yyyyMMdd')}${Math.floor(Math.random() * 10000)}`
+            // 🚀 NEW: Check for existing active bill to join
+            let orderId = ''
+            let billId = ''
+            let isUpdating = false
+            let existingTotal = 0
+            let existingSubtotal = 0
+            let existingTax = 0
+            let existingSGST = 0
+            let existingCGST = 0
+
+            if (manualOrderType === 'dine_in' && manualTableId) {
+                try {
+                    const res = await fetch(`/api/orders/active?restaurantId=${RESTAURANT_ID}&tableId=${manualTableId}&join=true&t=${Date.now()}`)
+                    const activeData = await res.json()
+                    if (activeData.order) {
+                        orderId = activeData.order.id
+                        billId = activeData.order.bill_id
+                        existingTotal = Number(activeData.order.total) || 0
+                        existingSubtotal = Number(activeData.order.subtotal) || 0
+                        existingTax = Number(activeData.order.tax) || 0
+                        existingSGST = Number(activeData.order.sgst_amount) || 0
+                        existingCGST = Number(activeData.order.cgst_amount) || 0
+                        isUpdating = true
+                        console.log('✅ Found existing bill to join:', billId)
+                    }
+                } catch (e) {
+                    console.error('Error checking active order:', e)
+                }
+            }
+
+            if (!isUpdating) {
+                billId = `BILL${format(new Date(), 'yyyyMMdd')}${Math.floor(Math.random() * 10000)}`
+            }
 
             // 2. Create customer if phone provided
             let customerId = null
@@ -275,38 +307,67 @@ export default function OrdersPage() {
                 }
             }
 
-            // 3. Insert Order
-            const { data: newOrder, error: orderErr } = await supabase
-                .from('orders')
-                .insert([{
-                    bill_id: billId,
-                    restaurant_id: RESTAURANT_ID,
-                    customer_id: customerId,
-                    table_id: manualTableId || null,
-                    order_type: manualOrderType,
-                    status: 'pending', // Auto accepted
-                    payment_status: 'pending',
-                    subtotal: subtotal,
-                    sgst_amount: sgstAmount,
-                    cgst_amount: cgstAmount,
-                    tax: sgstAmount + cgstAmount,
-                    total: total,
-                    delivery_address: manualOrderType === 'home_delivery' ? manualCustomer.address : null,
-                    notes: 'Manual Admin Entry'
-                }])
-                .select()
-                .single()
+            let newOrder: any = null
 
-            if (orderErr) throw orderErr
+            if (isUpdating) {
+                // 3a. Update Existing Order
+                const { data: updatedDoc, error: updateErr } = await supabase
+                    .from('orders')
+                    .update({
+                        total: existingTotal + total,
+                        subtotal: existingSubtotal + subtotal,
+                        tax: existingTax + (sgstAmount + cgstAmount),
+                        sgst_amount: existingSGST + sgstAmount,
+                        cgst_amount: existingCGST + cgstAmount,
+                        status: 'pending', // Reset to pending for kitchen notification
+                        updated_at: new Date().toISOString(),
+                        notes: 'Manual Admin Entry (Updated)'
+                    })
+                    .eq('id', orderId)
+                    .select()
+                    .single()
 
-            // 4. Insert Order Items
+                if (updateErr) throw updateErr
+                newOrder = updatedDoc
+                toast.success(`Items added to Bill #${billId}! 🚀`)
+            } else {
+                // 3b. Insert New Order
+                const { data: insertedDoc, error: orderErr } = await supabase
+                    .from('orders')
+                    .insert([{
+                        bill_id: billId,
+                        restaurant_id: RESTAURANT_ID,
+                        customer_id: customerId,
+                        table_id: manualTableId || null,
+                        order_type: manualOrderType,
+                        status: 'pending', // Auto accepted
+                        payment_status: 'pending',
+                        subtotal: subtotal,
+                        sgst_amount: sgstAmount,
+                        cgst_amount: cgstAmount,
+                        tax: sgstAmount + cgstAmount,
+                        total: total,
+                        delivery_address: manualOrderType === 'home_delivery' ? manualCustomer.address : null,
+                        notes: 'Manual Admin Entry'
+                    }])
+                    .select()
+                    .single()
+
+                if (orderErr) throw orderErr
+                newOrder = insertedDoc
+                orderId = newOrder.id
+            }
+
+            // 4. Insert Order Items (Always new items)
             const orderItemsPayload = manualCart.map(item => ({
-                order_id: newOrder.id,
+                order_id: orderId,
+                restaurant_id: RESTAURANT_ID, 
                 menu_item_id: item.id,
                 item_name: item.name,
                 quantity: item.quantity,
                 price: item.discounted_price || item.price,
-                total: (item.discounted_price || item.price) * item.quantity
+                total: (item.discounted_price || item.price) * item.quantity,
+                status: 'pending' // Required for kitchen flow
             }))
 
             const { error: itemsErr } = await supabase
@@ -316,22 +377,56 @@ export default function OrdersPage() {
             if (itemsErr) throw itemsErr
 
             // 5. Mark table occupied if dine-in
-            if (manualOrderType === 'dine_in' && manualTableId) {
+            if (manualOrderType === 'dine_in' && manualTableId && !isUpdating) {
                 await supabase
                     .from('restaurant_tables')
                     .update({ status: 'occupied' })
                     .eq('id', manualTableId)
             }
 
-            toast.success('Manual Order Placed! 🚀')
+            // 📢 6. TRIGGER WHATSAPP NOTIFICATION
+            if (manualCustomer.phone) {
+                const tableNumber = availableTables.find(t => t.id === manualTableId)?.table_number || 0
+                
+                const webhookData = {
+                    action: 'new-order',
+                    bill_id: billId,
+                    amount: total,
+                    customer: {
+                        name: manualCustomer.name || 'Guest',
+                        phone: manualCustomer.phone,
+                        address: manualCustomer.address
+                    },
+                    order_type: manualOrderType,
+                    table_number: tableNumber,
+                    items: manualCart.map(i => ({
+                        name: i.name,
+                        quantity: i.quantity,
+                        price: i.discounted_price || i.price,
+                        total: (i.discounted_price || i.price) * i.quantity
+                    })),
+                    payment_method: 'unpaid',
+                    restaurant_id: RESTAURANT_ID,
+                    status: isUpdating ? 'updated' : 'new'
+                }
+
+                triggerAutomationWebhook('new-order', webhookData).catch(err => {
+                    console.error('Manual order WhatsApp trigger failed:', err)
+                })
+            }
+
+            toast.success(isUpdating ? `Bill #${billId} updated! 🚀` : `Manual Order Placed! 🚀`)
             setIsManualOrderOpen(false)
+            setManualCart([])
+            setManualTableId('')
+            setManualCustomer({ name: '', phone: '', address: '' })
             fetchOrders()
             
             // Auto open for print/view
-            handleViewOrder(newOrder.id)
-        } catch (error) {
-            console.error('Error placing manual order:', error)
-            toast.error('Placement failed')
+            if (newOrder?.id) handleViewOrder(newOrder.id)
+        } catch (error: any) {
+            console.error('❌ [MANUAL ORDER ERROR]:', error.message || error)
+            toast.error('Placement failed: ' + (error.message || 'Unknown error'))
         } finally {
             setProcessingPayment(false)
         }
@@ -1235,12 +1330,21 @@ export default function OrdersPage() {
                                                 value={manualCustomer.name}
                                                 onChange={(e) => setManualCustomer({ ...manualCustomer, name: e.target.value })}
                                             />
-                                            <Input
-                                                placeholder="Phone Number"
-                                                className="bg-white border-gray-200 h-9 text-xs rounded-lg font-medium focus:ring-primary shadow-sm"
-                                                value={manualCustomer.phone}
-                                                onChange={(e) => setManualCustomer({ ...manualCustomer, phone: e.target.value })}
-                                            />
+                                            <div className="relative">
+                                                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 border-r pr-2 border-gray-200">
+                                                    +91
+                                                </div>
+                                                <Input
+                                                    placeholder="Phone Number"
+                                                    className="bg-white border-gray-200 h-9 text-xs rounded-lg font-medium focus:ring-primary shadow-sm pl-11"
+                                                    value={manualCustomer.phone}
+                                                    maxLength={10}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value.replace(/\D/g, '').slice(0, 10);
+                                                        setManualCustomer({ ...manualCustomer, phone: val })
+                                                    }}
+                                                />
+                                            </div>
                                             {manualOrderType === 'home_delivery' && (
                                                 <div className="col-span-2">
                                                     <Input

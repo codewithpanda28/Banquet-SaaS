@@ -15,14 +15,24 @@ export default function KitchenPage() {
 
     // ULTRA-AGGRESSIVE 2 SEC REFRESH
     useEffect(() => {
+        let isFetching = false;
+        
         const refreshData = async () => {
+            if (isFetching) return;
+            isFetching = true;
             try {
                 const { getActiveOrders } = await import('@/services/orderService')
-                const freshOrders = await getActiveOrders()
-                setOrders(freshOrders)
-                console.log('🔄 [KITCHEN] 2s Heartbeat Sync Completed')
+                let freshOrders = await getActiveOrders()
+                
+                // 🛡️ DEDUPLICATION: Ensure unique order IDs to prevent React key errors
+                const uniqueOrders = Array.from(new Map(freshOrders.map((o: any) => [o.id, o])).values())
+                
+                setOrders(uniqueOrders)
+                console.log(`🔄 [KITCHEN] Heartbeat Sync: ${uniqueOrders.length} unique orders`)
             } catch (err) {
                 console.error('❌ [KITCHEN] Heartbeat Sync Failed:', err)
+            } finally {
+                isFetching = false;
             }
         }
         

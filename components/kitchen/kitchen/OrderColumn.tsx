@@ -101,13 +101,15 @@ export default function OrderColumn({ title, orders, emptyMessage, columnType }:
                         </p>
                     </div>
                 ) : (
-                    orders.map((order) => (
-                        <OrderCard
-                            key={order.id}
-                            order={order}
-                            onViewDetails={() => setSelectedOrder(order)}
-                        />
-                    ))
+                    orders
+                        .filter((order, index, self) => self.findIndex(o => o.id === order.id) === index)
+                        .map((order) => (
+                            <OrderCard
+                                key={order.id}
+                                order={order}
+                                onViewDetails={() => setSelectedOrder(order)}
+                            />
+                        ))
                 )}
             </div>
         </div>
