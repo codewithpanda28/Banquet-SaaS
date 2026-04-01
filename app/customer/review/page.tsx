@@ -77,14 +77,18 @@ function ReviewContent() {
     const handleQuickSubmit = async (lowRating: number) => {
         setSubmitting(true)
         try {
-            await supabase.from('customer_reviews').insert({
+            const { error } = await supabase.from('customer_reviews').insert({
                 restaurant_id: restaurantId,
-                bill_id: billId,
                 rating: lowRating,
                 feedback: 'Low rating given by customer',
-                customer_name: customerName,
-                customer_phone: customerPhone
+                customer_name: customerName || 'Guest',
+                customer_phone: customerPhone || ''
             })
+            if (error) {
+                console.error('Quick submit error:', error)
+                toast.error('Could not save feedback, please try again.')
+                return
+            }
             setSubmitted(true)
         } catch (error) {
             console.error('Submission error:', error)
@@ -94,18 +98,23 @@ function ReviewContent() {
     }
 
     const handleSubmit = async () => {
-        if (!rating) return
+        if (!rating) { toast.error('Please select a star rating!'); return }
         setSubmitting(true)
         try {
-            await supabase.from('customer_reviews').insert({
+            const { error } = await supabase.from('customer_reviews').insert({
                 restaurant_id: restaurantId,
-                bill_id: billId,
                 rating: rating,
                 feedback: feedback,
-                customer_name: customerName,
-                customer_phone: customerPhone
+                customer_name: customerName || 'Guest',
+                customer_phone: customerPhone || ''
             })
-            
+
+            if (error) {
+                console.error('Submit error:', error)
+                toast.error('Could not save feedback. Please try again.')
+                return
+            }
+
             // 🔥 REDIRECT TO GOOGLE REVIEW LINK FROM SETTINGS
             const googleUrl = restaurant?.google_review_url || 'https://g.page/review'
             window.open(googleUrl, '_blank')

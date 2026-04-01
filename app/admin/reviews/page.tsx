@@ -14,7 +14,8 @@ import {
     Smartphone,
     Download
 } from 'lucide-react'
-import { supabase, RESTAURANT_ID } from '@/lib/supabase'
+import { Badge } from '@/components/ui/badge'
+import { supabase, RESTAURANT_ID, getRestaurantId } from '@/lib/supabase'
 import { format } from 'date-fns'
 import { QRCodeCanvas } from 'qrcode.react'
 import { cn } from '@/lib/utils'
@@ -43,17 +44,35 @@ export default function ReviewTerminalPage() {
     const fetchReviews = useCallback(async () => {
         try {
             setLoading(true)
-            const { data } = await supabase
-                .from('customer_reviews')
-                .select('*')
-                .eq('restaurant_id', RESTAURANT_ID)
-                .order('created_at', { ascending: false })
-            setReviewLogs(data || [])
-            
-            const { data: restro } = await supabase.from('restaurants').select('name').eq('id', RESTAURANT_ID).single()
+
+            // 🔄 SUPER SYNC: Check all possible ID sources
+            const currentId = getRestaurantId() || RESTAURANT_ID || localStorage.getItem('admin_restaurant_id') || localStorage.getItem('tenant_id')
+
+            if (!currentId) {
+                console.error('❌ [Review Sync] CRITICAL: No Restaurant ID detected in any source.')
+                setLoading(false)
+                return
+            }
+
+            console.log('📡 [Review Sync] Syncing reviews for ID:', currentId)
+
+            // 🔄 Optimized Fetch with table-isolation
+            const [customerData, logData] = await Promise.all([
+                supabase.from('customer_reviews').select('*').eq('restaurant_id', currentId).order('created_at', { ascending: false }).then(r => r.data || []),
+                supabase.from('review_logs').select('*').eq('restaurant_id', currentId).order('created_at', { ascending: false }).then(r => r.data || [])
+            ])
+
+            const combined = [...customerData, ...logData]
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+            setReviewLogs(combined)
+
+            // Sync Restaurant Name for the terminal display
+            const { data: restro } = await supabase.from('restaurants').select('name').eq('id', currentId).single()
             if (restro) setRestaurant(restro)
+
         } catch (error) {
-            console.error('Error fetching reviews:', error)
+            console.error('❌ [Review Sync] Fatal Fetch Error:', error)
         } finally {
             setLoading(false)
         }
@@ -64,7 +83,7 @@ export default function ReviewTerminalPage() {
     }, [fetchReviews])
 
     const filteredLogs = useMemo(() => {
-        return reviewLogs.filter(log => 
+        return reviewLogs.filter(log =>
             log.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
             log.customer_phone?.includes(search)
         )
@@ -112,9 +131,15 @@ export default function ReviewTerminalPage() {
                     title="Review Automation"
                     description="Monitor feedback and manage live terminal"
                 >
-                    <Button variant="outline" size="sm" onClick={fetchReviews} className="rounded-xl border-indigo-100 text-indigo-600 h-10 px-6">
-                        <RefreshCw className="h-4 w-4 mr-2" /> Refresh
-                    </Button>
+                    <div className="flex items-center gap-3">
+                        {loading && <div className="h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />}
+                        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                            System: Live Sync Active
+                        </Badge>
+                        <Button variant="outline" size="sm" onClick={fetchReviews} className="rounded-xl border-indigo-100 text-indigo-600 h-10 px-6 bg-white hover:bg-indigo-50">
+                            <RefreshCw className={cn("h-4 w-4 mr-2", loading && "animate-spin")} /> Refresh
+                        </Button>
+                    </div>
                 </PageHeader>
             </div>
 
@@ -143,11 +168,11 @@ export default function ReviewTerminalPage() {
                             <CardTitle className="text-xl font-bold text-slate-900 italic">Review Repository</CardTitle>
                             <div className="relative w-full md:w-64">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-300" />
-                                <Input 
-                                    value={search} 
-                                    onChange={e => setSearch(e.target.value)} 
-                                    placeholder="Filter Feed..." 
-                                    className="pl-10 h-10 rounded-xl border-none bg-slate-50 font-bold text-xs" 
+                                <Input
+                                    value={search}
+                                    onChange={e => setSearch(e.target.value)}
+                                    placeholder="Filter Feed..."
+                                    className="pl-10 h-10 rounded-xl border-none bg-slate-50 font-bold text-xs"
                                 />
                             </div>
                         </CardHeader>
@@ -190,10 +215,10 @@ export default function ReviewTerminalPage() {
                             <Star className="h-6 w-6 text-amber-500 fill-amber-500 mb-2 animate-pulse" />
                             <h2 className="text-xl font-bold italic uppercase tracking-tighter">Feedback Unit</h2>
                         </div>
-                        
+
                         <CardContent className="p-8 flex flex-col items-center gap-8">
                             <div className="bg-white p-6 rounded-3xl shadow-2xl shadow-indigo-500/10 border-2 border-slate-50 group">
-                                <QRCodeCanvas 
+                                <QRCodeCanvas
                                     id="feedback-qr"
                                     value={`${window.location.protocol}//${window.location.host}/customer/review?id=${RESTAURANT_ID}`}
                                     size={1024}
@@ -208,7 +233,7 @@ export default function ReviewTerminalPage() {
                                     <Smartphone className="h-6 w-6 text-indigo-600 shrink-0" />
                                     <p className="text-[10px] font-bold text-slate-400 uppercase leading-snug">Terminal Live</p>
                                 </div>
-                                <Button 
+                                <Button
                                     className="w-full h-12 rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-[10px] uppercase tracking-widest shadow-lg"
                                     onClick={handleDownload}
                                 >

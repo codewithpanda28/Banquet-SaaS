@@ -2,8 +2,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 
-// Use private service role key for backend operations to bypass RLS if needed,
-// but here we can just use the anon key if the policy allows.
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 const supabase = createClient(supabaseUrl, supabaseAnonKey)
@@ -26,7 +24,6 @@ export async function POST(req: Request) {
             }, { status: 400 })
         }
 
-        // 1. Log the review to the database
         const { data: restaurant } = await supabase
             .from('restaurants')
             .select('google_review_link, review_threshold')
@@ -36,20 +33,27 @@ export async function POST(req: Request) {
         const threshold = restaurant?.review_threshold || 4
         const shouldSendGoogle = rating >= threshold
 
+        // ✅ FIXED: Save to customer_reviews so it appears in the admin dashboard
         const { data, error } = await supabase
-            .from('review_logs')
+            .from('customer_reviews')
             .insert({
                 restaurant_id,
                 customer_name,
-                customer_phone,
+                customer_phone: customer_phone || '',
                 rating,
                 feedback,
+                source: 'whatsapp',
                 google_link_sent: shouldSendGoogle
             })
             .select()
             .single()
 
-        if (error) throw error
+        if (error) {
+            console.error('❌ [Review Submit API] DB Error:', error)
+            throw error
+        }
+
+        console.log(`✅ [Review Submit API] Saved review for restaurant: ${restaurant_id}`)
 
         return NextResponse.json({
             success: true,
