@@ -14,6 +14,7 @@ export type WebhookType =
     | 'add-stock'
     | 'inventory-low'
     | 'inventory-all'
+    | 'zomato-order'
     | 'swiggy-order'
     | 'upsell'
     | 'report-realtime'
