@@ -118,7 +118,7 @@ export default function TrackOrderPage() {
             <div className="absolute top-48 -left-24 w-64 h-64 bg-orange-200/20 rounded-full blur-3xl -z-10" />
 
             {/* Header */}
-            <header className="px-3 sm:px-4 py-3 sm:py-4 sticky top-[3.5rem] z-40 flex items-center justify-between bg-white/80 backdrop-blur-md border-b border-white/20 shadow-sm">
+            <header className="px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between bg-white border-b border-slate-100 mb-4">
                 <Button
                     variant="ghost"
                     size="icon"
@@ -127,9 +127,8 @@ export default function TrackOrderPage() {
                 >
                     <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6" />
                 </Button>
-                <div className="flex flex-col items-center">
-                    <span className="text-[9px] sm:text-[10px] font-black tracking-[0.2em] text-slate-400 uppercase">Order ID</span>
-                    <span className="text-xs sm:text-sm font-bold text-slate-900 font-mono tracking-wide">#{billId.slice(-6)}</span>
+                <div className="flex-1 text-center">
+                    <span className="text-[10px] font-black tracking-[0.2em] text-slate-400 uppercase">Live Tracking Status</span>
                 </div>
                 <div className="w-9 sm:w-10 flex justify-end pr-1 sm:pr-0">
                     {order.table_id && (
@@ -140,9 +139,19 @@ export default function TrackOrderPage() {
                 </div>
             </header>
 
-            <main className="px-6 pt-8 space-y-10 max-w-lg mx-auto">
+            <main className="px-6 pt-12 space-y-12 max-w-lg mx-auto relative">
+                {/* 🏷️ Top Branding & Order ID */}
+                <div className="flex flex-col items-center text-center">
+                    <div className="bg-white border border-slate-100 shadow-sm rounded-3xl px-6 py-3 flex flex-col items-center animate-in slide-in-from-top-4 duration-500">
+                        <span className="text-[9px] font-black tracking-[0.3em] text-slate-400 uppercase mb-1">Official Order ID</span>
+                        <span className="text-xl font-mono font-black text-slate-900 tracking-[0.2em]">
+                            #{billId.slice(-6).toUpperCase()}
+                        </span>
+                    </div>
+                </div>
+
                 {/* Hero Status */}
-                <div className="flex flex-col items-center text-center space-y-6">
+                <div className="flex flex-col items-center text-center space-y-8">
                     <motion.div
                         initial={{ scale: 0.8, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}

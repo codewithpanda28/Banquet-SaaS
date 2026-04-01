@@ -428,32 +428,6 @@ export default function CheckoutPage() {
 
             if (itemsError) throw itemsError
 
-            // 📢 5. TRIGGER WEBHOOK IMMEDIATELY (RELIABLE NOTIFICATION)
-            const webhookData = {
-                action: 'new-order',
-                bill_id: billId,
-                amount: total,
-                customer: { name, phone, address },
-                order_type: orderType || 'dine_in',
-                table_number: tableNumber || 0,
-                items: items.map(i => ({
-                    name: i.name,
-                    quantity: i.quantity,
-                    price: i.discounted_price || i.price,
-                    total: i.lineTotal
-                })),
-                payment_method: paymentMethod,
-                restaurant_id: rid,
-                whatsapp_api_url: restaurant?.whatsapp_api_url,
-                whatsapp_api_id: restaurant?.whatsapp_api_id,
-                whatsapp_token: restaurant?.whatsapp_token,
-                restaurant_name: restaurant?.name || 'Restaurant',
-                custom_domain: restaurant?.custom_domain
-            }
-
-            // Fire and forget webhook for immediate notification
-            triggerAutomationWebhook('new-order', webhookData).catch(err => console.error('Webhook failed:', err));
-
             // Background tasks
             if (coupon && !existingOrderId) {
                 incrementCouponUsage(coupon.id).catch(e => console.error('Coupon increment error:', e));
@@ -471,8 +445,6 @@ export default function CheckoutPage() {
                 link: `/customer/track/${billId}`
             })
 
-            // Store for manual re-trigger if needed
-            sessionStorage.setItem(`webhook_pending_${billId}`, JSON.stringify(webhookData));
 
             // Wait a bit for the toast to be readable on mobile
             setTimeout(() => {
