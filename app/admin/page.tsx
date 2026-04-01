@@ -855,6 +855,7 @@ export default function AdminDashboard() {
             // 3. Trigger n8n Webhook for Payment Confirmation
             await triggerPaymentWebhook({
                 action: 'submit_rating',
+                restaurantId: RESTAURANT_ID,
                 id: selectedOrder.id,
                 bill_id: selectedOrder.bill_id,
                 phone: selectedOrder.customers?.phone || '',
