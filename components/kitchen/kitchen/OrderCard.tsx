@@ -187,9 +187,9 @@ export default function OrderCard({ order, onViewDetails }: OrderCardProps) {
                                             {item.quantity}x
                                         </span>{" "}
                                         <span className="text-slate-900 font-medium">{item.item_name}</span>
-                                        {item.special_instructions && (
+                                        {item.notes && (
                                             <div className="mt-0.5 text-xs italic text-amber-400">
-                                                → {item.special_instructions}
+                                                → {item.notes}
                                             </div>
                                         )}
                                     </div>

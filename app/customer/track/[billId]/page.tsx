@@ -106,8 +106,8 @@ export default function TrackOrderPage() {
 
     let currentStepIndex = 0;
     if (order.status === 'preparing') currentStepIndex = 1;
-    if (['ready', 'served'].includes(order.status)) currentStepIndex = 2;
-    if (order.status === 'completed') currentStepIndex = 3;
+    if (order.status === 'ready') currentStepIndex = 2;
+    if (['served', 'completed'].includes(order.status)) currentStepIndex = 3;
 
     const activeStep = STATUS_STEPS[currentStepIndex]
     const isCompleted = ['served', 'completed'].includes(order.status)

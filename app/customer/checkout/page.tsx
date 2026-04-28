@@ -405,7 +405,7 @@ export default function CheckoutPage() {
                 quantity: item.quantity,
                 price: item.discounted_price || item.price,
                 subtotal: item.lineTotal,
-                notes: item.instructions,
+                notes: item.instructions || null,
                 status: 'pending'
             }))
 
@@ -572,8 +572,10 @@ export default function CheckoutPage() {
                                                 <span className="font-bold text-[#1A1A1A] group-hover:text-[#8B6508] transition-colors text-sm">
                                                     {item.name}
                                                 </span>
-                                                {item.instructions && (
-                                                    <span className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">{item.instructions}</span>
+                                                {item.notes && (
+                                                    <span className="text-[11px] text-amber-600 italic mt-0.5 line-clamp-1">
+                                                        → {item.notes}
+                                                    </span>
                                                 )}
                                             </div>
                                         </div>

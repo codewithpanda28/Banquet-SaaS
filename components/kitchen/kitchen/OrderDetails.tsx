@@ -99,7 +99,7 @@ export default function OrderDetails({ order: initialOrder, onClose }: OrderDeta
               <span class="qty">${item.quantity}x</span>
               <span class="name">${item.item_name}</span>
             </div>
-            ${item.special_instructions ? `<div class="instructions">Note: ${item.special_instructions}</div>` : ''}
+            ${item.notes ? `<div class="instructions">Note: ${item.notes}</div>` : ''}
           `).join('')}
         </div>
         ${localOrder.special_instructions ? `<div class="footer"><strong>Note:</strong> ${localOrder.special_instructions}</div>` : ''}
@@ -188,12 +188,12 @@ export default function OrderDetails({ order: initialOrder, onClose }: OrderDeta
                                             ) : null
                                         })()}
                                     </div>
-                                    {item.special_instructions && (
+                                    {item.notes && (
                                         <p className={`italic text-sm mt-1 ${item.status === 'ready'
                                             ? 'text-slate-400 line-through'
                                             : 'text-amber-600'
                                             }`}>
-                                            Note: {item.special_instructions}
+                                            Note: {item.notes}
                                         </p>
                                     )}
                                 </div>

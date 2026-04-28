@@ -372,6 +372,7 @@ export default function OrdersPage() {
                 quantity: item.quantity,
                 price: item.discounted_price || item.price,
                 total: (item.discounted_price || item.price) * item.quantity,
+                notes: item.instructions || null,
                 status: 'pending' // Required for kitchen flow
             }))
 
