@@ -22,7 +22,6 @@ import {
     SheetTitle,
     SheetTrigger,
 } from "@/components/ui/sheet"
-import { UpsellList } from '../menu/UpsellList'
 import { useRestaurant } from '@/hooks/useRestaurant'
 
 export function CartSidebar() {
@@ -208,16 +207,6 @@ export function CartSidebar() {
                                             </div>
                                         </motion.div>
                                     ))}
-                                </div>
-                            )}
-
-                            {items.length > 0 && restaurant?.id && (
-                                <div className="pt-2">
-                                    <UpsellList
-                                        restaurantId={restaurant.id}
-                                        limit={3}
-                                        title="Frequently Ordered Together"
-                                    />
                                 </div>
                             )}
                         </div>
