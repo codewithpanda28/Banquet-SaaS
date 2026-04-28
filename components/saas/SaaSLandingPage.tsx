@@ -5,79 +5,79 @@ import Link from 'next/link';
 import {
   ChevronRight, LayoutDashboard, Utensils, Zap, Globe, Smartphone, BarChart3,
   Star, Check, ArrowRight, Menu, X, CalendarCheck, Bell, ShieldCheck, TrendingUp,
-  Users, Clock, Layers, Cpu, MessageSquare, ChevronDown, Award, Receipt
+  Users, Clock, Layers, Cpu, MessageSquare, ChevronDown, Award, Receipt, QrCode
 } from 'lucide-react';
 
 const NAV_LINKS = [
   { label: 'Features', href: '#features' },
   { label: 'Dashboards', href: '#dashboards' },
   { label: 'How It Works', href: '#how-it-works' },
-  { label: 'Pricing', href: '#pricing' },
+  // { label: 'Pricing', href: '#pricing' },
   { label: 'Testimonials', href: '#testimonials' },
 ];
 
 const FEATURES = [
   {
     icon: <LayoutDashboard className="w-7 h-7 text-orange-500" />,
-    title: 'Centralized Venue Dashboard',
-    desc: 'Manage all your banquet halls, lawns, and meeting rooms from a single screen. Track bookings, leads, and revenue in real-time.',
+    title: 'Centralized HQ Dashboard',
+    desc: 'Manage menus, staff, live orders, and analytics for your banquet halls from a single powerful control center.',
     color: 'orange',
   },
   {
-    icon: <CalendarCheck className="w-7 h-7 text-violet-500" />,
-    title: 'Smart Event Calendar',
-    desc: 'Visual calendar to block dates, manage inquiries, and prevent double-bookings. Switch between daily, weekly, and monthly views effortlessly.',
+    icon: <QrCode className="w-7 h-7 text-violet-500" />,
+    title: 'Smart Guest QR Menus',
+    desc: 'Generate dynamic QR codes for VIP tables or event areas. Guests scan, browse your menu, and place orders instantly.',
     color: 'violet',
   },
   {
-    icon: <Receipt className="w-7 h-7 text-emerald-500" />,
-    title: 'Quotations & Invoicing',
-    desc: 'Generate professional, GST-compliant event quotations in 60 seconds. Track advance payments, security deposits, and final settlements.',
+    icon: <Smartphone className="w-7 h-7 text-emerald-500" />,
+    title: 'Kitchen Display System',
+    desc: 'Orders appear instantly on kitchen screens. Cook smarter, reduce paper token errors, and serve faster with real-time KDS.',
     color: 'emerald',
   },
   {
-    icon: <Utensils className="w-7 h-7 text-amber-500" />,
-    title: 'Catering & Buffet Planner',
-    desc: 'Plan event menus, calculate per-plate costs, manage live counters, and automate kitchen prep sheets based on guaranteed guest counts.',
+    icon: <Users className="w-7 h-7 text-amber-500" />,
+    title: 'Captain & Staff App',
+    desc: 'Waiters and Captains log in securely via PIN to take live orders from tables, add items to existing bills, and send directly to kitchen.',
     color: 'amber',
   },
   {
     icon: <Zap className="w-7 h-7 text-sky-500" />,
-    title: 'Automated CRM & Lead Alerts',
-    desc: 'Never miss an inquiry. Auto-capture leads from your website, send WhatsApp follow-ups, and track conversions automatically.',
+    title: 'n8n Automation Engine',
+    desc: 'Auto-trigger WhatsApp messages and daily revenue reports via n8n webhooks without writing a single line of code.',
     color: 'sky',
   },
   {
     icon: <Globe className="w-7 h-7 text-rose-500" />,
-    title: 'Custom Brand & Domain',
-    desc: 'Your banquet, your brand. Get a custom website domain, digital booking brochures, and branded customer portals.',
+    title: 'Custom Brand & Theme',
+    desc: 'Your banquet gets its own custom URL and digital menu branding. Fully white-labeled to match your aesthetic.',
     color: 'rose',
   },
   {
-    icon: <Clock className="w-7 h-7 text-indigo-500" />,
-    title: 'Vendor & Decor Management',
-    desc: 'Assign decorators, DJs, and external vendors directly to events. Share schedules and requirement sheets via automated links.',
+    icon: <BarChart3 className="w-7 h-7 text-indigo-500" />,
+    title: 'Real-Time Analytics',
+    desc: 'Data-driven decisions with live sales tracking, best-seller insights, and revenue forecasting across all your properties.',
     color: 'indigo',
   },
   {
-    icon: <Users className="w-7 h-7 text-teal-500" />,
-    title: 'Role-Based Access Control',
-    desc: 'Specific dashboards for Owners, Sales Managers, Banquet Captains, and Chefs. Restrict financial data while enabling operations.',
+    icon: <ShieldCheck className="w-7 h-7 text-teal-500" />,
+    title: 'Multi-Tenant Security',
+    desc: 'Built on Supabase with Row-Level Security (RLS). Every banquet tenant\'s data is strictly isolated and secure.',
     color: 'teal',
   },
   {
-    icon: <BarChart3 className="w-7 h-7 text-pink-500" />,
-    title: 'Deep Analytics & ROI',
-    desc: 'Know your most profitable events, peak booking seasons, and sales team performance with beautiful, exportable charts.',
+    icon: <Award className="w-7 h-7 text-pink-500" />,
+    title: 'Fast Checkout & Billing',
+    desc: 'Process payments rapidly, merge bills, and manage split payments from the admin panel to close events smoothly.',
     color: 'pink',
   },
 ];
 
 const STEPS = [
-  { num: '01', title: 'Setup Venues & Packages', desc: 'Add your banquet halls, define capacities, and create standard food/decor packages in the system.' },
-  { num: '02', title: 'Capture & Convert Leads', desc: 'Receive inquiries, instantly share digital quotations, and lock in bookings with online advance payments.' },
-  { num: '03', title: 'Plan & Execute Events', desc: 'System automatically generates kitchen requirements, vendor tasks, and staff duty rosters for the big day.' },
-  { num: '04', title: 'Settle & Scale', desc: 'Process final payments, gather automated customer feedback, and analyze your growth across multiple properties.' },
+  { num: '01', title: 'Setup Menus & Tables', desc: 'Add your banquet details, upload the food menu, and configure table or event area numbering.' },
+  { num: '02', title: 'Deploy QR & KDS', desc: 'Place QR codes on guest tables and set up the Kitchen Display System (KDS) screen for your chefs.' },
+  { num: '03', title: 'Take Live Orders', desc: 'Guests order via QR or Captains punch orders through their app. Orders flow instantly to the KDS.' },
+  { num: '04', title: 'Track & Automate', desc: 'Admin monitors live revenue, approves checkouts, and gets daily WhatsApp reports via n8n.' },
 ];
 
 const STATS = [
@@ -89,36 +89,33 @@ const STATS = [
 
 const PLANS = [
   {
-    name: 'Single Venue',
-    price: '₹2,499',
+    name: 'Starter Setup',
+    price: '₹1,499',
     period: '/mo',
-    tagline: 'Perfect for independent banquet halls',
+    tagline: 'Perfect for a single banquet hall',
     color: 'orange',
     features: [
-      'Manage 1 Property (Unlimited Halls)',
-      'Event Calendar & Bookings',
-      'Basic CRM & Lead Management',
-      'Quotation & Invoice Generator',
-      'Menu & Package Builder',
+      'Digital QR Menu Ordering',
+      'Admin & Owner Dashboard',
+      'Live Kitchen Display (KDS)',
+      'Basic Sales Analytics',
       'Standard Email Support',
     ],
-    missing: ['Custom Domain', 'WhatsApp Automations', 'Vendor Management', 'Multi-Property Analytics'],
+    missing: ['Captain/Waiter App', 'n8n WhatsApp Alerts', 'Multi-Branch Support'],
   },
   {
-    name: 'Growth Portfolio',
-    price: '₹5,999',
+    name: 'Professional Ops',
+    price: '₹3,999',
     period: '/mo',
-    tagline: 'The industry standard for expanding businesses',
+    tagline: 'The standard for smooth event execution',
     color: 'violet',
     popular: true,
     features: [
-      'Manage up to 3 Properties',
-      'Everything in Single Venue',
-      'Advanced CRM & WhatsApp Alerts',
-      'Vendor & Decor Tracking',
-      'Kitchen Prep Sheets & Catering KDS',
-      'Custom Domain Integration',
-      'Staff Role Management',
+      'Everything in Starter',
+      'Captain/Waiter Ordering App',
+      'n8n WhatsApp Automations',
+      'Advanced Live Analytics',
+      'Multi-Branch Support (Up to 3)',
       'Priority Phone Support',
     ],
     missing: [],
@@ -130,14 +127,12 @@ const PLANS = [
     tagline: 'Bespoke infrastructure for large hospitality groups',
     color: 'sky',
     features: [
-      'Unlimited Properties & Halls',
-      'Centralized Group Reporting',
-      'Custom API & Tally Integration',
+      'Unlimited Branches & Halls',
+      'Custom Super Admin Controls',
+      'White-Labeled Customer Portal',
       'Dedicated Success Manager',
       '24/7 SLA Concierge Support',
-      'White-Labeled Customer Portal',
-      'Advanced Access Controls',
-      'Quarterly Business Reviews',
+      'Custom API Integrations',
     ],
     missing: [],
   },
@@ -171,11 +166,11 @@ const TESTIMONIALS = [
 ];
 
 const FAQS = [
-  { q: 'Is BanquetSaaS suitable for open lawns and resorts as well?', a: 'Absolutely! You can map out multiple sub-venues like Lawns, Poolside areas, and AC Banquet Halls under a single property, managing bookings for each independently.' },
-  { q: 'How does the quotation system work?', a: 'You pre-configure your food packages (e.g., Gold Veg, Platinum Non-Veg) and decor options. During an inquiry, simply select the packages, enter the guest count, and the system generates a professional PDF quotation instantly.' },
-  { q: 'Can we track advance payments and due balances?', a: 'Yes, the system has a dedicated financial tracker for every event. It logs the booking token, subsequent advances, and alerts you of the final pending balance before the event date.' },
-  { q: 'Do you provide WhatsApp integration?', a: 'Yes, our Growth and Enterprise plans include automated WhatsApp triggers for sending quotations, booking confirmations, payment reminders, and thank-you messages to clients.' },
-  { q: 'Is my event data secure?', a: "100%. We use bank-grade encryption and secure cloud hosting. Your client data, leads, and financial records are strictly isolated and never shared." },
+  { q: 'How does the QR menu system work?', a: 'You generate a unique QR code for each VIP table or event area. Guests scan it with their phone camera (no app needed) to view the menu and place orders directly to the kitchen.' },
+  { q: 'What is the Kitchen Display System (KDS)?', a: 'The KDS is a digital screen for your chefs. Instead of paper tokens, orders appear instantly on the screen as "New", "Preparing", and "Ready", ensuring zero missed orders.' },
+  { q: 'How do my Captains and Waiters use the system?', a: 'Staff members log in to the Waiter Dashboard using a secure 4-digit PIN. They can select a table, add items to the cart, and send orders to the kitchen while standing right next to the guest.' },
+  { q: 'What is n8n automation and how does it help?', a: 'n8n allows us to connect your BanquetSaaS to WhatsApp and other tools. You can get automated daily revenue reports, order alerts, and more without manual work.' },
+  { q: 'Is my data secure?', a: "Absolutely. We use Supabase with strict Row-Level Security (RLS). Each banquet's data is fully isolated, meaning no other tenant can ever access your menus or financial data." },
 ];
 
 export default function SaaSLandingPage({ realStats }: {
@@ -289,9 +284,9 @@ export default function SaaSLandingPage({ realStats }: {
 
           {/* CTA */}
           <div className="hidden md:flex items-center gap-3">
-            <Link href="#pricing" className="px-5 py-2.5 text-sm font-semibold text-orange-600 border-2 border-orange-200 rounded-xl hover:bg-orange-50 transition-all">
+            {/* <Link href="#pricing" className="px-5 py-2.5 text-sm font-semibold text-orange-600 border-2 border-orange-200 rounded-xl hover:bg-orange-50 transition-all">
               View Plans
-            </Link>
+            </Link> */}
             <Link href="#contact" className="px-5 py-2.5 text-sm font-bold text-white btn-primary rounded-xl shadow-lg">
               Get Started Free →
             </Link>
@@ -457,7 +452,7 @@ export default function SaaSLandingPage({ realStats }: {
       </section>
 
       {/* ─── Stats Bar ─── */}
-      <section className="py-12 px-6 bg-white border-y border-gray-100">
+      {/* <section className="py-12 px-6 bg-white border-y border-gray-100">
         <div className="max-w-7xl mx-auto">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
             {[
@@ -478,7 +473,7 @@ export default function SaaSLandingPage({ realStats }: {
             ))}
           </div>
         </div>
-      </section>
+      </section> */}
 
       {/* ─── Features Section ─── */}
       <section id="features" className="py-24 px-6 bg-[#FAFAF8]">
@@ -514,13 +509,13 @@ export default function SaaSLandingPage({ realStats }: {
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-orange-50 border border-orange-200 rounded-full text-xs font-bold text-orange-600 mb-5">
-              <LayoutDashboard className="w-3.5 h-3.5" /> 3 Dedicated Interfaces
+              <LayoutDashboard className="w-3.5 h-3.5" /> 4 Powerful Dashboards
             </div>
             <h2 className="text-4xl lg:text-5xl font-black text-gray-900 mb-4 tracking-tight">
-              Empower Every <span className="shimmer-text">Department</span>
+              Perfect Tools for <span className="shimmer-text">Every Role</span>
             </h2>
             <p className="text-gray-500 text-lg max-w-2xl mx-auto">
-              Sales needs CRM. Kitchen needs prep sheets. Owners need revenue numbers. We give everyone exactly the tools they need to succeed.
+              From the Admin checking revenue, to the Captain taking orders, to the Chef viewing the KDS screen — everyone gets exactly what they need.
             </p>
           </div>
 
@@ -535,21 +530,21 @@ export default function SaaSLandingPage({ realStats }: {
                       <BarChart3 className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-orange-400 uppercase tracking-widest">For Owners & GMs</p>
-                      <h3 className="text-2xl font-black text-gray-900">Venue Management Dashboard</h3>
+                      <p className="text-xs font-bold text-orange-400 uppercase tracking-widest">For Owners & Admins</p>
+                      <h3 className="text-2xl font-black text-gray-900">Admin Control Center</h3>
                     </div>
                   </div>
-                  <p className="text-gray-600 leading-relaxed mb-6">Gain absolute control over your properties. Monitor overall revenue, evaluate sales performance, track pending balances, and analyze venue utilization rates.</p>
+                  <p className="text-gray-600 leading-relaxed mb-6">The heart of your banquet operations. Monitor live revenue, manage your digital menu, track staff activity, and oversee all active orders in real-time.</p>
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      'Multi-Venue Performance Metrics',
-                      'Comprehensive Booking Calendar',
-                      'Advance & Pending Balance Tracker',
-                      'Sales Team Conversion Reports',
-                      'Role & Permission Control',
-                      'Vendor Commission Management',
-                      'Automated Daily Report Emails',
-                      'Live Event Status Overview',
+                      'Live Revenue Tracking',
+                      'Menu & Category Management',
+                      'Active Order Monitoring',
+                      'Staff PIN & Role Management',
+                      'QR Code Generator',
+                      'Daily Analytics Reports',
+                      'WhatsApp Integration (n8n)',
+                      'Split Payment Tracking',
                     ].map(f => (
                       <div key={f} className="flex items-start gap-2">
                         <div className="w-5 h-5 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -562,7 +557,7 @@ export default function SaaSLandingPage({ realStats }: {
                 </div>
                 <div className="bg-white rounded-[1.5rem] border border-orange-100 p-6 shadow-sm">
                   <div className="flex items-center justify-between mb-4">
-                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Property Snapshot</p>
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Live Admin Overview</p>
                     <div className="flex items-center gap-1.5">
                       <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                       <span className="text-xs text-emerald-600 font-bold">LIVE</span>
@@ -570,10 +565,10 @@ export default function SaaSLandingPage({ realStats }: {
                   </div>
                   <div className="grid grid-cols-2 gap-3 mb-4">
                     {[
-                      { label: 'Revenue This Month', val: '₹45.5L', color: 'text-orange-600', bg: 'bg-orange-50' },
-                      { label: 'Upcoming Events', val: '24', color: 'text-violet-600', bg: 'bg-violet-50' },
-                      { label: 'Pending Dues', val: '₹8.2L', color: 'text-rose-600', bg: 'bg-rose-50' },
-                      { label: 'New Leads (7d)', val: '45', color: 'text-sky-600', bg: 'bg-sky-50' },
+                      { label: 'Revenue Today', val: '₹1,24,500', color: 'text-orange-600', bg: 'bg-orange-50' },
+                      { label: 'Active Orders', val: '14', color: 'text-violet-600', bg: 'bg-violet-50' },
+                      { label: 'Total Guests', val: '320', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                      { label: 'Avg. Ticket', val: '₹4,500', color: 'text-sky-600', bg: 'bg-sky-50' },
                     ].map(s => (
                       <div key={s.label} className={`${s.bg} rounded-2xl p-4`}>
                         <p className={`text-xl font-black ${s.color}`}>{s.val}</p>
@@ -581,50 +576,36 @@ export default function SaaSLandingPage({ realStats }: {
                       </div>
                     ))}
                   </div>
-                  <div className="space-y-2">
-                    {[
-                      { ev: 'Sharma Wedding', date: '15 Nov', status: 'Confirmed', statusColor: 'bg-emerald-100 text-emerald-700', value: '₹4.5L' },
-                      { ev: 'TechCorp Seminar', date: '18 Nov', status: 'Tentative', statusColor: 'bg-amber-100 text-amber-700', value: '₹1.2L' },
-                      { ev: 'Rao Reception', date: '22 Nov', status: 'Confirmed', statusColor: 'bg-emerald-100 text-emerald-700', value: '₹6.8L' },
-                    ].map(o => (
-                      <div key={o.ev} className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-2.5">
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs font-bold text-gray-900">{o.ev}</span>
-                          <span className="text-[10px] font-medium text-gray-500">{o.date}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${o.statusColor}`}>{o.status}</span>
-                          <span className="text-xs font-black text-gray-900">{o.value}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               </div>
             </div>
 
-            {/* ── Sales & CRM Dashboard ── */}
+            {/* ── Customer QR Experience ── */}
             <div className="card-hover bg-gradient-to-br from-violet-50 to-purple-50 rounded-[2rem] border border-violet-100 p-8 lg:p-10">
               <div className="grid lg:grid-cols-2 gap-10 items-center">
                 <div className="order-2 lg:order-1 bg-white rounded-[1.5rem] border border-violet-100 p-6 shadow-sm">
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Lead Pipeline</p>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Customer QR Scan Experience</p>
                   <div className="space-y-3">
+                    <div className="flex items-center gap-3 bg-violet-50 rounded-2xl p-3">
+                      <div className="w-10 h-10 bg-violet-500 rounded-xl flex items-center justify-center text-white flex-shrink-0">
+                        <QrCode className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-gray-900">Scan QR → Instant Menu</p>
+                        <p className="text-[11px] text-gray-500">No app download. Just scan & order.</p>
+                      </div>
+                    </div>
                     {[
-                      { stage: 'New Inquiry', leads: 12, items: ['Karan - Engagement (300 pax)', 'Priya - Birthday (50 pax)'] },
-                      { stage: 'Quotation Sent', leads: 8, items: ['Arora Wedding (500 pax)'] },
-                      { stage: 'Negotiation', leads: 4, items: ['Infosys Annual Gala (200 pax)'] },
-                    ].map(c => (
-                      <div key={c.stage} className="bg-gray-50 rounded-2xl p-3 border border-gray-100">
-                        <div className="flex items-center justify-between mb-3">
-                          <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wider">{c.stage}</span>
-                          <span className="w-6 h-6 rounded-full bg-violet-100 text-violet-700 text-[10px] font-black flex items-center justify-center">{c.leads}</span>
-                        </div>
-                        <div className="space-y-1.5">
-                          {c.items.map(item => (
-                            <div key={item} className="bg-white rounded-lg px-3 py-2 text-xs font-medium text-gray-700 border border-gray-200 shadow-sm flex justify-between items-center">
-                              {item} <ChevronRight className="w-3 h-3 text-gray-400" />
-                            </div>
-                          ))}
+                      { emoji: '🛒', title: 'Smart Menu', sub: 'Category filter, search, bestseller tags' },
+                      { emoji: '💳', title: 'Direct Checkout', sub: 'Easy split payments and tips' },
+                      { emoji: '📍', title: 'Live Order Tracking', sub: 'Pending → Preparing → Ready → Served' },
+                      { emoji: '⭐', title: 'Instant Reviews', sub: 'Feedback collected immediately' },
+                    ].map(item => (
+                      <div key={item.title} className="flex items-center gap-3 bg-gray-50 rounded-2xl p-3">
+                        <span className="text-xl">{item.emoji}</span>
+                        <div>
+                          <p className="text-xs font-bold text-gray-900">{item.title}</p>
+                          <p className="text-[11px] text-gray-500">{item.sub}</p>
                         </div>
                       </div>
                     ))}
@@ -633,24 +614,22 @@ export default function SaaSLandingPage({ realStats }: {
                 <div className="order-1 lg:order-2">
                   <div className="flex items-center gap-3 mb-5">
                     <div className="w-12 h-12 bg-violet-500 rounded-2xl flex items-center justify-center shadow-lg shadow-violet-200">
-                      <Users className="w-6 h-6 text-white" />
+                      <Smartphone className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-violet-400 uppercase tracking-widest">For Sales Managers</p>
-                      <h3 className="text-2xl font-black text-gray-900">CRM & Sales Pipeline</h3>
+                      <p className="text-xs font-bold text-violet-400 uppercase tracking-widest">For Diners & Guests</p>
+                      <h3 className="text-2xl font-black text-gray-900">Customer Dashboard</h3>
                     </div>
                   </div>
-                  <p className="text-gray-600 leading-relaxed mb-6">Empower your sales team to close deals faster. Automatically capture leads, drag-and-drop through pipeline stages, and generate instant PDF quotations on the spot.</p>
+                  <p className="text-gray-600 leading-relaxed mb-6">Guests scan your QR code and get a beautiful, branded digital menu. They order, pay, and track progress — all from their phone browser. No app needed.</p>
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      'Kanban Lead Pipeline',
-                      'Instant PDF Quotation Builder',
-                      'Menu & Decor Package Selector',
-                      'Automated WhatsApp Follow-ups',
-                      'Task & Meeting Reminders',
-                      'Payment Link Generation',
-                      'Lost Lead Analysis',
-                      'Digital Brochure Sharing',
+                      'Instant QR Menu Access',
+                      'No App Download Required',
+                      'Live Order Status Tracking',
+                      'Digital Waiter Calling',
+                      'Pay Bills from Phone',
+                      'Post-Order Star Ratings',
                     ].map(f => (
                       <div key={f} className="flex items-start gap-2">
                         <div className="w-5 h-5 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -664,7 +643,7 @@ export default function SaaSLandingPage({ realStats }: {
               </div>
             </div>
 
-            {/* ── Catering & Kitchen Dashboard ── */}
+            {/* ── Kitchen Dashboard (KDS) ── */}
             <div className="card-hover bg-gradient-to-br from-emerald-50 to-teal-50 rounded-[2rem] border border-emerald-100 p-8 lg:p-10">
               <div className="grid lg:grid-cols-2 gap-10 items-center">
                 <div>
@@ -673,21 +652,19 @@ export default function SaaSLandingPage({ realStats }: {
                       <Utensils className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                      <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest">For Chefs & Catering</p>
-                      <h3 className="text-2xl font-black text-gray-900">Catering Operations</h3>
+                      <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest">For Chefs & Kitchen</p>
+                      <h3 className="text-2xl font-black text-gray-900">Kitchen Display System (KDS)</h3>
                     </div>
                   </div>
-                  <p className="text-gray-600 leading-relaxed mb-6">No more miscommunication between sales and kitchen. Once an event is locked, the chef automatically receives exact guest counts, finalized menus, and live counter requirements.</p>
+                  <p className="text-gray-600 leading-relaxed mb-6">Eliminate paper tickets. The KDS shows incoming orders instantly. Move items from 'New' to 'Preparing' to 'Ready' with a single tap.</p>
                   <div className="grid grid-cols-2 gap-3">
                     {[
-                      'Automated Kitchen Prep Sheets',
-                      'Per-Plate Cost Estimation',
-                      'Ingredient & Procurement Lists',
-                      'Live Counter Staff Assignment',
-                      'Tasting Session Notes',
-                      'Last-Minute Pax Update Alerts',
-                      'Food Wastage Tracking',
-                      'Vendor Coordination Sync',
+                      'Real-Time Order Sync',
+                      '3-Column Kanban Board',
+                      'Status Tracking per Item',
+                      'Auto-hide Cancelled Orders',
+                      'Visual Priority Markers',
+                      'Zero Paper Wastage',
                     ].map(f => (
                       <div key={f} className="flex items-start gap-2">
                         <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -699,35 +676,25 @@ export default function SaaSLandingPage({ realStats }: {
                   </div>
                 </div>
                 <div className="bg-white rounded-[1.5rem] border border-emerald-100 p-6 shadow-sm">
-                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Event Menu: Sharma Wedding</p>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2">
-                      <span className="text-sm font-bold text-gray-900">Guaranteed Pax: 500</span>
-                      <span className="text-[10px] font-bold bg-amber-100 text-amber-700 px-2 py-1 rounded">Prep Mode</span>
-                    </div>
-
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-xs font-bold text-gray-500 uppercase mb-2">Starters (Live)</p>
-                        <ul className="space-y-1">
-                          {['Paneer Tikka - Counter 1', 'Hara Bhara Kebab', 'Spring Rolls - Counter 2'].map(item => (
-                            <li key={item} className="text-xs text-gray-700 flex items-center gap-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400"></div> {item}
-                            </li>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4">Live KDS View</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { col: 'New', count: 4, color: 'bg-orange-500', items: ['Paneer Tikka', 'Masala Tea'] },
+                      { col: 'Prep', count: 2, color: 'bg-amber-500', items: ['Spring Rolls'] },
+                      { col: 'Ready', count: 1, color: 'bg-emerald-500', items: ['Cold Coffee'] },
+                    ].map(c => (
+                      <div key={c.col} className="bg-gray-50 rounded-xl p-2 border border-gray-100">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[10px] font-bold text-gray-500">{c.col}</span>
+                          <span className={`w-4 h-4 rounded-full text-white text-[9px] font-black flex items-center justify-center ${c.color}`}>{c.count}</span>
+                        </div>
+                        <div className="space-y-1">
+                          {c.items.map(item => (
+                            <div key={item} className="bg-white rounded p-1.5 text-[9px] font-medium text-gray-700 border border-gray-200">{item}</div>
                           ))}
-                        </ul>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-xs font-bold text-gray-500 uppercase mb-2">Main Course (Buffet)</p>
-                        <ul className="space-y-1">
-                          {['Dal Makhani (40kg prep)', 'Shahi Paneer (35kg prep)', 'Assorted Indian Breads'].map(item => (
-                            <li key={item} className="text-xs text-gray-700 flex items-center gap-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-orange-400"></div> {item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -932,14 +899,16 @@ export default function SaaSLandingPage({ realStats }: {
                 Join 500+ banquet owners who are closing more bookings, eliminating errors, and scaling effortlessly with BanquetSaaS.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link href="#pricing">
+                {/* <Link href="#pricing">
                   <button className="h-14 px-10 text-white font-bold btn-primary rounded-2xl text-base shadow-xl flex items-center gap-2">
                     Launch Your Banquet <ChevronRight className="w-5 h-5" />
                   </button>
-                </Link>
-                <button className="h-14 px-10 text-gray-700 font-bold bg-white border-2 border-gray-200 rounded-2xl text-base hover:border-orange-300 transition-all shadow-sm">
-                  Book a Free Demo
-                </button>
+                </Link> */}
+                <a href="https://wa.me/918252472186?text=Hi%2C%20I%20would%20like%20to%20book%20a%20free%20demo%20for%20BanquetSaaS." target="_blank" rel="noopener noreferrer">
+                  <button className="h-14 px-10 text-gray-700 font-bold bg-white border-2 border-gray-200 rounded-2xl text-base hover:border-orange-300 transition-all shadow-sm">
+                    Book a Free Demo
+                  </button>
+                </a>
               </div>
               <p className="text-xs text-gray-400 mt-6">Setup in under 2 hours · Dedicated Onboarding Manager · Cancel anytime</p>
             </div>
