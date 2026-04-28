@@ -29,7 +29,6 @@ export function MenuItemModal({ item, isOpen, onClose }: MenuItemModalProps) {
     const [quantity, setQuantity] = useState(1)
     const [instructions, setInstructions] = useState('')
     const { addItem } = useCartStore()
-    const { openUpsell } = useUIStore()
     const { restaurant } = useRestaurant()
 
     useEffect(() => {

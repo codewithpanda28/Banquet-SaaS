@@ -5,7 +5,7 @@ import { Header } from '@/components/customer/layout/Header'
 import { CartSidebar } from '@/components/customer/cart/CartSidebar'
 import { FloatingCartButton } from '@/components/customer/cart/FloatingCartButton'
 import { Toaster } from '@/components/ui/sonner'
-import { GlobalUpsell } from '@/components/customer/menu/GlobalUpsell'
+
 import { cn } from '@/lib/utils'
 import { usePathname } from 'next/navigation'
 
@@ -29,7 +29,7 @@ export default function CustomerLayoutClient({
                 <>
                     <CartSidebar />
                     <FloatingCartButton />
-                    <GlobalUpsell />
+
                 </>
             )}
             <Toaster position="top-center" richColors />

@@ -120,13 +120,8 @@ export function Header() {
                             variant="ghost"
                             size="icon"
                             onClick={() => {
-                                // Unified cart & upsell trigger
-                                const { openCart, openUpsell } = useUIStore.getState()
-                                const { items } = useCartStore.getState()
+                                const { openCart } = useUIStore.getState()
                                 openCart()
-                                if (items.length > 0) {
-                                    setTimeout(() => openUpsell(items[items.length - 1].id), 200)
-                                }
                             }}
                             className="rounded-2xl w-10 h-10 relative hover:bg-slate-100/80 transition-all active:scale-90 mr-1"
                         >

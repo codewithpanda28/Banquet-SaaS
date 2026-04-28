@@ -23,7 +23,7 @@ import {
     SheetTitle,
     SheetTrigger,
 } from "@/components/ui/sheet"
-import { UpsellList } from '@/components/customer/menu/UpsellList'
+
 import { useRestaurant } from '@/hooks/useRestaurant'
 
 export default function CheckoutPage() {
@@ -562,10 +562,10 @@ export default function CheckoutPage() {
                                     <div key={item.cartId} className="flex items-center justify-between py-3 border-b border-dashed border-[#D4AF37]/20 last:border-0 group">
                                         <div className="flex items-center gap-4">
                                             {item.image_url ? (
-                                                <img src={item.image_url} alt={item.name} className="w-14 h-14 rounded-2xl object-cover border border-[#D4AF37]/20 shadow-sm shrink-0" />
+                                                <img src={item.image_url} alt={item.name} className="w-16 h-16 rounded-2xl object-cover border border-[#D4AF37]/20 shadow-sm shrink-0" />
                                             ) : (
-                                                <div className="w-14 h-14 rounded-2xl bg-[#FCFBF7] border border-[#D4AF37]/10 flex items-center justify-center shrink-0">
-                                                    <ShoppingBag className="w-5 h-5 text-[#D4AF37]/40" />
+                                                <div className="w-16 h-16 rounded-2xl bg-[#FCFBF7] border border-[#D4AF37]/10 flex items-center justify-center shrink-0">
+                                                    <ShoppingBag className="w-6 h-6 text-[#D4AF37]/40" />
                                                 </div>
                                             )}
                                             <div className="flex flex-col">
