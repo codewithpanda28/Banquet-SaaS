@@ -29,7 +29,7 @@ async function fetchRealStats() {
     const totalRevenue = revenueData?.reduce((sum, o) => sum + (Number(o.total) || 0), 0) || 0;
 
     return {
-      totalRestaurants: totalRestaurants || 0,
+      totalBanquets: totalRestaurants || 0,
       totalOrders: totalOrders || 0,
       totalCustomers: totalCustomers || 0,
       totalRevenue,
@@ -38,7 +38,7 @@ async function fetchRealStats() {
   } catch (err) {
     console.error('[SaaS Page] Failed to fetch real stats:', err);
     return {
-      totalRestaurants: 0,
+      totalBanquets: 0,
       totalOrders: 0,
       totalCustomers: 0,
       totalRevenue: 0,
