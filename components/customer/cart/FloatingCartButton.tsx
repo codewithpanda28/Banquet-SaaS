@@ -30,14 +30,6 @@ export function FloatingCartButton() {
 
     const handleViewCart = () => {
         openCart()
-        // Trigger upsell based on cart contents
-        if (items.length > 0) {
-            // Give a tiny moment for sidebar animation to start, then pop the modal
-            setTimeout(() => {
-                // Pass the last item as a hint, but the modal will check all items
-                openUpsell(items[items.length - 1].id)
-            }, 300)
-        }
     }
 
     return (

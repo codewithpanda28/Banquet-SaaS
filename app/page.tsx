@@ -50,10 +50,11 @@ async function fetchRealStats() {
 export default async function Home() {
   const headersList = await headers();
   const isMainDomain = headersList.get('x-is-main-domain') === 'true';
+  const isTenantFound = headersList.get('x-tenant-found') === 'true';
   const host = headersList.get('host') || '';
-  const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1');
+  const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1') || host.startsWith('192.168.') || host.startsWith('10.');
 
-  if (isMainDomain || isLocalhost) {
+  if (isMainDomain || isLocalhost || !isTenantFound) {
     const stats = await fetchRealStats();
     return <SaaSLandingPage realStats={stats} />;
   }

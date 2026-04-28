@@ -559,16 +559,29 @@ export default function CheckoutPage() {
                         <div className="p-8 space-y-6">
                             <div className="space-y-4">
                                 {items.map((item) => (
-                                    <div key={item.cartId} className="flex justify-between text-sm group items-center">
-                                        <div className="flex items-center gap-3">
-                                            <span className="w-8 h-8 rounded-full bg-[#FCFBF7] border border-[#D4AF37]/10 flex items-center justify-center text-[10px] font-black text-[#8B6508]">
-                                                {item.quantity}
-                                            </span>
-                                            <span className="font-medium text-[#1A1A1A] group-hover:text-[#8B6508] transition-colors">
-                                                {item.name}
+                                    <div key={item.cartId} className="flex items-center justify-between py-3 border-b border-dashed border-[#D4AF37]/20 last:border-0 group">
+                                        <div className="flex items-center gap-4">
+                                            {item.image_url ? (
+                                                <img src={item.image_url} alt={item.name} className="w-14 h-14 rounded-2xl object-cover border border-[#D4AF37]/20 shadow-sm shrink-0" />
+                                            ) : (
+                                                <div className="w-14 h-14 rounded-2xl bg-[#FCFBF7] border border-[#D4AF37]/10 flex items-center justify-center shrink-0">
+                                                    <ShoppingBag className="w-5 h-5 text-[#D4AF37]/40" />
+                                                </div>
+                                            )}
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-[#1A1A1A] group-hover:text-[#8B6508] transition-colors text-sm">
+                                                    {item.name}
+                                                </span>
+                                                {item.instructions && (
+                                                    <span className="text-[11px] text-slate-500 line-clamp-1 mt-0.5">{item.instructions}</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="pl-3">
+                                            <span className="inline-flex items-center justify-center text-[11px] font-black text-[#8B6508] bg-[#F4EBD0] px-2.5 py-1 rounded-full border border-[#D4AF37]/30 shadow-sm whitespace-nowrap">
+                                                x {item.quantity}
                                             </span>
                                         </div>
-                                        <span className="font-bold text-[#1A1A1A] hidden">Free</span>
                                     </div>
                                 ))}
                             </div>
