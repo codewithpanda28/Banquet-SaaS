@@ -155,7 +155,6 @@ export function CartSidebar() {
                                 <div className="space-y-4">
                                     {items.map((item) => (
                                         <motion.div
-                                            layout
                                             key={item.cartId}
                                             className="flex gap-4 p-5 bg-white border border-[#D4AF37]/10 rounded-[1.5rem] shadow-sm hover:shadow-md transition-all group relative overflow-hidden"
                                         >

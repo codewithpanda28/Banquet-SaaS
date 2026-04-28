@@ -9,7 +9,7 @@ import { useUIStore } from '@/store/uiStore'
 
 export function FloatingCartButton() {
     const { items, getTotal, getItemCount } = useCartStore()
-    const { openCart, isCartOpen, openUpsell } = useUIStore()
+    const { openCart, isCartOpen } = useUIStore()
     const [isClient, setIsClient] = React.useState(false)
     const pathname = usePathname()
 

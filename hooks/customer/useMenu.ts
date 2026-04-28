@@ -46,15 +46,15 @@ export function useMenu(restaurantId: string | null) {
 
         fetchData()
 
-        channel = supabase.channel('menu-realtime')
+        channel = supabase.channel(`menu-realtime-${restaurantId}`)
             .on(
                 'postgres_changes',
-                { event: '*', schema: 'public', table: 'menu_items' },
+                { event: '*', schema: 'public', table: 'menu_items', filter: `restaurant_id=eq.${restaurantId}` },
                 () => fetchData(true)
             )
             .on(
                 'postgres_changes',
-                { event: '*', schema: 'public', table: 'menu_categories' },
+                { event: '*', schema: 'public', table: 'menu_categories', filter: `restaurant_id=eq.${restaurantId}` },
                 () => fetchData(true)
             )
             .subscribe()

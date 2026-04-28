@@ -385,21 +385,9 @@ function MenuContent() {
     useEffect(() => {
         checkSessionStatus()
 
-        const channel = supabase.channel('menu-updates')
-            .on(
-                'postgres_changes',
-                {
-                    event: '*', 
-                    schema: 'public',
-                    table: 'orders'
-                },
-                async (payload) => {
-                    await checkSessionStatus()
-                }
-            )
-            .subscribe()
-
-        return () => { supabase.removeChannel(channel) }
+        // Real-time broad orders listener removed to prevent performance lag.
+        // Customer-specific listener on line 347 handles necessary updates.
+        return () => { }
     }, [customerPhone, clearCart, setOrderType, checkSessionStatus])
 
     // 🏆 Refresh points when Rewards Modal opens
