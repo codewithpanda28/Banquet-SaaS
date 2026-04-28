@@ -658,22 +658,7 @@ export default function AdminDashboard() {
 
             toast.success(`Payment settled successfully! ✅`)
 
-            // 3. Mark Table as Available if it's a Dine In order
-            if (selectedOrder.table_id) {
-                await supabase
-                    .from('restaurant_tables')
-                    .update({ status: 'available' })
-                    .eq('id', selectedOrder.table_id)
-
-                // Also mark the specific 'seated' booking for this table as completed
-                // This ensures the QR scan doesn't see it as "occupied" after payment
-                await supabase
-                    .from('table_bookings')
-                    .update({ status: 'completed' })
-                    .eq('table_id', selectedOrder.table_id)
-                    .eq('status', 'seated')
-                    .eq('booking_date', new Date().toISOString().split('T')[0])
-            }
+            // Automatic table state updates have been removed as per user request.
 
             // Update local state for immediate UI feedback
             setSelectedOrder(prev => prev ? { ...prev, status: 'completed', payment_status: 'paid' } : null)

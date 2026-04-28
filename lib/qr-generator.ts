@@ -36,10 +36,8 @@ export async function generateQRDataURL(
 
 // Generate table QR code
 export async function generateTableQR(tableNumber: number): Promise<string> {
-  // Use the same domain but point to /customer/scan route in unified dashboard
-  const baseUrl = typeof window !== 'undefined'
-    ? window.location.origin
-    : process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  // Always use the production Vercel URL for QR codes even if testing locally
+  const baseUrl = process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'https://banquet-saas.vercel.app'
   const scanUrl = `${baseUrl}/customer/scan?table=${tableNumber}&type=dine_in`
 
   return generateQRDataURL(scanUrl, { width: 400 })

@@ -676,23 +676,7 @@ export default function OrdersPage() {
 
             toast.success(`Payment marked as ${method.toUpperCase()} ✅`)
 
-            // 3. Mark Table as Available and Clear Bookings if it's a Dine In order
-            if (selectedOrder.table_id) {
-                // Set table back to available
-                await supabase
-                    .from('restaurant_tables')
-                    .update({ status: 'available' })
-                    .eq('id', selectedOrder.table_id)
-
-                // Also mark the specific 'seated' booking for this table as completed
-                // This ensures the QR scan doesn't see it as "occupied" after payment
-                await supabase
-                    .from('table_bookings')
-                    .update({ status: 'completed' })
-                    .eq('table_id', selectedOrder.table_id)
-                    .eq('status', 'seated')
-                    .eq('booking_date', new Date().toISOString().split('T')[0])
-            }
+            // Automatic table state updates have been removed as per user request.
 
             // Update local state so button changes immediately
             setSelectedOrder({ ...selectedOrder, status: 'completed', payment_status: 'paid' })

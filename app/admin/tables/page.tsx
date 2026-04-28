@@ -61,8 +61,8 @@ export default function TablesPage() {
         
         for (const table of tables) {
             try {
-                const baseUrl = window.location.origin
-                const qrValue = `${baseUrl}/customer/scan?table=${table.table_number}&id=${rid}`
+                const baseUrl = process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'https://banquet-saas.vercel.app'
+                const qrValue = `${baseUrl.replace(/\/$/, '')}/customer/scan?table=${table.table_number}&id=${rid}`
 
                 const url = await QRCode.toDataURL(qrValue, {
                     width: 300,

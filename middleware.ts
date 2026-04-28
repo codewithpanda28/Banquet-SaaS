@@ -8,7 +8,7 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-const MAIN_DOMAIN = process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'localhost:3000';
+const MAIN_DOMAIN = process.env.NEXT_PUBLIC_MAIN_DOMAIN || 'https://banquet-saas.vercel.app/';
 
 export async function middleware(req: NextRequest) {
   const url = req.nextUrl;
@@ -21,7 +21,7 @@ export async function middleware(req: NextRequest) {
 
   // 🆔 ALWAYS Check for ?id= Search Parameter (Universal Overrider)
   const idFromUrl = url.searchParams.get('id');
-  
+
   // 🏷️ Admin Login Redirect (Fix 404)
   // We handle this FIRST to ensure the redirect happens regardless of ?id= param
   if (url.pathname === '/admin/login') {
@@ -40,7 +40,7 @@ export async function middleware(req: NextRequest) {
     // 🔍 SaaS Lookup: Detect restaurant by domain OR slug
     const hostWithoutPort = hostname.split(':')[0];
     const subdomain = hostWithoutPort.includes('.') ? hostWithoutPort.split('.')[0] : hostWithoutPort;
-    
+
     // Attempt 1: Check Custom Domain
     let { data: restaurant } = await supabase
       .from('restaurants')
@@ -75,8 +75,8 @@ export async function middleware(req: NextRequest) {
       response.cookies.set('tenant_slug', restaurant.slug, { path: '/', httpOnly: false });
       return response;
     } else {
-        requestHeaders.set('x-tenant-found', 'false');
-        requestHeaders.set('x-debug-subdomain', subdomain);
+      requestHeaders.set('x-tenant-found', 'false');
+      requestHeaders.set('x-debug-subdomain', subdomain);
     }
   }
 

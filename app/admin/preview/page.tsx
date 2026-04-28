@@ -134,7 +134,7 @@ export default function AppPreviewPage() {
                                             <div className="h-3 w-3 rounded-full bg-green-400"></div>
                                         </div>
                                         <div className="flex-1 bg-white rounded-lg px-4 py-1 text-xs text-gray-500 font-mono">
-                                            localhost:3000/customer
+                                            https://banquet-saas.vercel.app/customer
                                         </div>
                                     </div>
 
@@ -184,7 +184,7 @@ export default function AppPreviewPage() {
                                             <div className="h-3 w-3 rounded-full bg-green-400"></div>
                                         </div>
                                         <div className="flex-1 bg-white rounded-lg px-4 py-1 text-xs text-gray-500 font-mono">
-                                            localhost:3000/kitchen
+                                            https://banquet-saas.vercel.app/kitchen
                                         </div>
                                     </div>
 
