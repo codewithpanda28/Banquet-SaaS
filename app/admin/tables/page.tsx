@@ -61,8 +61,8 @@ export default function TablesPage() {
         
         for (const table of tables) {
             try {
-                const text = encodeURIComponent(`I am at Table ${table.table_number}`)
-                const qrValue = `https://wa.me/${phone}?text=${text}`
+                const baseUrl = window.location.origin
+                const qrValue = `${baseUrl}/customer/scan?table=${table.table_number}&id=${rid}`
 
                 const url = await QRCode.toDataURL(qrValue, {
                     width: 300,

@@ -15,7 +15,6 @@ import {
 import { supabase, getRestaurantId } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { triggerAutomationWebhook } from '@/lib/webhook'
 
 interface Table { id: string; table_number: number; table_name: string; capacity: number; status: string }
 interface Category { id: string; name: string }
@@ -312,13 +311,6 @@ export default function WaiterDashboard() {
                     last_login_at: new Date().toISOString()
                 }).eq('id', finalStaffId)
             }
-
-            triggerAutomationWebhook('waiter-login', {
-                staff_id: finalStaffId || 'temp',
-                name: finalStaffName,
-                restaurant_id: getRestaurantId(),
-                login_at: new Date().toISOString()
-            })
         } catch (err) {
             console.error('💥 Login Save Error:', err)
             setStep('table')
@@ -507,27 +499,6 @@ export default function WaiterDashboard() {
 
             const { error: itemsError } = await supabase.from('order_items').insert(orderItems)
             if (itemsError) throw itemsError
-
-            // Trigger Webhook with Logging
-            try {
-                const webhookRes = await triggerAutomationWebhook('waiter-order', {
-                    action: 'waiter-order',
-                    bill_id: billId,
-                    order_id: orderId,
-                    table_number: selectedTable.table_number,
-                    customer_name: customerName || 'Walk-in',
-                    customer_phone: customerPhone || 'N/A',
-                    items: cart.map(item => ({ name: item.name, quantity: item.quantity, price: item.price })),
-                    total: cartTotal,
-                    waiter_name: staffName || 'Guest Waiter',
-                    waiter_id: staffId || 'guest',
-                    restaurant_id: getRestaurantId(),
-                    timestamp: new Date().toISOString()
-                })
-                console.log('✅ Webhook Sent Successfully:', webhookRes)
-            } catch (webhookErr) {
-                console.error('❌ Webhook Failure:', webhookErr)
-            }
 
             toast.success(`Items added successfully to Table ${selectedTable.table_number}! 🎉`)
             setCart([])

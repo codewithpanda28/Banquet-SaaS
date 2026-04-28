@@ -66,60 +66,18 @@ export async function updateOrderStatus(orderId: string, status: string) {
 
         if (error) throw error
 
-        // Trigger Webhook if status is 'served' or 'cancelled'
-        if (status === 'served' || status === 'cancelled') {
+        if (status === 'cancelled') {
             const { data: order } = await supabase
                 .from('orders')
-                .select('*, customers(*), restaurant_tables(id, table_number), order_items(*)')
+                .select('table_id')
                 .eq('id', orderId)
                 .single()
 
-            if (order) {
-                // Fetch full restaurant config for dynamic WhatsApp n8n routing
-                const { data: restaurant } = await supabase
-                    .from('restaurants')
-                    .select('*, id, name, whatsapp_api_url, whatsapp_api_id, whatsapp_token')
-                    .eq('id', order.restaurant_id)
-                    .single()
-
-                // ✅ Release table status ONLY on cancellation. 
-                // For 'served', table remains occupied until payment is collected in Admin Dashboard.
-                if (order.table_id && status === 'cancelled') {
-                    await supabase
-                        .from('restaurant_tables')
-                        .update({ status: 'available' })
-                        .eq('id', order.table_id)
-                }
-
-                const { triggerPaymentWebhook } = await import('@/lib/webhook')
-                await triggerPaymentWebhook({
-                    bill_id: order.bill_id,
-                    amount: order.total,
-                    customer: {
-                        name: order.customers?.name || 'Walk-in',
-                        phone: order.customers?.phone || 'N/A',
-                        address: order.delivery_address || order.customers?.address
-                    },
-                    order_type: order.order_type,
-                    table_number: order.restaurant_tables?.table_number,
-                    items: order.order_items?.map((i: any) => ({
-                        name: i.item_name,
-                        quantity: i.quantity,
-                        price: i.price || (i.total / i.quantity),
-                        total: i.total
-                    })),
-                    payment_method: order.payment_method || 'pending',
-                    payment_status: order.payment_status,
-                    restaurant_id: order.restaurant_id,
-                    // SaaS Multi-Tenant Config for n8n
-                    whatsapp_api_url: restaurant?.whatsapp_api_url,
-                    whatsapp_api_id: restaurant?.whatsapp_api_id,
-                    whatsapp_token: restaurant?.whatsapp_token,
-                    restaurant_name: restaurant?.name || 'Restaurant',
-                    updated_at: new Date().toISOString(),
-                    source: status === 'cancelled' ? 'kitchen_cancelled' : 'kitchen_served',
-                    trigger_type: status === 'cancelled' ? 'order_cancelled' : 'order_served'
-                })
+            if (order?.table_id) {
+                await supabase
+                    .from('restaurant_tables')
+                    .update({ status: 'available' })
+                    .eq('id', order.table_id)
             }
         }
 

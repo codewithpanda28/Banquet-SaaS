@@ -182,7 +182,7 @@ export function UpsellList({ restaurantId, limit = 5, title = "Complete Your Mea
                             )}
 
                             <div className="flex items-center justify-between mt-2 pt-1">
-                                <div className="flex flex-col">
+                                <div className="flex flex-col hidden">
                                     <span className="font-black text-xs text-orange-600">₹{item.discounted_price || item.price}</span>
                                     {item.discounted_price && (
                                         <span className="text-[9px] text-slate-400 line-through">₹{item.price}</span>

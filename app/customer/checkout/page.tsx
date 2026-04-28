@@ -235,10 +235,6 @@ export default function CheckoutPage() {
             toast.error('Please enter name and phone number')
             return
         }
-        if (orderType === 'home_delivery' && !address) {
-            toast.error('Please enter delivery address')
-            return
-        }
 
         const rid = getRestaurantId()
         console.log('🚀 [Checkout] Place Order clicked', { name, phone, rid })
@@ -277,7 +273,6 @@ export default function CheckoutPage() {
                     .update({
                         name: name,
                         address: address || null,
-                        updated_at: new Date().toISOString(),
                         ...(needsAttribution ? { referred_by: referrerId } : {})
                     })
                     .eq('id', existingCustomer.id)
@@ -359,15 +354,12 @@ export default function CheckoutPage() {
                     .update({
                         total: existingTotal + total,
                         subtotal: existingSubtotal + subtotal,
-                        tax: tax + (existingOrderId ? (existingSubtotal * (restaurant?.tax_percentage || 5) / 100) : 0), // Simplified for now
                         sgst_amount: sgst,
                         cgst_amount: cgst,
-                        discount: (discount || 0),
                         status: (existingStatus === 'pending_confirmation' || existingStatus === 'completed' || existingStatus === 'cancelled')
                             ? 'pending_confirmation'
                             : (existingStatus === 'served' ? 'confirmed' : existingStatus),
-                        payment_status: 'pending',
-                        updated_at: new Date().toISOString()
+                        payment_status: 'pending'
                     })
                     .eq('id', existingOrderId)
 
@@ -387,15 +379,11 @@ export default function CheckoutPage() {
                     payment_status: 'pending',
                     payment_method: paymentMethod,
                     subtotal: parseFloat(subtotal.toString()) || 0,
-                    tax: parseFloat(tax.toString()) || 0,
                     sgst_amount: parseFloat(sgst.toString()) || 0,
                     cgst_amount: parseFloat(cgst.toString()) || 0,
-                    discount: parseFloat(discount.toString()) || 0,
-                    delivery_charge: parseFloat(delivery.toString()) || 0,
                     total: parseFloat(total.toString()) || 0,
-                    special_instructions: '',
+                    notes: '',
                     delivery_address: address,
-                    estimated_time: 30,
                     created_at: new Date().toISOString()
                 }
 
@@ -416,8 +404,8 @@ export default function CheckoutPage() {
                 item_name: item.name,
                 quantity: item.quantity,
                 price: item.discounted_price || item.price,
-                total: item.lineTotal,
-                special_instructions: item.instructions,
+                subtotal: item.lineTotal,
+                notes: item.instructions,
                 status: 'pending'
             }))
 
@@ -468,8 +456,8 @@ export default function CheckoutPage() {
             // Wait a bit for the toast to be readable on mobile
             setTimeout(() => {
                 clearCart()
-                // Redirect to payment/confirmation page so user can trigger webhook manually
-                router.push(`/customer/payment/upi?billId=${billId}&amount=${total.toFixed(2)}&method=${paymentMethod}`)
+                // Redirect to success page directly for Banquet
+                router.push(`/customer/order-confirmed/${billId}`)
             }, 500)
 
         } catch (err: any) {
@@ -513,380 +501,106 @@ export default function CheckoutPage() {
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 pb-40 font-sans">
-            <header className="px-4 py-4 sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-white/20 shadow-sm flex items-center justify-between">
-                <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full hover:bg-black/5 -ml-2 text-slate-600">
+        <div className="min-h-screen bg-[#FCFBF7] pb-40 font-sans">
+            <header className="px-4 py-6 sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-[#D4AF37]/20 shadow-sm flex items-center justify-between">
+                <Button variant="ghost" size="icon" onClick={() => router.back()} className="rounded-full hover:bg-[#D4AF37]/10 -ml-2 text-[#8B6508]">
                     <ArrowLeft className="w-5 h-5" />
                 </Button>
-                <h1 className="text-sm font-black uppercase tracking-widest text-slate-900">Checkout</h1>
-                <div className="w-8" /> {/* Spacer */}
+                <h1 className="text-sm font-black uppercase tracking-[0.3em] text-[#8B6508]">Banquet Checkout</h1>
+                <div className="w-8" />
             </header>
 
             <div className="p-6 space-y-8 max-w-lg mx-auto">
                 {/* Contact Section */}
                 <div className="space-y-4">
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
-                            <User className="w-4 h-4 text-orange-600" />
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="w-10 h-10 rounded-full bg-[#F4EBD0] flex items-center justify-center border border-[#D4AF37]/20 shadow-sm">
+                            <User className="w-5 h-5 text-[#8B6508]" />
                         </div>
-                        <h2 className="font-bold text-slate-900">Contact Details</h2>
+                        <h2 className="font-serif font-bold text-xl text-[#1A1A1A]">Guest Details</h2>
                     </div>
 
-                    <div className="bg-white p-1 rounded-2xl shadow-sm border border-slate-100 space-y-1">
-                        <div className="flex items-center px-4 py-2 border-b border-slate-50">
-                            <User className="w-4 h-4 text-slate-400 mr-3" />
+                    <div className="bg-white p-2 rounded-2xl shadow-md border border-[#D4AF37]/10 space-y-1">
+                        <div className="flex items-center px-4 py-3 border-b border-[#F4EBD0]/50">
+                            <User className="w-4 h-4 text-[#D4AF37] mr-3" />
                             <Input
-                                placeholder="Your Name"
+                                placeholder="Full Name"
                                 value={name}
                                 onChange={(e) => { setName(e.target.value); setCustomerInfo(e.target.value, phone, address) }}
                                 className="border-0 shadow-none focus-visible:ring-0 px-0 h-10 font-medium placeholder:text-slate-300"
                             />
                         </div>
-                        <div className="flex items-center px-4 py-2">
-                            <Phone className="w-4 h-4 text-slate-400 mr-3" />
+                        <div className="flex items-center px-4 py-3">
+                            <Phone className="w-4 h-4 text-[#D4AF37] mr-3" />
                             <Input
-                                placeholder="Phone Number"
+                                placeholder="WhatsApp / Phone"
                                 type="tel"
                                 value={phone}
                                 onChange={(e) => { setPhone(e.target.value); setCustomerInfo(name, e.target.value, address) }}
                                 className="border-0 shadow-none focus-visible:ring-0 px-0 h-10 font-medium placeholder:text-slate-300"
                             />
                         </div>
-                        {orderType === 'home_delivery' && (
-                            <div className="flex items-start px-4 py-3 border-t border-slate-50">
-                                <MapPin className="w-4 h-4 text-slate-400 mr-3 mt-1" />
-                                <textarea
-                                    placeholder="Delivery Address"
-                                    value={address}
-                                    onChange={(e) => { setAddress(e.target.value); setCustomerInfo(name, phone, e.target.value) }}
-                                    className="flex-1 min-h-[80px] text-sm resize-none outline-none placeholder:text-slate-300 font-medium bg-transparent"
-                                />
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                {/* Payment Method */}
-                <div className="space-y-4">
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-                            <Wallet className="w-4 h-4 text-green-600" />
-                        </div>
-                        <h2 className="font-bold text-slate-900">Payment Method</h2>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                        <button
-                            onClick={() => setPaymentMethod('upi')}
-                            className={cn(
-                                "relative h-28 rounded-2xl border-2 flex flex-col items-center justify-center gap-2 transition-all duration-300 overflow-hidden group",
-                                paymentMethod === 'upi' ? "bg-orange-50 border-orange-500 shadow-xl shadow-orange-500/10" : "bg-white border-slate-100 hover:border-slate-200"
-                            )}
-                        >
-                            <div className={cn(
-                                "w-12 h-12 rounded-full flex items-center justify-center transition-colors mb-1",
-                                paymentMethod === 'upi' ? "bg-white text-orange-600 shadow-sm" : "bg-slate-50 text-slate-400 group-hover:bg-slate-100"
-                            )}>
-                                <QrCode className="w-6 h-6" />
-                            </div>
-                            <span className={cn("font-bold text-sm", paymentMethod === 'upi' ? "text-orange-900" : "text-slate-500")}>UPI / Online</span>
-                            {paymentMethod === 'upi' && (
-                                <div className="absolute top-3 right-3 text-orange-500">
-                                    <CheckCircle2 className="w-5 h-5 fill-orange-500 text-white" />
-                                </div>
-                            )}
-                        </button>
-
-                        <button
-                            onClick={() => setPaymentMethod('cash')}
-                            className={cn(
-                                "relative h-28 rounded-2xl border-2 flex flex-col items-center justify-center gap-2 transition-all duration-300 overflow-hidden group",
-                                paymentMethod === 'cash' ? "bg-orange-50 border-orange-500 shadow-xl shadow-orange-500/10" : "bg-white border-slate-100 hover:border-slate-200"
-                            )}
-                        >
-                            <div className={cn(
-                                "w-12 h-12 rounded-full flex items-center justify-center transition-colors mb-1",
-                                paymentMethod === 'cash' ? "bg-white text-orange-600 shadow-sm" : "bg-slate-50 text-slate-400 group-hover:bg-slate-100"
-                            )}>
-                                <Wallet className="w-6 h-6" />
-                            </div>
-                            <span className={cn("font-bold text-sm", paymentMethod === 'cash' ? "text-orange-900" : "text-slate-500")}>Pay Cash</span>
-                            {paymentMethod === 'cash' && (
-                                <div className="absolute top-3 right-3 text-orange-500">
-                                    <CheckCircle2 className="w-5 h-5 fill-orange-500 text-white" />
-                                </div>
-                            )}
-                        </button>
                     </div>
                 </div>
 
                 {/* Order Summary */}
                 <div className="space-y-4">
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                            <ShoppingBag className="w-4 h-4 text-blue-600" />
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="w-10 h-10 rounded-full bg-[#F4EBD0] flex items-center justify-center border border-[#D4AF37]/20 shadow-sm">
+                            <ShoppingBag className="w-5 h-5 text-[#8B6508]" />
                         </div>
-                        <h2 className="font-bold text-slate-900">Order Summary</h2>
+                        <h2 className="font-serif font-bold text-xl text-[#1A1A1A]">Menu Selection</h2>
                     </div>
 
-                    <div className="bg-white rounded-2xl shadow-lg shadow-black/5 border border-slate-100 overflow-hidden relative">
-                        {/* Receipt Top Pattern */}
-                        <div className="h-2 bg-gradient-to-r from-orange-400 via-red-400 to-purple-400" />
+                    <div className="bg-white rounded-3xl shadow-xl shadow-[#D4AF37]/5 border border-[#D4AF37]/20 overflow-hidden relative">
+                        {/* Gold Accent Bar */}
+                        <div className="h-2 bg-gradient-to-r from-[#D4AF37] via-[#F4EBD0] to-[#D4AF37]" />
 
-                        <div className="p-6 space-y-6">
+                        <div className="p-8 space-y-6">
                             <div className="space-y-4">
                                 {items.map((item) => (
-                                    <div key={item.cartId} className="flex justify-between text-sm group">
-                                        <span className="font-medium text-slate-600 group-hover:text-slate-900 transition-colors flex gap-2">
-                                            <span className="text-slate-400 font-bold">{item.quantity}x</span>
-                                            {item.name}
-                                        </span>
-                                        <span className="font-bold text-slate-900">₹{item.lineTotal.toFixed(2)}</span>
+                                    <div key={item.cartId} className="flex justify-between text-sm group items-center">
+                                        <div className="flex items-center gap-3">
+                                            <span className="w-8 h-8 rounded-full bg-[#FCFBF7] border border-[#D4AF37]/10 flex items-center justify-center text-[10px] font-black text-[#8B6508]">
+                                                {item.quantity}
+                                            </span>
+                                            <span className="font-medium text-[#1A1A1A] group-hover:text-[#8B6508] transition-colors">
+                                                {item.name}
+                                            </span>
+                                        </div>
+                                        <span className="font-bold text-[#1A1A1A] hidden">Free</span>
                                     </div>
                                 ))}
                             </div>
 
-                            <div className="border-t border-dashed border-slate-200" />
+                            <div className="border-t border-dashed border-[#D4AF37]/30" />
 
-                            {/* Coupon Input */}
-                            <div className="space-y-3">
-                                {coupon ? (
-                                    <div className="flex items-center justify-between p-3 bg-green-50 rounded-xl border border-green-100 animate-in fade-in zoom-in-95">
-                                        <div className="flex items-center gap-3">
-                                            <div className="h-10 w-10 bg-green-100 rounded-lg flex items-center justify-center border border-green-200 shadow-sm">
-                                                <Ticket className="h-5 w-5 text-green-700" />
-                                            </div>
-                                            <div>
-                                                <p className="font-bold text-green-900 flex items-center gap-2">
-                                                    {coupon.code}
-                                                    <Badge variant="outline" className="bg-green-100/50 text-green-700 border-green-200 text-[10px] h-5">APPLIED</Badge>
-                                                </p>
-                                                <p className="text-xs text-green-700 font-medium mt-0.5">
-                                                    You saved ₹{discount.toFixed(2)} with this offer!
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <Button variant="ghost" size="sm" onClick={removeCoupon} className="h-8 w-8 p-0 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors">
-                                            <X className="h-4 w-4" />
-                                        </Button>
-                                    </div>
-                                ) : (
-                                    <div className="flex gap-2">
-                                        <div className="relative flex-1">
-                                            <Input
-                                                placeholder="Enter promo code"
-                                                value={couponCode}
-                                                onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                                                className="h-12 pl-10 text-sm bg-slate-50 border-transparent focus:bg-white focus:border-orange-500/20 font-mono uppercase placeholder:normal-case transition-all rounded-xl placeholder:font-sans"
-                                            />
-                                            <Ticket className="absolute left-3 top-3.5 w-4 h-4 text-slate-400" />
-                                        </div>
-                                        <Button
-                                            variant="default"
-                                            onClick={handleApplyCoupon}
-                                            disabled={!couponCode || verifyingCoupon}
-                                            className="h-12 px-6 font-bold bg-slate-900 hover:bg-black rounded-xl"
-                                        >
-                                            {verifyingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : "APPLY"}
-                                        </Button>
-                                    </div>
-                                )}
-
-                                {!coupon && (
-                                    <Sheet>
-                                        <SheetTrigger asChild>
-                                            <Button variant="link" className="text-orange-600 h-auto p-0 font-bold text-xs flex items-center gap-1 hover:no-underline" onClick={async () => {
-                                                const rid = getRestaurantId()
-                                                console.log('🎟️ [Checkout] Fetching available coupons for rid:', rid)
-                                                try {
-                                                    // Pass phone if available to show private/loyal coupons
-                                                    const res = await fetch(`/api/coupons?restaurantId=${rid || ''}&phone=${phone || ''}`)
-                                                    const json = await res.json()
-                                                    console.log('✅ [Checkout] Coupons API response:', json)
-                                                    if (json.error) {
-                                                        console.error('❌ [Checkout] Coupons API error:', json.error)
-                                                    }
-                                                    setAvailableCoupons(json.coupons || [])
-                                                } catch (err) {
-                                                    console.error('❌ [Checkout] Failed to fetch coupons:', err)
-                                                }
-                                            }}>
-                                                View Available Offers <ChevronRight className="w-3 h-3" />
-                                            </Button>
-                                        </SheetTrigger>
-                                        <SheetContent side="bottom" className="h-[80vh] rounded-t-3xl pt-6 px-0 overflow-hidden flex flex-col">
-                                            <SheetHeader className="px-6 pb-4 border-b border-slate-100">
-                                                <SheetTitle className="text-left text-xl font-black">Available Offers</SheetTitle>
-                                                <SheetDescription className="text-left">
-                                                    Select a promo code to apply to your order
-                                                </SheetDescription>
-                                            </SheetHeader>
-                                            <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50/50">
-                                                {availableCoupons.length === 0 ? (
-                                                    <div className="text-center py-10 text-muted-foreground">
-                                                        <Ticket className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                                                        <p>No active offers available right now.</p>
-                                                    </div>
-                                                ) : (
-                                                    availableCoupons
-                                                        .map((deal) => {
-                                                            const alreadyUsed = useCartStore.getState().isCouponUsed(deal.code)
-                                                            return (
-                                                                <div
-                                                                    key={deal.id}
-                                                                    className={`bg-white p-4 rounded-xl border shadow-sm relative overflow-hidden transition-all ${alreadyUsed
-                                                                        ? 'border-slate-100 opacity-50 cursor-not-allowed'
-                                                                        : 'border-slate-200 group active:scale-[0.98] cursor-pointer hover:border-orange-200'
-                                                                        }`}
-                                                                    onClick={async () => {
-                                                                        if (alreadyUsed) {
-                                                                            toast.error('You have already used this coupon!')
-                                                                            return
-                                                                        }
-
-                                                                        const currentCoupon = useCartStore.getState().coupon
-                                                                        if (currentCoupon) {
-                                                                            if (currentCoupon.code === deal.code) {
-                                                                                toast.error('This coupon is already applied!')
-                                                                            } else {
-                                                                                toast.error('A coupon is already applied. Remove it first.')
-                                                                            }
-                                                                            return
-                                                                        }
-
-                                                                        const rid = getRestaurantId()
-                                                                        try {
-                                                                            const res = await fetch('/api/coupons', {
-                                                                                method: 'POST',
-                                                                                headers: { 'Content-Type': 'application/json' },
-                                                                                body: JSON.stringify({
-                                                                                    code: deal.code,
-                                                                                    cartTotal: subtotal,
-                                                                                    restaurantId: rid,
-                                                                                    customerPhone: phone
-                                                                                })
-                                                                            })
-                                                                            const result = await res.json()
-                                                                            if (result.coupon) {
-                                                                                applyCoupon(result.coupon)
-                                                                                toast.success(`🎉 Applied ${deal.code}!`)
-                                                                            } else if (result.error) {
-                                                                                toast.error(result.error)
-                                                                            }
-                                                                        } catch {
-                                                                            toast.error('Could not apply coupon. Try again.')
-                                                                        }
-                                                                    }}
-                                                                >
-                                                                    <div className="flex gap-4 relative z-0">
-                                                                        <div className="flex flex-col items-center justify-center w-20 border-r border-dashed border-slate-200 pr-4">
-                                                                            <div className="h-10 w-10 bg-orange-100 rounded-lg flex items-center justify-center mb-1">
-                                                                                <Percent className="h-5 w-5 text-orange-600" />
-                                                                            </div>
-                                                                            <span className="text-[10px] font-bold text-slate-400 uppercase">
-                                                                                {deal.discount_type === 'percentage' ? `${deal.discount_value}%` : `₹${deal.discount_value}`}
-                                                                            </span>
-                                                                        </div>
-                                                                        <div className="flex-1 py-1">
-                                                                            <div className="flex justify-between items-start mb-1">
-                                                                                <span className="font-black text-lg text-slate-800 uppercase tracking-wide bg-slate-100 px-2 py-0.5 rounded border border-slate-200/50">
-                                                                                    {deal.code}
-                                                                                </span>
-                                                                                {alreadyUsed && (
-                                                                                    <span className="text-[10px] font-bold text-red-400 bg-red-50 px-2 py-0.5 rounded-full border border-red-100">USED</span>
-                                                                                )}
-                                                                            </div>
-                                                                            <p className="text-xs text-slate-500 font-medium line-clamp-2 mb-2">
-                                                                                {deal.description || 'Special discount for you!'}
-                                                                            </p>
-                                                                            <div className="flex items-center justify-between mt-2">
-                                                                                <p className="text-[10px] text-slate-400 font-semibold bg-slate-50 inline-block px-1.5 py-0.5 rounded">
-                                                                                    Valid until {format(new Date(deal.valid_until), 'MMM dd')}
-                                                                                </p>
-                                                                                {!alreadyUsed && (
-                                                                                    <Button size="sm" variant="ghost" className="h-7 text-xs font-bold text-orange-600 hover:text-orange-700 hover:bg-orange-50 px-0">
-                                                                                        TAP TO APPLY
-                                                                                    </Button>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            )
-                                                        })
-                                                )}
-                                            </div>
-                                        </SheetContent>
-                                    </Sheet>
-                                )}
+                            <div className="py-4 text-center">
+                                <p className="text-[10px] font-black text-[#D4AF37] uppercase tracking-[0.3em] mb-1">Banquet Inclusive</p>
+                                <p className="text-xs text-[#8B6508]/60 italic font-serif">All selections are included in your banquet service.</p>
                             </div>
-
-                            {restaurant?.id && (
-                                <div className="pt-2 border-t border-dashed border-slate-200">
-                                    <UpsellList
-                                        restaurantId={restaurant.id}
-                                        limit={3}
-                                        title="Missed Something?"
-                                    />
-                                </div>
-                            )}
-
-                            <div className="space-y-2 text-sm pt-2">
-                                <div className="flex justify-between">
-                                    <span className="text-slate-500">Subtotal</span>
-                                    <span className="font-medium text-slate-900">₹{subtotal.toFixed(2)}</span>
-                                </div>
-                                {discount > 0 && (
-                                    <div className="flex justify-between text-green-600">
-                                        <span className="font-medium flex items-center gap-1"><Ticket className="h-3 w-3" /> Discount</span>
-                                        <span className="font-bold">- ₹{discount.toFixed(2)}</span>
-                                    </div>
-                                )}
-                                <div className="flex justify-between">
-                                    <span className="text-slate-500">SGST ({restaurant?.sgst_percentage || '2.5'}%)</span>
-                                    <span className="font-medium text-slate-900">₹{sgst.toFixed(2)}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-slate-500">CGST ({restaurant?.cgst_percentage || '2.5'}%)</span>
-                                    <span className="font-medium text-slate-900">₹{cgst.toFixed(2)}</span>
-                                </div>
-                                {orderType === 'home_delivery' && (
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-500">Delivery Fee</span>
-                                        <span className="font-medium text-slate-900">₹{delivery.toFixed(2)}</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex justify-between items-center">
-                            <span className="font-bold text-slate-500 uppercase tracking-widest text-xs">Total to Pay</span>
-                            <span className="font-black text-2xl text-slate-900">₹{total.toFixed(2)}</span>
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Sticky Footer */}
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-white/20 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] z-50">
+            <div className="fixed bottom-0 left-0 right-0 p-6 bg-white/90 backdrop-blur-md border-t border-[#D4AF37]/10 shadow-[0_-10px_40px_rgba(212,175,55,0.1)] z-50">
                 <div className="max-w-lg mx-auto">
                     <Button
                         size="lg"
-                        className="w-full h-16 rounded-[2rem] text-lg font-black shadow-2xl shadow-orange-500/30 hover:shadow-orange-500/40 transition-all active:scale-[0.98] bg-gradient-to-r from-orange-500 to-red-500 text-white"
+                        className="w-full h-16 rounded-full text-lg font-black shadow-2xl shadow-[#D4AF37]/30 hover:shadow-[#D4AF37]/50 transition-all active:scale-[0.98] bg-gradient-to-r from-[#B8860B] to-[#D4AF37] text-white border-none"
                         onClick={handlePlaceOrder}
                         disabled={loading}
                     >
                         {loading ? (
                             <div className="flex items-center gap-2">
                                 <Loader2 className="w-5 h-5 animate-spin" />
-                                Processing Order...
+                                Prepping Order...
                             </div>
                         ) : (
-                            <div className="flex items-center justify-between w-full px-2">
-                                <span>Place Order</span>
-                                <div className="bg-white/20 backdrop-blur-md px-4 py-1.5 rounded-xl text-base font-bold shadow-sm">
-                                    ₹{total.toFixed(2)}
-                                </div>
+                            <div className="flex items-center justify-center w-full px-2">
+                                <span className="uppercase tracking-widest">Send to Kitchen</span>
                             </div>
                         )}
                     </Button>

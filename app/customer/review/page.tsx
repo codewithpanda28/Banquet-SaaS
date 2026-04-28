@@ -128,48 +128,56 @@ function ReviewContent() {
 
     if (loading) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 font-sans">
-                <div className="h-12 w-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
-                <p className="text-sm font-bold text-slate-400 uppercase tracking-widest animate-pulse">Syncing Terminal...</p>
+            <div className="flex flex-col items-center justify-center min-h-screen bg-[#FCFBF7] font-sans">
+                <div className="h-14 w-14 border-4 border-[#D4AF37] border-t-transparent rounded-full animate-spin mb-6" />
+                <p className="text-[10px] font-black text-[#D4AF37] uppercase tracking-[0.3em] animate-pulse">Consulting Registry...</p>
             </div>
         )
     }
 
     if (submitted) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-white font-sans p-8 text-center animate-in zoom-in duration-500">
-                <div className="h-24 w-24 bg-emerald-50 rounded-full flex items-center justify-center mb-8 shadow-inner">
-                    <CheckCircle2 className="h-12 w-12 text-emerald-500" />
+            <div className="flex flex-col items-center justify-center min-h-screen bg-white font-sans p-10 text-center animate-in zoom-in duration-700">
+                <div className="h-24 w-24 bg-[#F4EBD0]/50 border border-[#D4AF37]/20 rounded-full flex items-center justify-center mb-10 shadow-sm">
+                    <CheckCircle2 className="h-12 w-12 text-[#D4AF37]" />
                 </div>
-                <h1 className="text-4xl font-black text-slate-900 italic tracking-tighter mb-4">THANK YOU!</h1>
-                <p className="text-slate-500 font-medium max-w-md mx-auto leading-relaxed">Your feedback helps us grow. We hope to see you again soon at <span className="text-indigo-600 font-bold italic">{restaurant?.name}</span>.</p>
-                <div className="mt-12">
-                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-2">Live Support Logged</p>
-                    <div className="h-1 w-12 bg-slate-100 mx-auto rounded-full" />
+                <h1 className="text-4xl font-serif font-bold text-[#1A1A1A] tracking-tight mb-6 uppercase">Our Gratitude</h1>
+                <p className="text-[#8B6508]/60 font-medium max-w-md mx-auto leading-relaxed text-lg italic">
+                    Your gracious feedback has been recorded. It was an honor to host you at 
+                    <span className="text-[#8B6508] font-bold block mt-2 not-italic">{restaurant?.name}</span>.
+                </p>
+                <div className="mt-16">
+                    <p className="text-[10px] font-black text-[#D4AF37] uppercase tracking-[0.4em] mb-3">Live Log Verified</p>
+                    <div className="h-0.5 w-16 bg-[#F4EBD0] mx-auto rounded-full" />
                 </div>
             </div>
         )
     }
 
     return (
-        <div className="min-h-screen bg-slate-50 font-sans flex items-center justify-center p-4">
-            <div className="w-full max-w-xl animate-in fade-in slide-in-from-bottom-8 duration-700">
-                <div className="bg-white rounded-[2.5rem] shadow-[0_20px_50px_rgba(79,70,229,0.1)] border border-indigo-50/50 p-8 md:p-12 overflow-hidden relative">
+        <div className="min-h-screen bg-[#FCFBF7] font-sans flex items-center justify-center p-6 relative overflow-hidden">
+            {/* Background Decorations */}
+            <div className="absolute -top-24 -right-24 w-64 h-64 bg-[#F4EBD0]/30 rounded-full blur-3xl" />
+            <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-[#F4EBD0]/20 rounded-full blur-3xl" />
+
+            <div className="w-full max-w-xl animate-in fade-in slide-in-from-bottom-12 duration-1000 relative z-10">
+                <div className="bg-white rounded-[3rem] shadow-2xl shadow-[#D4AF37]/5 border border-[#D4AF37]/10 p-10 md:p-16 overflow-hidden text-center">
                     
                     {/* Header */}
-                    <div className="text-center space-y-2 mb-12">
-                        <div className="inline-flex items-center gap-2 bg-indigo-50 px-4 py-1.5 rounded-full mb-4">
-                            <Star className="h-3 w-3 text-indigo-600 fill-indigo-600" />
-                            <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Share Your Experience</span>
+                    <div className="space-y-6 mb-16">
+                        <div className="inline-flex items-center gap-3 bg-[#F4EBD0]/30 px-5 py-2 rounded-full mb-2 border border-[#D4AF37]/10">
+                            <Star className="h-3 w-3 text-[#D4AF37] fill-[#D4AF37]" />
+                            <span className="text-[10px] font-black text-[#8B6508] uppercase tracking-[0.3em]">Guest Impressions</span>
                         </div>
-                        <h1 className="text-4xl font-black text-slate-900 tracking-tighter italic uppercase leading-none">
-                            How was your {billId ? 'meal' : 'visit'}?
+                        <h1 className="text-5xl font-serif font-bold text-[#1A1A1A] tracking-tight leading-[1.1]">
+                            How was your <br/>
+                            <span className="text-[#D4AF37] italic">{billId ? 'banquet' : 'experience'}?</span>
                         </h1>
-                        <p className="text-slate-400 font-medium text-sm">at {restaurant?.name}</p>
+                        <p className="text-[#8B6508]/40 font-medium text-sm tracking-wide uppercase">at {restaurant?.name}</p>
                     </div>
 
-                    {/* Star Rating - EXTRA LARGE & PREMIUM */}
-                    <div className="flex justify-center gap-2 md:gap-4 mb-16">
+                    {/* Star Rating */}
+                    <div className="flex justify-center gap-3 md:gap-6 mb-20">
                         {[1, 2, 3, 4, 5].map((star) => (
                             <button
                                 key={star}
@@ -177,46 +185,47 @@ function ReviewContent() {
                                 onClick={() => setRating(star)}
                                 onMouseEnter={() => setHover(star)}
                                 onMouseLeave={() => setHover(0)}
-                                className="relative group transition-all duration-300 transform active:scale-90"
+                                className="relative group transition-all duration-500 transform active:scale-90"
                             >
                                 <Star
-                                    size={48}
+                                    size={56}
+                                    strokeWidth={1}
                                     className={cn(
-                                        "transition-all duration-300",
+                                        "transition-all duration-500",
                                         (hover || rating) >= star 
-                                            ? "fill-amber-400 text-amber-400 drop-shadow-[0_0_15px_rgba(251,191,36,0.5)] scale-110" 
-                                            : "text-slate-300 fill-slate-100/50"
+                                            ? "fill-[#D4AF37] text-[#D4AF37] drop-shadow-[0_0_20px_rgba(212,175,55,0.4)] scale-110" 
+                                            : "text-[#D4AF37]/20 fill-[#FCFBF7]"
                                     )}
                                 />
                                 <div className={cn(
-                                    "absolute -bottom-2 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-amber-400 transition-all duration-500",
+                                    "absolute -bottom-4 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-[#D4AF37] transition-all duration-700",
                                     rating === star ? "opacity-100 scale-100" : "opacity-0 scale-0"
                                 )} />
                             </button>
                         ))}
                     </div>
 
-                    {/* High Rating Content (4-5 stars) */}
+                    {/* High Rating Content */}
                     {rating >= 4 && (
-                        <div className="space-y-8 animate-in slide-in-from-top-4 duration-500">
+                        <div className="space-y-10 animate-in slide-in-from-top-6 duration-700">
                             
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Full Name</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2 text-left">
+                                    <p className="text-[9px] font-black text-[#D4AF37] uppercase tracking-[0.2em] ml-2">Guest Identity</p>
                                     <Input
                                         value={customerName}
                                         onChange={(e) => setCustomerName(e.target.value)}
-                                        placeholder="Guest Name"
-                                        className="h-12 rounded-2xl border-slate-100 bg-white font-bold text-sm shadow-sm px-6 text-center md:text-left focus:ring-indigo-500 transition-all"
+                                        placeholder="Full Name"
+                                        className="h-14 rounded-2xl border-[#F4EBD0] bg-[#FCFBF7]/50 font-bold text-sm px-6 focus:ring-[#D4AF37] transition-all text-[#1A1A1A]"
                                     />
                                 </div>
-                                <div className="space-y-1.5">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest pl-2">Contact</p>
+                                <div className="space-y-2 text-left">
+                                    <p className="text-[9px] font-black text-[#D4AF37] uppercase tracking-[0.2em] ml-2">Contact Link</p>
                                     <Input
                                         value={customerPhone}
                                         onChange={(e) => setCustomerPhone(e.target.value)}
                                         placeholder="Phone Number"
-                                        className="h-12 rounded-2xl border-slate-100 bg-white font-bold text-sm shadow-sm px-6 text-center md:text-left focus:ring-indigo-500 transition-all"
+                                        className="h-14 rounded-2xl border-[#F4EBD0] bg-[#FCFBF7]/50 font-bold text-sm px-6 focus:ring-[#D4AF37] transition-all text-[#1A1A1A]"
                                     />
                                 </div>
                             </div>
@@ -224,13 +233,13 @@ function ReviewContent() {
                             <Button
                                 onClick={handleSubmit}
                                 disabled={submitting}
-                                className="w-full h-16 rounded-[1.5rem] bg-indigo-600 hover:bg-slate-900 text-white font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-indigo-200 transition-all transform active:scale-[0.98] group"
+                                className="w-full h-20 rounded-full bg-[#1A1A1A] hover:bg-black text-white font-black text-[11px] uppercase tracking-[0.3em] shadow-2xl transition-all transform active:scale-[0.98] group flex items-center justify-center gap-4"
                             >
                                 {submitting ? (
-                                    <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    <div className="h-6 w-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
                                 ) : (
                                     <>
-                                        Post on Google <Navigation className="ml-3 h-4 w-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                                        Endorse on Google <Navigation className="h-4 w-4 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform text-[#D4AF37]" />
                                     </>
                                 )}
                             </Button>
@@ -238,13 +247,13 @@ function ReviewContent() {
                     )}
 
                     {/* Footer decoration */}
-                    <div className="mt-12 text-center">
-                        <div className="inline-block h-1 w-12 bg-indigo-100 rounded-full" />
+                    <div className="mt-16 text-center">
+                        <div className="inline-block h-0.5 w-16 bg-[#F4EBD0] rounded-full" />
                     </div>
                 </div>
                 
-                <p className="text-center mt-8 text-slate-400 text-[10px] uppercase font-black tracking-widest leading-none">
-                    Powered by {restaurant?.name || 'Restaurant Official'}
+                <p className="text-center mt-10 text-[#8B6508]/30 text-[9px] uppercase font-black tracking-[0.4em] leading-none">
+                    Curated by {restaurant?.name || 'Grand Banquet'}
                 </p>
             </div>
         </div>

@@ -22,7 +22,6 @@ import { Order } from '@/types'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { triggerPaymentWebhook, triggerAutomationWebhook } from '@/lib/webhook'
 
 // Helper to robustly parse dates primarily from UTC
 const parseDate = (dateString: string) => {
@@ -96,6 +95,10 @@ export default function OrdersPage() {
                     }
 
                     if (payload.eventType === 'UPDATE') {
+                        // Update list
+                        setOrders(prev => prev.map(o => o.id === targetOrder.id ? { ...o, ...targetOrder } : o))
+                        setFilteredOrders(prev => prev.map(o => o.id === targetOrder.id ? { ...o, ...targetOrder } : o))
+
                         // IF ORDER WAS HANDLED ELSEWHERE, CLOSE MODAL
                         if (targetOrder.status !== 'pending_confirmation') {
                             setSelectedApproval((prev: any) => {
@@ -106,13 +109,15 @@ export default function OrdersPage() {
                                 return prev
                             })
                         }
+
+                        if (selectedOrder && targetOrder.id === selectedOrder.id) {
+                            setSelectedOrder((prev: any) => prev ? { ...prev, ...targetOrder } : null)
+                        }
                     }
 
-                    // Instant fetch for "Live" feel
-                    fetchOrders(false)
-
-                    if (selectedOrder && (payload.new as any)?.id === selectedOrder.id) {
-                        handleViewOrder(selectedOrder.id)
+                    // Only fetch stats or full list if it's a new order or we need fresh counts
+                    if (payload.eventType === 'INSERT') {
+                        fetchOrders(false)
                     }
                 }
             )
@@ -409,10 +414,6 @@ export default function OrdersPage() {
                     restaurant_id: RESTAURANT_ID,
                     status: isUpdating ? 'updated' : 'new'
                 }
-
-                triggerAutomationWebhook('new-order', webhookData).catch(err => {
-                    console.error('Manual order WhatsApp trigger failed:', err)
-                })
             }
 
             toast.success(isUpdating ? `Bill #${billId} updated! 🚀` : `Manual Order Placed! 🚀`)
@@ -593,7 +594,6 @@ export default function OrdersPage() {
                             <tr>
                                 <th>Item</th>
                                 <th style="text-align:right">Qty</th>
-                                <th style="text-align:right">Price</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -601,18 +601,13 @@ export default function OrdersPage() {
                                 <tr>
                                     <td>${item.item_name}</td>
                                     <td style="text-align:right">${item.quantity}</td>
-                                    <td style="text-align:right">${item.total.toFixed(2)}</td>
                                 </tr>
                             `).join('') || ''}
                         </tbody>
                     </table>
                     
                     <div class="total">
-                        <p>Subtotal: ₹${(order.subtotal || order.total - (order.tax || 0)).toFixed(2)}</p>
-                        <p>SGST (${order.sgst_percentage || 2.5}%): ₹${(order.sgst_amount || 0).toFixed(2)}</p>
-                        <p>CGST (${order.cgst_percentage || 2.5}%): ₹${(order.cgst_amount || 0).toFixed(2)}</p>
-                        ${order.discount > 0 ? `<p>Discount: -₹${order.discount.toFixed(2)}</p>` : ''}
-                        <p><strong>Total: ₹${order.total.toFixed(2)}</strong></p>
+                        <p><strong>Order Confirmed</strong></p>
                     </div>
                     <div class="footer">
                         <p>Thank get for dining with us!</p>
@@ -627,16 +622,14 @@ export default function OrdersPage() {
     function exportOrders() {
         try {
             const csvContent = [
-                ['Bill ID', 'Customer', 'Phone', 'Type', 'Table', 'Total', 'Status', 'Payment', 'Date'],
+                ['Bill ID', 'Customer', 'Phone', 'Type', 'Table', 'Status', 'Date'],
                 ...filteredOrders.map((order: any) => [
                     order.bill_id,
                     order.customers?.name || 'Walk-in',
                     order.customers?.phone || 'N/A',
                     order.order_type.replace('_', ' '),
                     order.restaurant_tables ? `Table ${order.restaurant_tables.table_number}` : 'N/A',
-                    `₹${order.total.toFixed(2)}`,
                     order.status,
-                    order.payment_method,
                     format(parseDate(order.created_at), 'dd/MM/yyyy hh:mm a')
                 ])
             ]
@@ -656,50 +649,32 @@ export default function OrdersPage() {
         }
     }
 
-    async function handlePayment(method: 'cash' | 'upi' | 'mixed') {
+    async function handlePayment(method: 'cash' | 'upi' | 'mixed' | 'banquet') {
         if (!selectedOrder) return
 
         try {
             setProcessingPayment(true)
+
+            // Fix: Map 'banquet' to 'cash' to avoid DB constraint violation
+            const dbMethod = method === 'banquet' ? 'cash' : method;
 
             // 1. Update Payment Status in Database
             const { error } = await supabase
                 .from('orders')
                 .update({
                     payment_status: 'paid',
-                    payment_method: method,
+                    payment_method: dbMethod,
                     status: 'completed'
                 })
                 .eq('id', selectedOrder.id)
+                .eq('restaurant_id', String(RESTAURANT_ID))
 
-            if (error) throw error
+            if (error) {
+                console.error('❌ [OrdersPage] Payment update error:', JSON.stringify(error, null, 2));
+                throw new Error(error.message || 'Database update failed');
+            }
 
-            // Trigger n8n Webhook for Payment Confirmation
-            await triggerPaymentWebhook({
-                bill_id: selectedOrder.bill_id,
-                amount: selectedOrder.total,
-                customer: {
-                    name: selectedOrder.customers?.name || selectedOrder.customer_name || 'Walk-in',
-                    phone: selectedOrder.customers?.phone || 'N/A',
-                    address: selectedOrder.delivery_address || selectedOrder.customers?.address
-                },
-                order_type: selectedOrder.order_type,
-                table_number: Array.isArray(selectedOrder.restaurant_tables) ? selectedOrder.restaurant_tables[0]?.table_number : selectedOrder.restaurant_tables?.table_number,
-                items: selectedOrder.order_items?.map((i: any) => ({
-                    name: i.item_name,
-                    quantity: i.quantity,
-                    price: i.price,
-                    total: i.total
-                })),
-                payment_method: method,
-                payment_status: 'paid',
-                restaurant_id: RESTAURANT_ID,
-                updated_at: new Date().toISOString(),
-                source: 'admin_dashboard',
-                trigger_type: 'payment_marked_manually'
-            })
-
-            toast.success(`Payment marked as ${method.toUpperCase()} & Message Sent 🚀`)
+            toast.success(`Payment marked as ${method.toUpperCase()} ✅`)
 
             // 3. Mark Table as Available and Clear Bookings if it's a Dine In order
             if (selectedOrder.table_id) {
@@ -719,8 +694,16 @@ export default function OrdersPage() {
                     .eq('booking_date', new Date().toISOString().split('T')[0])
             }
 
-            setSelectedOrder(null)
+            // Update local state so button changes immediately
+            setSelectedOrder({ ...selectedOrder, status: 'completed', payment_status: 'paid' })
+            setOrders(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, status: 'completed', payment_status: 'paid' } : o))
+            setFilteredOrders(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, status: 'completed', payment_status: 'paid' } : o))
+
+            // Don't close modal immediately so user sees the "ORDER COMPLETED" state change
             fetchOrders()
+            setTimeout(() => {
+                setSelectedOrder(null)
+            }, 1500)
         } catch (error) {
             console.error('Error processing payment:', error)
             toast.error('Failed to update payment')
@@ -795,8 +778,8 @@ export default function OrdersPage() {
                     </div>
                     <div className="flex items-center gap-6 border-l border-gray-100 pl-6 border-dashed">
                         <div className="text-right">
-                            <p className="text-[10px] uppercase font-bold text-gray-400">Total</p>
-                            <p className="text-3xl font-black text-gray-900">₹{Number(order.total).toFixed(2)}</p>
+                            <p className="text-[10px] uppercase font-bold text-gray-400">Items</p>
+                            <p className="text-xl font-black text-gray-900">{order.order_items?.length || 0}</p>
                         </div>
                         <div className="flex flex-col gap-2">
                             <Button size="sm" className="bg-green-50 text-green-700 hover:bg-green-600 hover:text-white font-bold" onClick={() => handleViewOrder(order.id)}>View</Button>
@@ -971,12 +954,6 @@ export default function OrdersPage() {
                                                     <span className="font-semibold text-gray-900">#{selectedOrder.restaurant_tables.table_number}</span>
                                                 </div>
                                             )}
-                                            <div className="flex justify-between text-sm">
-                                                <span className="text-gray-500 font-medium">Payment:</span>
-                                                <span className={cn("font-semibold capitalize", selectedOrder.payment_status === 'paid' ? "text-green-600" : "text-orange-600")}>
-                                                    {selectedOrder.payment_status || 'Pending'}
-                                                </span>
-                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -985,52 +962,27 @@ export default function OrdersPage() {
                                 <div className="space-y-4">
                                     <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
                                         <div className="grid grid-cols-12 bg-gray-50 border-b border-gray-200 p-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50 z-10">
-                                            <div className="col-span-6 pl-2">Item</div>
+                                            <div className="col-span-10 pl-2">Item</div>
                                             <div className="col-span-2 text-center">Qty</div>
-                                            <div className="col-span-4 text-right pr-2">Total</div>
                                         </div>
                                         <div className="divide-y divide-gray-100">
                                             {selectedOrder.order_items?.map((item: any) => (
                                                 <div key={item.id} className="grid grid-cols-12 p-3 items-center hover:bg-gray-50/50 transition-colors">
-                                                    <div className="col-span-6 pl-2">
+                                                    <div className="col-span-10 pl-2">
                                                         <p className="text-sm font-semibold text-gray-800">{item.item_name}</p>
-                                                        <p className="text-[10px] text-gray-400 font-medium">₹{(Number(item.total) / Number(item.quantity)).toFixed(2)} each</p>
                                                     </div>
                                                     <div className="col-span-2 flex justify-center">
                                                         <div className="h-6 w-6 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-bold">
                                                             {item.quantity}
                                                         </div>
                                                     </div>
-                                                    <div className="col-span-4 text-right pr-2">
-                                                        <p className="text-sm font-bold text-gray-900">₹{item.total.toFixed(2)}</p>
-                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
                                         {/* Summary */}
-                                        <div className="bg-gray-50 p-4 border-t border-gray-200">
-                                            <div className="flex justify-between items-center text-sm mb-1">
-                                                <span className="text-gray-500 font-medium">Subtotal</span>
-                                                <span className="font-semibold text-gray-900">₹{(selectedOrder.subtotal || selectedOrder.total - (selectedOrder.tax || 0)).toFixed(2)}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center text-sm mb-1">
-                                                <span className="text-gray-500 font-medium">SGST</span>
-                                                <span className="font-semibold text-gray-900">₹{(selectedOrder.sgst_amount || 0).toFixed(2)}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center text-sm mb-1">
-                                                <span className="text-gray-500 font-medium">CGST</span>
-                                                <span className="font-semibold text-gray-900">₹{(selectedOrder.cgst_amount || 0).toFixed(2)}</span>
-                                            </div>
-                                            {selectedOrder.discount > 0 && (
-                                                <div className="flex justify-between items-center text-sm mb-1 text-green-600">
-                                                    <span className="font-medium">Discount</span>
-                                                    <span className="font-semibold">-₹{selectedOrder.discount.toFixed(2)}</span>
-                                                </div>
-                                            )}
-                                            <div className="flex justify-between items-center pt-3 border-t border-gray-200 mt-2">
-                                                <span className="text-base font-bold text-gray-900">Grand Total</span>
-                                                <span className="text-2xl font-black text-gray-900">₹{selectedOrder.total.toFixed(2)}</span>
-                                            </div>
+                                        <div className="bg-gray-50 p-4 border-t border-gray-200 text-center">
+                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Inclusive Selection</p>
+                                            <p className="text-[10px] text-gray-500 mt-1 italic">Banquet experience optimized.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -1044,10 +996,10 @@ export default function OrdersPage() {
                                         <XCircle className="h-5 w-5 text-red-600" />
                                         Order Cancelled
                                     </div>
-                                ) : selectedOrder.status === 'completed' || selectedOrder.payment_status === 'paid' ? (
+                                ) : selectedOrder.status === 'completed' ? (
                                     <div className="w-full h-11 bg-green-50 border border-green-200 text-green-700 rounded-xl flex items-center justify-center font-bold text-sm gap-2">
                                         <CheckCircle2 className="h-5 w-5 text-green-600" />
-                                        Payment Completed {selectedOrder.payment_method ? `via ${selectedOrder.payment_method.toUpperCase()}` : ''}
+                                        Order Finished
                                     </div>
                                 ) : (
                                     <div className="flex flex-col gap-3">
@@ -1070,27 +1022,24 @@ export default function OrdersPage() {
                                                 </Button>
                                             </div>
                                         ) : (
-                                            <div className="grid grid-cols-3 gap-3">
+                                            <div className="flex justify-center w-full">
                                                 <Button
-                                                    className="h-11 rounded-xl bg-green-600 hover:bg-green-700 text-white font-bold shadow-sm"
-                                                    onClick={() => handlePayment('cash')}
-                                                    disabled={processingPayment}
+                                                    className={cn(
+                                                        "h-14 w-full rounded-2xl font-black text-xl shadow-lg transition-all duration-500",
+                                                        selectedOrder.status === 'completed' 
+                                                            ? "bg-emerald-50 text-emerald-600 border-2 border-emerald-100 shadow-none" 
+                                                            : "bg-green-600 hover:bg-green-700 text-white shadow-green-600/20"
+                                                    )}
+                                                    onClick={() => selectedOrder.status !== 'completed' && handlePayment('banquet')}
+                                                    disabled={processingPayment || selectedOrder.status === 'completed'}
                                                 >
-                                                    <DollarSign className="mr-2 h-4 w-4" /> Cash
-                                                </Button>
-                                                <Button
-                                                    className="h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm"
-                                                    onClick={() => handlePayment('upi')}
-                                                    disabled={processingPayment}
-                                                >
-                                                    <Smartphone className="mr-2 h-4 w-4" /> UPI
-                                                </Button>
-                                                <Button
-                                                    className="h-11 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-sm"
-                                                    onClick={() => handlePayment('mixed')}
-                                                    disabled={processingPayment}
-                                                >
-                                                    <Wallet className="mr-2 h-4 w-4" /> Mixed
+                                                    {processingPayment ? (
+                                                        <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+                                                    ) : selectedOrder.status === 'completed' ? (
+                                                        <><CheckCircle2 className="mr-2 h-6 w-6 text-emerald-500" /> ORDER COMPLETED</>
+                                                    ) : (
+                                                        <><CheckCircle2 className="mr-2 h-6 w-6" /> COMPLETE ORDER</>
+                                                    )}
                                                 </Button>
                                             </div>
                                         )}
@@ -1132,35 +1081,20 @@ export default function OrdersPage() {
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">Items</p>
                             <div className="max-h-[200px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                                 {selectedApproval?.order_items?.map((item: any) => (
-                                    <div key={item.id} className="flex justify-between items-center p-3 bg-white border border-gray-100 rounded-xl">
-                                        <div className="flex items-center gap-3">
-                                            <span className="h-6 w-6 bg-red-50 text-red-600 rounded-full flex items-center justify-center text-[10px] font-black">{item.quantity}</span>
-                                            <span className="text-sm font-bold text-gray-800">{item.item_name}</span>
+                                        <div className="flex justify-between items-center p-3 bg-white border border-gray-100 rounded-xl">
+                                            <div className="flex items-center gap-3">
+                                                <span className="h-6 w-6 bg-red-50 text-red-600 rounded-full flex items-center justify-center text-[10px] font-black">{item.quantity}</span>
+                                                <span className="text-sm font-bold text-gray-800">{item.item_name}</span>
+                                            </div>
                                         </div>
-                                        <span className="text-sm font-black text-gray-900">₹{item.total?.toFixed(2)}</span>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
-                        </div>
 
-                        <div className="space-y-2 pt-4 border-t border-gray-100">
-                            <div className="flex items-center justify-between text-sm">
-                                <span className="text-gray-500 font-medium">Subtotal</span>
-                                <span className="font-bold text-gray-900">₹{(selectedApproval?.subtotal || (selectedApproval?.total || 0) - (selectedApproval?.tax || 0)).toFixed(2)}</span>
+                            <div className="space-y-2 pt-4 border-t border-gray-100 text-center">
+                                <span className="text-lg font-black text-gray-900 uppercase tracking-widest text-[10px]">Banquet Selection</span>
+                                <p className="text-[10px] text-gray-400 italic">Review items before sending to kitchen.</p>
                             </div>
-                            <div className="flex items-center justify-between text-sm">
-                                <span className="text-gray-500 font-medium">SGST ({selectedApproval?.sgst_percentage || 2.5}%)</span>
-                                <span className="font-bold text-gray-900">₹{(selectedApproval?.sgst_amount || 0).toFixed(2)}</span>
-                            </div>
-                            <div className="flex items-center justify-between text-sm">
-                                <span className="text-gray-500 font-medium">CGST ({selectedApproval?.cgst_percentage || 2.5}%)</span>
-                                <span className="font-bold text-gray-900">₹{(selectedApproval?.cgst_amount || 0).toFixed(2)}</span>
-                            </div>
-                            <div className="flex items-center justify-between pt-2 border-t border-dashed border-gray-200">
-                                <span className="text-lg font-black text-gray-900">Grand Total</span>
-                                <span className="text-2xl font-black text-red-600">₹{selectedApproval?.total?.toFixed(2)}</span>
-                            </div>
-                        </div>
                     </div>
 
                     <div className="p-8 pt-0 grid grid-cols-2 gap-4">
@@ -1304,7 +1238,6 @@ export default function OrdersPage() {
                                                                 )} />
                                                                 <h4 className="font-semibold text-gray-800 text-base leading-tight line-clamp-2">{item.name}</h4>
                                                             </div>
-                                                            <span className="font-bold text-xl text-gray-900 shrink-0">₹{item.discounted_price || item.price}</span>
                                                         </div>
                                                         <p className="text-xs text-gray-400 font-medium line-clamp-2 mt-auto pt-2">{item.description}</p>
                                                     </CardContent>
@@ -1384,11 +1317,6 @@ export default function OrdersPage() {
                                                                         )} />
                                                                         <h5 className="text-sm font-bold text-gray-900 leading-tight">{item.name}</h5>
                                                                     </div>
-                                                                    <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wider">₹{price.toFixed(2)} / unit</p>
-                                                                </div>
-                                                                <div className="text-right shrink-0">
-                                                                    <p className="text-[10px] font-bold text-gray-400 uppercase mb-0.5">Item Total</p>
-                                                                    <p className="text-md font-black text-primary">₹{total.toFixed(2)}</p>
                                                                 </div>
                                                             </div>
                                                             <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-50">
@@ -1427,26 +1355,8 @@ export default function OrdersPage() {
 
                                 <div className="shrink-0 bg-gray-50 px-6 pb-6 pt-4 border-t border-gray-200 space-y-3">
                                     <div className="space-y-1.5 px-1">
-                                        <div className="flex justify-between items-center text-[11px] font-semibold text-gray-500">
-                                            <span className="uppercase tracking-wider">Subtotal</span>
-                                            <span className="text-gray-900 font-bold">₹{manualCart.reduce((acc, item) => acc + (item.discounted_price || item.price) * item.quantity, 0).toFixed(2)}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center text-[10px] font-semibold text-gray-400">
-                                            <span className="uppercase tracking-wider">SGST ({taxRates.sgst}%)</span>
-                                            <span className="text-gray-600">₹{(manualCart.reduce((acc, item) => acc + (item.discounted_price || item.price) * item.quantity, 0) * (taxRates.sgst / 100)).toFixed(2)}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center text-[10px] font-semibold text-gray-400">
-                                            <span className="uppercase tracking-wider">CGST ({taxRates.cgst}%)</span>
-                                            <span className="text-gray-600">₹{(manualCart.reduce((acc, item) => acc + (item.discounted_price || item.price) * item.quantity, 0) * (taxRates.cgst / 100)).toFixed(2)}</span>
-                                        </div>
-                                        <div className="flex justify-between items-end pt-3 mt-1 border-t border-dashed border-gray-200">
-                                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-none mb-1">Payable</p>
-                                            <p className="text-2xl font-bold text-gray-900 tracking-tight leading-none">
-                                                ₹{(
-                                                    manualCart.reduce((acc, item) => acc + (item.discounted_price || item.price) * item.quantity, 0) 
-                                                    * (1 + (taxRates.sgst + taxRates.cgst) / 100)
-                                                ).toFixed(2)}
-                                            </p>
+                                        <div className="flex justify-center items-center py-4 border-t border-dashed border-gray-200">
+                                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest leading-none">Banquet Selection Confirmed</p>
                                         </div>
                                     </div>
                                     <Button 
@@ -1457,7 +1367,7 @@ export default function OrdersPage() {
                                         {processingPayment ? <Loader2 className="h-6 w-6 animate-spin" /> : (
                                             <>
                                                 <Printer className="h-5 w-5" />
-                                                Print & Settle
+                                                Print & Confirm
                                             </>
                                         )}
                                     </Button>

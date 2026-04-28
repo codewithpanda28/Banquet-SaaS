@@ -41,14 +41,9 @@ const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/admin' },
     { icon: ShoppingBag, label: 'Orders', href: '/admin/orders' },
     { icon: UtensilsCrossed, label: 'Menu', href: '/admin/menu' },
-    { icon: ReceiptText, label: 'Bills History', href: '/admin/bills' },
+    { icon: ReceiptText, label: 'Order History', href: '/admin/bills' },
     { icon: Armchair, label: 'Tables', href: '/admin/tables' },
-    { icon: ConciergeBell, label: 'Waiter Activity', href: '/admin/waiters' },
     { icon: Users, label: 'Customers', href: '/admin/customers' },
-    { icon: Crown, label: 'VIP Leaderboard', href: '/admin/loyalty' },
-    { icon: Share2, label: 'Referral Engine', href: '/admin/referrals' },
-    { icon: Gift, label: 'Rewards Program', href: '/admin/rewards' },
-    { icon: TicketPercent, label: 'Coupons', href: '/admin/coupons' },
     { icon: FileBarChart, label: 'Reports', href: '/admin/reports' },
     { icon: Monitor, label: 'App Previews', href: '/admin/preview' },
     { icon: Settings, label: 'Settings', href: '/admin/settings' },
@@ -56,12 +51,7 @@ const menuItems = [
 ]
 
 const automationItems = [
-    { icon: ConciergeBell, label: 'Waiter Dashboard', href: '/waiter', color: 'text-emerald-500' },
     { icon: CalendarCheck, label: 'Table Booking', href: '/admin/bookings', color: 'text-blue-500' },
-    { icon: Star, label: 'Review Automation', href: '/admin/reviews', color: 'text-amber-500' },
-    { icon: Package, label: 'Inventory', href: '/admin/inventory', color: 'text-orange-500' },
-    { icon: Bike, label: 'Zomato/Swiggy', href: '/admin/delivery', color: 'text-red-500' },
-    { icon: Zap, label: 'AI Upsell', href: '/admin/upsell', color: 'text-yellow-500' },
     { icon: ChefHat, label: 'Kitchen Dashboard', href: '/kitchen', color: 'text-orange-600' },
 ]
 
@@ -96,11 +86,14 @@ export function AdminSidebar() {
             <div className="flex h-16 items-center justify-between px-4 border-b border-gray-100">
                 {sidebarOpen ? (
                     <div className="flex items-center gap-3 animate-in fade-in duration-300">
-                        <div className="h-9 w-9 rounded-xl bg-green-600 flex items-center justify-center text-white shadow-lg shadow-green-500/20 ring-1 ring-green-600/20 overflow-hidden">
+                        <div className={cn(
+                            "h-11 w-11 rounded-xl flex items-center justify-center overflow-hidden transition-all shadow-md",
+                            !restaurant?.logo_url && "bg-green-600 shadow-green-500/20 text-white"
+                        )}>
                             {restaurant?.logo_url ? (
-                                <img src={restaurant.logo_url} className="h-full w-full object-contain" alt="Logo" />
+                                <img src={restaurant.logo_url} className="h-full w-full object-cover" alt="Logo" />
                             ) : (
-                                <Store className="h-5 w-5" />
+                                <Store className="h-6 w-6" />
                             )}
                         </div>
                         <span className="text-sm font-black tracking-tight text-gray-900 truncate max-w-[120px]">
@@ -109,11 +102,14 @@ export function AdminSidebar() {
                     </div>
                 ) : (
                     <div className="mx-auto">
-                        <div className="h-9 w-9 rounded-xl bg-green-600 flex items-center justify-center text-white shadow-lg shadow-green-500/20 ring-1 ring-green-600/20 overflow-hidden">
+                        <div className={cn(
+                            "h-11 w-11 rounded-xl flex items-center justify-center overflow-hidden transition-all shadow-md",
+                            !restaurant?.logo_url && "bg-green-600 shadow-green-500/20 text-white"
+                        )}>
                              {restaurant?.logo_url ? (
-                                <img src={restaurant.logo_url} className="h-full w-full object-contain" alt="Logo" />
+                                <img src={restaurant.logo_url} className="h-full w-full object-cover" alt="Logo" />
                             ) : (
-                                <Store className="h-5 w-5" />
+                                <Store className="h-6 w-6" />
                             )}
                         </div>
                     </div>

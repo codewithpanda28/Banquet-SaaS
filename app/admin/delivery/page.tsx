@@ -17,7 +17,6 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
-import { triggerAutomationWebhook } from '@/lib/webhook'
 
 interface OrderItem {
     item_name: string;
@@ -145,16 +144,8 @@ export default function DeliveryIntegrationPage() {
         }
         setSyncing(true)
 
-        // Trigger aggregation webhooks in n8n
-        const syncPromises = []
-        if (settings.zomato_enabled) {
-            syncPromises.push(triggerAutomationWebhook('zomato-order', { api_key: settings.zomato_api_key, restaurant_id: RESTAURANT_ID }))
-        }
-        if (settings.swiggy_enabled) {
-            syncPromises.push(triggerAutomationWebhook('swiggy-order', { api_key: settings.swiggy_api_key, restaurant_id: RESTAURANT_ID }))
-        }
-
-        await Promise.allSettled(syncPromises)
+        // Webhook removed as requested. Manual sync via n8n is disabled.
+        toast.info('Direct API sync is currently disabled (No Automation).')
 
         fetchOrders()
         setSyncing(false)

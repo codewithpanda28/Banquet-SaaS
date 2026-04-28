@@ -156,16 +156,7 @@ export default function MenuPage() {
 
     async function handleSaveItem() {
         try {
-            if (!itemForm.name.trim() || !itemForm.category_id || !itemForm.price) {
-                toast.error('Please fill all required fields')
-                return
-            }
-
-            const priceValue = parseFloat(itemForm.price)
-            if (isNaN(priceValue) || priceValue < 0) {
-                toast.error('Please enter a valid price')
-                return
-            }
+            const priceValue = 0 // Price not needed for banquet service
 
             const isInfinite = itemForm.stock === '' || itemForm.stock === null;
             const itemData = {
@@ -489,10 +480,7 @@ export default function MenuPage() {
 
                                     {/* Content Area */}
                                     <div className="p-5">
-                                        <div className="flex justify-between items-start mb-2">
                                             <h4 className="font-bold text-lg leading-tight line-clamp-1 pr-2">{item.name}</h4>
-                                            <span className="font-black text-lg text-primary">₹{item.price}</span>
-                                        </div>
                                         <p className="text-sm text-muted-foreground line-clamp-2 h-10 mb-4 leading-relaxed">
                                             {item.description || 'A delicious preparation with authentic spices.'}
                                         </p>
@@ -622,47 +610,31 @@ export default function MenuPage() {
                             />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-6">
-                            <div className="space-y-2">
-                                <Label htmlFor="item-price" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Price (₹) *</Label>
-                                <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-bold">₹</span>
-                                    <Input
-                                        id="item-price"
-                                        type="number"
-                                        step="0.01"
-                                        value={itemForm.price}
-                                        onChange={(e) => setItemForm({ ...itemForm, price: e.target.value })}
-                                        placeholder="0.00"
-                                        className="bg-secondary/20 border-border/50 h-10 pl-8 font-mono"
-                                    />
-                                </div>
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="item-type" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Dietary Type</Label>
-                                <Select
-                                    disabled={dietaryType !== 'both'}
-                                    value={itemForm.is_veg ? 'veg' : 'non-veg'}
-                                    onValueChange={(value) => setItemForm({ ...itemForm, is_veg: value === 'veg' })}
-                                >
-                                    <SelectTrigger id="item-type" className="bg-secondary/20 border-border/50 h-10">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="veg">
-                                            <div className="flex items-center gap-2">
-                                                <div className="h-3 w-3 rounded-full bg-green-500 ring-1 ring-green-200" /> Vegetarian
-                                            </div>
-                                        </SelectItem>
-                                        <SelectItem value="non-veg">
-                                            <div className="flex items-center gap-2">
-                                                <div className="h-3 w-3 rounded-full bg-red-500 ring-1 ring-red-200" /> Non-Vegetarian
-                                            </div>
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="item-type" className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Dietary Type</Label>
+                            <Select
+                                disabled={dietaryType !== 'both'}
+                                value={itemForm.is_veg ? 'veg' : 'non-veg'}
+                                onValueChange={(value) => setItemForm({ ...itemForm, is_veg: value === 'veg' })}
+                            >
+                                <SelectTrigger id="item-type" className="bg-secondary/20 border-border/50 h-10">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="veg">
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-3 w-3 rounded-full bg-green-500 ring-1 ring-green-200" /> Vegetarian
+                                        </div>
+                                    </SelectItem>
+                                    <SelectItem value="non-veg">
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-3 w-3 rounded-full bg-red-500 ring-1 ring-red-200" /> Non-Vegetarian
+                                        </div>
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
+
 
                         <div className="space-y-2">
                             <div className="flex justify-between items-center mb-1">

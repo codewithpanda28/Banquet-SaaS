@@ -41,13 +41,13 @@ export function CategoryTabs({ categories, activeCategory, onSelect }: CategoryT
                     id="tab-all"
                     onClick={() => onSelect('all')}
                     className={cn(
-                        "relative shrink-0 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 select-none active:scale-95",
+                        "relative shrink-0 px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 select-none active:scale-95",
                         activeCategory === 'all'
-                            ? "bg-slate-900 text-white shadow-md shadow-slate-200"
-                            : "bg-white text-slate-500 hover:bg-slate-50 shadow-sm border border-gray-100"
+                            ? "bg-[#D4AF37] text-white shadow-lg shadow-[#D4AF37]/20"
+                            : "bg-white text-[#8B6508]/60 hover:bg-[#F4EBD0]/50 border border-[#D4AF37]/10"
                     )}
                 >
-                    All
+                    All Items
                 </button>
 
                 {categories.map((category) => (
@@ -56,17 +56,17 @@ export function CategoryTabs({ categories, activeCategory, onSelect }: CategoryT
                         id={`tab-${category.id}`}
                         onClick={() => onSelect(category.id)}
                         className={cn(
-                            "relative shrink-0 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all duration-300 select-none active:scale-95 flex items-center gap-2",
+                            "relative shrink-0 px-5 py-2.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] transition-all duration-300 select-none active:scale-95 flex items-center gap-2",
                             activeCategory === category.id
                                 ? "text-white"
-                                : "bg-white text-slate-500 hover:bg-slate-50 shadow-sm border border-gray-100"
+                                : "bg-white text-[#8B6508]/60 hover:bg-[#F4EBD0]/50 border border-[#D4AF37]/10"
                         )}
                     >
                         {category.name}
                         {activeCategory === category.id && (
                             <motion.div
                                 layoutId="active-pill"
-                                className="absolute inset-0 bg-orange-600 rounded-2xl -z-10 shadow-lg shadow-orange-600/20"
+                                className="absolute inset-0 bg-[#D4AF37] rounded-full -z-10 shadow-lg shadow-[#D4AF37]/20"
                                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
                             />
                         )}

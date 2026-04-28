@@ -118,15 +118,18 @@ export function MenuItemCard({ item, onAdd }: MenuItemCardProps) {
                 </div>
 
                 <div className="flex items-end justify-between mt-1">
-                    <div className="flex flex-col">
-                        {item.discounted_price ? (
-                            <div className="flex flex-col leading-none">
-                                <span className="text-[10px] text-muted-foreground line-through decoration-red-500/50">₹{item.price}</span>
-                                <span className="font-black text-base">₹{item.discounted_price}</span>
-                            </div>
-                        ) : (
-                            <span className="font-black text-base">₹{item.price}</span>
-                        )}
+                    {/* Price Section - Hidden for Banquet */}
+                    <div className="hidden">
+                        <div className="flex flex-col">
+                            {item.discounted_price ? (
+                                <div className="flex flex-col leading-none">
+                                    <span className="text-[10px] text-muted-foreground line-through decoration-red-500/50">₹{item.price}</span>
+                                    <span className="font-black text-base">₹{item.discounted_price}</span>
+                                </div>
+                            ) : (
+                                <span className="font-black text-base">₹{item.price}</span>
+                            )}
+                        </div>
                     </div>
 
                     <div onClick={(e) => e.stopPropagation()}>

@@ -72,7 +72,6 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { cn } from '@/lib/utils'
-import { triggerPaymentWebhook, triggerAutomationWebhook } from '@/lib/webhook'
 
 export default function AdminDashboard() {
     const [stats, setStats] = useState({
@@ -106,28 +105,6 @@ export default function AdminDashboard() {
     const [isSplitDialogOpen, setIsSplitDialogOpen] = useState(false)
     const [splitCash, setSplitCash] = useState<string>('')
     const [splitUpi, setSplitUpi] = useState<string>('')
-
-    // Flash Sale Broadcast States
-    const [isFlashSaleDialogOpen, setIsFlashSaleDialogOpen] = useState(false)
-    const [selectedPhones, setSelectedPhones] = useState<string[]>([])
-    const [customerSearchQuery, setCustomerSearchQuery] = useState('')
-    const [isSendingFlashSale, setIsSendingFlashSale] = useState(false)
-
-
-
-    // Filtered customers for flash sale dialog
-    const filteredCustomersForFlashSale = allCustomers.filter(c =>
-    (c.name?.toLowerCase().includes(customerSearchQuery.toLowerCase()) ||
-        c.phone?.includes(customerSearchQuery))
-    )
-
-    const toggleSelectAll = () => {
-        if (allCustomers.length > 0 && selectedPhones.length === filteredCustomersForFlashSale.length) {
-            setSelectedPhones([])
-        } else {
-            setSelectedPhones(filteredCustomersForFlashSale.map(c => c.phone).filter(Boolean))
-        }
-    }
 
     // Helper to robustly parse dates primarily from UTC
     // --- GLOBAL ALERT SYSTEM ---
@@ -402,126 +379,6 @@ export default function AdminDashboard() {
         }
     }
 
-    const fetchCustomersForFlashSale = useCallback(async () => {
-        try {
-            const { data, error } = await supabase
-                .from('customers')
-                .select('id, name, phone, wallet_balance')
-                .eq('restaurant_id', RESTAURANT_ID)
-                .order('name', { ascending: true })
-
-            if (error) throw error
-            setAllCustomers(data || [])
-        } catch (error) {
-            console.error('Error fetching customers:', error)
-        }
-    }, [])
-
-    useEffect(() => {
-        if (isFlashSaleDialogOpen && allCustomers.length === 0) {
-            fetchCustomersForFlashSale()
-        }
-    }, [isFlashSaleDialogOpen, allCustomers.length, fetchCustomersForFlashSale])
-
-    const handleSendFlashSale = async () => {
-        if (selectedPhones.length === 0) {
-            toast.error("Please select at least one customer")
-            return
-        }
-
-        try {
-            setIsSendingFlashSale(true)
-            const nextState = !isFlashSale
-
-            const message = nextState
-                ? "🔥 *Flash Sale Active!* 20% Off on all items for next 2 hours. Start ordering now!"
-                : "Flash Sale has ended."
-
-            // Trigger all webhooks in parallel for speed
-            const broadcastPromises = selectedPhones.map(async (phone) => {
-                let formattedPhone = phone.replace(/[^0-9]/g, '')
-                if (formattedPhone.length === 10) {
-                    formattedPhone = '91' + formattedPhone
-                }
-
-                return triggerAutomationWebhook('whatsapp-chat', {
-                    type: 'flash_sale',
-                    active: nextState,
-                    phone: formattedPhone,
-                    message
-                })
-            })
-
-            const results = await Promise.all(broadcastPromises)
-            const successCount = results.filter(r => r && (r.success || !r.error)).length
-
-            // Also update local state
-            setIsFlashSale(nextState)
-
-            toast.success(nextState
-                ? `Flash Sale Activated & Sent to ${successCount} customers! 🚀`
-                : `Flash Sale Deactivated & Notified ${successCount} customers`
-            )
-            setIsFlashSaleDialogOpen(false)
-            setSelectedPhones([])
-        } catch (error) {
-            console.error('Flash sale error:', error)
-            toast.error('Failed to process flash sale broadcast')
-        } finally {
-            setIsSendingFlashSale(false)
-        }
-    }
-
-    const sendDailyReport = async () => {
-        try {
-            setGeneratingReport(true)
-            const avgTicket = stats.totalOrders > 0 ? (stats.totalRevenue / stats.totalOrders).toFixed(2) : '0'
-            const currentHour = new Array(24).fill(0).map((_, i) => ({ h: i, count: stats.peakHours[i] }))
-            const busiestHour = currentHour.reduce((prev, current) => (prev.count > current.count) ? prev : current).h
-
-            const reportMsg =
-                `*--- TASTYBYTES EXECUTIVE REPORT ---*\n` +
-                `Date: ${new Date().toLocaleDateString()}\n` +
-                `Time: ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}\n\n` +
-
-                `*FINANCIAL SUMMARY*\n` +
-                `- Total Revenue: INR ${stats.totalRevenue.toLocaleString()}\n` +
-                `- Total Orders: ${stats.totalOrders}\n\n` +
-
-                `*KITCHEN & OPERATIONS*\n` +
-                `- Orders Completed: ${stats.kitchenCounts.completed}\n` +
-                `- Currently Preparing: ${stats.kitchenCounts.preparing}\n` +
-                `- Ready for Service: ${stats.kitchenCounts.ready}\n` +
-                `- Pending Kitchen: ${stats.kitchenCounts.pending}\n` +
-                `- Waiting Approval: ${stats.kitchenCounts.pending_confirmation}\n` +
-                `- Cancelled Orders: ${stats.kitchenCounts.cancelled}\n\n` +
-
-                `*INSIGHTS*\n` +
-                `- Peak Business Hour: ${busiestHour}:00 - ${busiestHour + 1}:00\n\n` +
-
-                `--------------------------------\n` +
-                `_Sent via Restaurant Admin Dashboard_`
-
-            // Trigger webhook for data consistency
-            await triggerAutomationWebhook('report-daily', {
-                type: 'daily_report',
-                phone: '918252472186',
-                revenue: stats.totalRevenue,
-                orders: stats.totalOrders,
-                message: reportMsg
-            })
-
-            // Direct WhatsApp Trigger
-            const waUrl = `https://wa.me/918252472186?text=${encodeURIComponent(reportMsg)}`
-            window.open(waUrl, '_blank')
-
-            toast.success('Professional Report Generated! 📱')
-        } catch (error) {
-            toast.error('Failed to generate report')
-        } finally {
-            setGeneratingReport(false)
-        }
-    }
 
     const saveLoyaltyRules = async () => {
         try {
@@ -580,7 +437,6 @@ export default function AdminDashboard() {
     const isApprovalOpenRef = useRef(isApprovalDialogOpen)
     const selectedApprovalRef = useRef(selectedApproval)
 
-    // Sync refs to avoid stale closures in stable effects
     useEffect(() => {
         fetchRef.current = fetchDashboardData
         refreshRef.current = refreshSelectedOrder
@@ -635,8 +491,18 @@ export default function AdminDashboard() {
 
                     // B. Handle Cross-Dashboard Sync (UPDATE)
                     if (payload.eventType === 'UPDATE') {
+                        const newStatus = targetOrder.status
+                        
+                        // Update current view if relevant
+                        if (selOrderRef.current?.id === targetOrder.id) {
+                            setSelectedOrder(prev => prev ? { ...prev, ...targetOrder } : null)
+                        }
+
+                        // Update list
+                        setRecentOrders(prev => prev.map(o => o.id === targetOrder.id ? { ...o, ...targetOrder } : o))
+
                         // If order handled elsewhere, close popup
-                        if (targetOrder.status && targetOrder.status !== 'pending_confirmation') {
+                        if (newStatus && newStatus !== 'pending_confirmation') {
                             setSelectedApproval((prev: any) => {
                                 if (prev?.id === targetOrder.id) {
                                     console.log('🧹 [LIVE] Closing handled modal')
@@ -645,11 +511,6 @@ export default function AdminDashboard() {
                                 }
                                 return prev
                             })
-                        }
-
-                        // Update current view if relevant
-                        if (selOrderRef.current?.id === targetOrder.id) {
-                            refreshRef.current(targetOrder.id)
                         }
                     }
 
@@ -692,7 +553,7 @@ export default function AdminDashboard() {
         setIsDetailsOpen(true)
     }
 
-    const handlePayment = async (method: 'cash' | 'upi' | 'mixed', overrideAmounts?: { cash: number, upi: number }) => {
+    const handlePayment = async (method: 'cash' | 'upi' | 'mixed' | 'banquet', overrideAmounts?: { cash: number, upi: number }) => {
         if (!selectedOrder) return
         setProcessingPayment(true)
  
@@ -702,7 +563,7 @@ export default function AdminDashboard() {
 
         try {
             // 💰 [SAAS] ADMIN COIN DEDUCTION (Platform Fee - Restaurant only)
-            if ((method === 'cash' || method === 'upi' || method === 'mixed') && Number(selectedOrder.total) > 200) {
+            if ((method === 'cash' || method === 'upi' || method === 'mixed' || method === 'banquet') && Number(selectedOrder.total) > 200) {
                 const restId = String(RESTAURANT_ID);
                 const { data: restData } = await supabase
                     .from('restaurants')
@@ -752,18 +613,28 @@ export default function AdminDashboard() {
                 }
             }
 
-            await supabase
+            // Fix: Map 'banquet' to 'cash' to avoid DB constraint violation
+            const dbMethod = method === 'banquet' ? 'cash' : method;
+
+            const { error: updateError } = await supabase
                 .from('orders')
                 .update({
                     payment_status: 'paid',
-                    payment_method: method,
+                    payment_method: dbMethod,
                     status: 'completed',
                     notes: method === 'mixed' 
-                        ? `Split Payment: Cash ₹${cashValue} + UPI ₹${upiValue}`
+                        ? `Split Payment Handled`
                         : `Paid via ${method.toUpperCase()}`,
                     updated_at: new Date().toISOString()
                 })
-                .eq('id', selectedOrder.id);
+                .eq('id', selectedOrder.id)
+                .eq('restaurant_id', String(RESTAURANT_ID));
+
+            if (updateError) {
+                console.error('❌ [handlePayment] Update failed:', JSON.stringify(updateError, null, 2));
+                throw new Error(updateError.message || 'Payment update failed');
+            }
+
 
             // 2. Update Customer Loyalty Stats (New)
             if (selectedOrder.customer_id) {
@@ -785,24 +656,6 @@ export default function AdminDashboard() {
                 }
             }
 
-            // 3. Trigger n8n Webhook for Payment Confirmation
-            await triggerPaymentWebhook({
-                action: 'submit_rating',
-                restaurantId: RESTAURANT_ID,
-                id: selectedOrder.id,
-                bill_id: selectedOrder.bill_id,
-                phone: selectedOrder.customers?.phone || '',
-                customerName: selectedOrder.customers?.name || 'Guest',
-                amount: selectedOrder.total,
-                itemsOrdered: selectedOrder.order_items?.map((i: any) => i.item_name).join(', ') || 'Delicious Meal',
-                payment_method: method === 'mixed' 
-                    ? `MIXED (Cash: ₹${cashValue} + UPI: ₹${upiValue})`
-                    : method.toUpperCase(),
-                status: 'completed',
-                split_details: method === 'mixed' ? { cash: cashValue, upi: upiValue } : null,
-                updated_at: new Date().toISOString()
-            });
-
             toast.success(`Payment settled successfully! ✅`)
 
             // 3. Mark Table as Available if it's a Dine In order
@@ -813,9 +666,17 @@ export default function AdminDashboard() {
                     .eq('id', selectedOrder.table_id)
             }
 
-            setIsDetailsOpen(false)
-            setIsSplitDialogOpen(false)
-            fetchDashboardData(range) // Refresh data
+            // Update local state for immediate UI feedback
+            setSelectedOrder(prev => prev ? { ...prev, status: 'completed', payment_status: 'paid' } : null)
+            setRecentOrders(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, status: 'completed', payment_status: 'paid' } : o))
+
+            fetchDashboardData(range) // Refresh background data
+
+            // Close after delay so user sees the "Order Finished" state
+            setTimeout(() => {
+                setIsDetailsOpen(false)
+                setIsSplitDialogOpen(false)
+            }, 1000)
 
             // 4. Sync AdminHeader Balance
             window.dispatchEvent(new CustomEvent('refresh-admin-balance'))
@@ -884,46 +745,11 @@ export default function AdminDashboard() {
                     </Button>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className={cn(
-                            "rounded-xl font-bold h-10 gap-2 border-2 transition-all",
-                            isFlashSale ? "bg-orange-50 border-orange-500 text-orange-600 shadow-orange-500/10" : "bg-white border-gray-100 text-gray-500"
-                        )}
-                        onClick={() => setIsFlashSaleDialogOpen(true)}
-                    >
-                        <Zap className={cn("h-4 w-4", isFlashSale && "fill-orange-500")} />
-                        {isFlashSale ? "Flash Sale Live" : "Flash Sale"}
-                    </Button>
-
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-xl font-bold h-10 gap-2 border-2 bg-white border-gray-100 text-gray-700 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm"
-                        onClick={sendDailyReport}
-                        disabled={generatingReport}
-                    >
-                        {generatingReport ? <div className="h-4 w-4 animate-spin border-2 border-blue-600 border-t-transparent rounded-full" /> : <Smartphone className="h-4 w-4" />}
-                        Send Report
-                    </Button>
-                </div>
             </div>
 
             {/* Metrics Grid */}
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3">
                 {[
-                    {
-                        title: "Total Revenue",
-                        value: `₹${stats.totalRevenue.toLocaleString()}`,
-                        icon: DollarSign,
-                        trend: "+20.1% from yesterday",
-                        trendUp: true,
-                        color: "bg-green-500",
-                        textColor: "text-green-600",
-                        iconBg: "bg-green-100",
-                    },
                     {
                         title: "Active Orders",
                         value: stats.activeOrders.toString(),
@@ -966,7 +792,7 @@ export default function AdminDashboard() {
                             </div>
                         </CardHeader>
                         <CardContent className="relative z-10">
-                            <div className="text-3xl font-black tracking-tight text-gray-900">{stat.value}</div>
+                            <div className={cn("text-3xl font-black tracking-tight text-gray-900", (stat as any).valueClassName)}>{stat.value}</div>
                             <p className="text-xs text-gray-500 mt-1 font-medium flex items-center gap-1">
                                 {stat.trendUp ? <TrendingUp className="h-3 w-3 text-green-500" /> : <TrendingUp className="h-3 w-3 text-red-500 rotate-180" />}
                                 <span className={stat.trendUp ? "text-green-600" : "text-red-600"}>{stat.trend}</span>
@@ -1072,10 +898,7 @@ export default function AdminDashboard() {
                                                 </div>
                                             </div>
 
-                                            {/* Amount */}
-                                            <div className="col-span-2 text-right">
-                                                <span className="font-bold text-gray-900">₹{Number(order.total).toFixed(2)}</span>
-                                            </div>
+                                            {/* Amount Hidden for Banquet */}
 
                                             {/* Status Badge */}
                                             <div className="col-span-3 text-right">
@@ -1105,67 +928,6 @@ export default function AdminDashboard() {
 
                 {/* Kitchen Activity / Secondary Metrics */}
                 <div className="col-span-3 space-y-6">
-                    {/* 💰 Wallet Management Card */}
-                    <Card className="glass-card border-gray-100 shadow-sm relative overflow-hidden bg-white hover:border-amber-500/20 hover:shadow-md transition-all duration-300">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl -mr-16 -mt-16" />
-                        <CardHeader className="relative z-10 border-b border-gray-50 pb-4">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="font-bold text-gray-900 group">
-                                    Customer Wallet Hub 🏦
-                                </CardTitle>
-                                <Badge className="bg-amber-100 text-amber-700 border-none font-bold text-[9px] uppercase tracking-widest px-2 animate-pulse">Live Ledger</Badge>
-                            </div>
-                            <CardDescription className="text-xs text-gray-500">Manage per-order loyalty settlements</CardDescription>
-                        </CardHeader>
-                        <CardContent className="relative z-10 px-0 pt-2">
-                            <ScrollArea className="h-[320px] px-6">
-                                <div className="space-y-4 py-2">
-                                    {walletTransactions.length === 0 ? (
-                                        <div className="py-20 text-center text-gray-400">
-                                            <div className="h-10 w-10 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-3">
-                                                <DollarSign className="h-4 w-4 opacity-10" />
-                                            </div>
-                                            <p className="text-xs font-medium">No recent wallet settlements.</p>
-                                        </div>
-                                    ) : (
-                                        walletTransactions.map((tx) => (
-                                            <div key={tx.id} className="flex items-center justify-between p-3 rounded-2xl bg-gray-50/50 border border-gray-100/50 hover:bg-white hover:shadow-sm transition-all group">
-                                                <div className="flex items-center gap-3 overflow-hidden">
-                                                    <div className="h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0 border border-amber-200">
-                                                        <DollarSign className="h-4 w-4 text-amber-700" />
-                                                    </div>
-                                                    <div className="flex flex-col min-w-0">
-                                                        <span className="text-[11px] font-bold text-gray-900 truncate">
-                                                            {tx.customers?.name || 'Walk-in Customer'}
-                                                        </span>
-                                                        <span className="text-[9px] text-gray-500 font-medium">
-                                                            Bill: #{tx.orders?.bill_id || 'N/A'} • ₹{tx.orders?.total || '0'}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div className="text-right shrink-0">
-                                                    <p className="text-xs font-black text-red-600">
-                                                        -₹{Number(tx.amount).toFixed(0)}
-                                                    </p>
-                                                    <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap">Deducted</p>
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </ScrollArea>
-                            <div className="mt-4 px-6 pb-4">
-                                <Button 
-                                    className="w-full h-10 rounded-xl bg-gray-900 hover:bg-black text-white font-black text-[10px] uppercase tracking-widest shadow-xl shadow-gray-200 gap-2"
-                                    asChild
-                                >
-                                    <Link href="/admin/customers">
-                                        View All Customer Ledgers <ChevronRight className="h-3 w-3" />
-                                    </Link>
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
 
                     <Card className="glass-card border-gray-100 shadow-sm relative overflow-hidden bg-white hover:border-green-500/20 hover:shadow-md transition-all duration-300">
                         <div className="absolute inset-0 bg-gradient-to-t from-gray-50 via-transparent to-transparent z-0" />
@@ -1262,16 +1024,6 @@ export default function AdminDashboard() {
                                             <p className="font-semibold text-gray-900 text-base">{selectedOrder.customers?.name || 'Walk-in Customer'}</p>
                                             <p className="text-sm text-gray-500 font-medium">{selectedOrder.customers?.phone || 'No Phone'}</p>
                                             
-                                            <div className="mt-3 flex flex-wrap gap-2">
-                                                {selectedOrder.customers?.wallet_balance > 0 && (
-                                                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-50 rounded-full border border-amber-100">
-                                                        <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                                                        <p className="text-[9px] font-black text-amber-700 uppercase tracking-widest">
-                                                            Wallet Balance: ₹{Number(selectedOrder.customers.wallet_balance).toFixed(0)}
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </div>
                                         </div>
                                         {(selectedOrder.delivery_address || selectedOrder.customers?.address) && (
                                             <p className="text-xs text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-100 leading-relaxed">
@@ -1294,12 +1046,6 @@ export default function AdminDashboard() {
                                                     <span className="font-semibold text-gray-900">#{selectedOrder.restaurant_tables.table_number}</span>
                                                 </div>
                                             )}
-                                            <div className="flex justify-between text-sm">
-                                                <span className="text-gray-500 font-medium">Payment:</span>
-                                                <span className={cn("font-semibold capitalize", selectedOrder.payment_status === 'paid' ? "text-green-600" : "text-orange-600")}>
-                                                    {selectedOrder.payment_status || 'Pending'}
-                                                </span>
-                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -1308,52 +1054,27 @@ export default function AdminDashboard() {
                                 <div className="space-y-4">
                                     <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
                                         <div className="grid grid-cols-12 bg-gray-50 border-b border-gray-200 p-3 text-[11px] font-bold text-gray-500 uppercase tracking-wider sticky top-0 bg-gray-50 z-10">
-                                            <div className="col-span-6 pl-2">Item</div>
+                                            <div className="col-span-10 pl-2">Item</div>
                                             <div className="col-span-2 text-center">Qty</div>
-                                            <div className="col-span-4 text-right pr-2">Total</div>
                                         </div>
                                         <div className="divide-y divide-gray-100">
                                             {selectedOrder.order_items?.map((item: any) => (
                                                 <div key={item.id} className="grid grid-cols-12 p-3 items-center hover:bg-gray-50/50 transition-colors">
-                                                    <div className="col-span-6 pl-2">
+                                                    <div className="col-span-10 pl-2">
                                                         <p className="text-sm font-semibold text-gray-800">{item.item_name}</p>
-                                                        <p className="text-[10px] text-gray-400 font-medium">₹{(Number(item.total) / Number(item.quantity)).toFixed(2)} each</p>
                                                     </div>
                                                     <div className="col-span-2 flex justify-center">
                                                         <div className="h-6 w-6 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center text-xs font-bold">
                                                             {item.quantity}
                                                         </div>
                                                     </div>
-                                                    <div className="col-span-4 text-right pr-2">
-                                                        <p className="text-sm font-bold text-gray-900">₹{item.total.toFixed(2)}</p>
-                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
                                         {/* Summary */}
-                                        <div className="bg-gray-50 p-4 border-t border-gray-200">
-                                            <div className="flex justify-between items-center text-sm mb-1">
-                                                <span className="text-gray-500 font-medium">Subtotal</span>
-                                                <span className="font-semibold text-gray-900">₹{(selectedOrder.subtotal || selectedOrder.total - (selectedOrder.tax || 0)).toFixed(2)}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center text-sm mb-1">
-                                                <span className="text-gray-500 font-medium">SGST ({selectedOrder.sgst_percentage || restaurant?.sgst_percentage || 2.5}%)</span>
-                                                <span className="font-semibold text-gray-900">₹{(selectedOrder.sgst_amount || 0).toFixed(2)}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center text-sm mb-1">
-                                                <span className="text-gray-500 font-medium">CGST ({selectedOrder.cgst_percentage || restaurant?.cgst_percentage || 2.5}%)</span>
-                                                <span className="font-semibold text-gray-900">₹{(selectedOrder.cgst_amount || 0).toFixed(2)}</span>
-                                            </div>
-                                            {selectedOrder.discount > 0 && (
-                                                <div className="flex justify-between items-center text-sm mb-1 text-green-600">
-                                                    <span className="font-medium">Discount</span>
-                                                    <span className="font-semibold">-₹{selectedOrder.discount.toFixed(2)}</span>
-                                                </div>
-                                            )}
-                                            <div className="flex justify-between items-center pt-3 border-t border-gray-200 mt-2">
-                                                <span className="text-base font-bold text-gray-900">Grand Total</span>
-                                                <span className="text-2xl font-black text-gray-900">₹{selectedOrder.total.toFixed(2)}</span>
-                                            </div>
+                                        <div className="bg-gray-50 p-4 border-t border-gray-200 text-center">
+                                            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Inclusive Selection</p>
+                                            <p className="text-[10px] text-gray-500 mt-1 italic">Guest experience optimized for banquet service.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -1363,37 +1084,23 @@ export default function AdminDashboard() {
                             {/* Actions Footer - Fixed at Bottom */}
                             <div className="p-6 pt-2 shrink-0 bg-white border-t border-gray-50 z-10">
                                 {selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && selectedOrder.payment_status !== 'paid' ? (
-                                    <div className="grid grid-cols-3 gap-3">
+                                    <div className="flex justify-center">
                                         <Button
-                                            className="h-11 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold shadow-sm"
-                                            onClick={() => handlePayment('cash')}
+                                            className="h-14 w-full rounded-xl bg-green-600 hover:bg-green-700 text-white font-black text-xl shadow-lg shadow-green-600/20"
+                                            onClick={() => handlePayment('banquet')}
                                             disabled={processingPayment}
                                         >
-                                            Collect Cash
-                                        </Button>
-                                        <Button
-                                            className="h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-sm"
-                                            onClick={() => handlePayment('upi')}
-                                            disabled={processingPayment}
-                                        >
-                                            Collect UPI
-                                        </Button>
-                                        <Button
-                                            className="h-11 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold shadow-sm"
-                                            onClick={() => {
-                                                setSplitCash('')
-                                                setSplitUpi('')
-                                                setIsSplitDialogOpen(true)
-                                            }}
-                                            disabled={processingPayment}
-                                        >
-                                            Mixed
+                                            {processingPayment ? (
+                                                <Loader2 className="mr-2 h-6 w-6 animate-spin" />
+                                            ) : (
+                                                <><CheckCircle2 className="mr-2 h-6 w-6" /> FINISH ORDER</>
+                                            )}
                                         </Button>
                                     </div>
                                 ) : (
                                     <div className="w-full h-11 bg-green-50 border border-green-200 text-green-700 rounded-xl flex items-center justify-center font-bold text-sm gap-2">
                                         <CheckCircle2 className="h-5 w-5 text-green-600" />
-                                        Payment Completed via {selectedOrder.payment_method?.toUpperCase()}
+                                        Order Finished
                                     </div>
                                 )}
                             </div>
@@ -1402,125 +1109,6 @@ export default function AdminDashboard() {
                 </DialogContent>
             </Dialog>
 
-            {/* Flash Sale Broadcast Dialog */}
-            <Dialog open={isFlashSaleDialogOpen} onOpenChange={setIsFlashSaleDialogOpen}>
-                <DialogContent className="max-w-2xl bg-white rounded-3xl p-0 overflow-hidden border-none shadow-2xl">
-                    <DialogHeader className="p-8 pb-4 bg-orange-50/50">
-                        <DialogTitle className="text-2xl font-black text-orange-600 flex items-center gap-2">
-                            <Zap className="fill-orange-500" /> Flash Sale Broadcast
-                        </DialogTitle>
-                        <DialogDescription className="font-medium text-orange-700/70">
-                            Select customers to notify about the flash sale.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="p-8 pt-4 space-y-6">
-                        {/* Search and Select All */}
-                        <div className="flex items-center gap-4">
-                            <div className="relative flex-1">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                                <Input
-                                    placeholder="Search customers by name or phone..."
-                                    className="pl-10 h-10 rounded-xl border-gray-100 bg-gray-50/50 focus:ring-orange-500"
-                                    value={customerSearchQuery}
-                                    onChange={(e) => setCustomerSearchQuery(e.target.value)}
-                                />
-                            </div>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={toggleSelectAll}
-                                className="rounded-xl border-gray-100 text-gray-600 font-bold h-10"
-                            >
-                                {selectedPhones.length === filteredCustomersForFlashSale.length && allCustomers.length > 0 ? "Deselect All" : "Select All"}
-                            </Button>
-                        </div>
-
-                        {/* Customer List */}
-                        <ScrollArea className="h-[350px] rounded-2xl border border-gray-100 p-2 bg-gray-50/30">
-                            <div className="space-y-1">
-                                {allCustomers.length === 0 ? (
-                                    <div className="h-full flex items-center justify-center py-20 text-gray-400 font-medium">
-                                        No customers found.
-                                    </div>
-                                ) : (
-                                    filteredCustomersForFlashSale.map((customer) => (
-                                        <div
-                                            key={customer.id}
-                                            className="flex items-center justify-between p-3 rounded-xl hover:bg-white hover:shadow-sm transition-all group cursor-pointer border border-transparent hover:border-orange-100"
-                                            onClick={() => {
-                                                const phone = customer.phone
-                                                if (!phone) return
-                                                setSelectedPhones(prev =>
-                                                    prev.includes(phone)
-                                                        ? prev.filter(p => p !== phone)
-                                                        : [...prev, phone]
-                                                )
-                                            }}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <Checkbox
-                                                    checked={selectedPhones.includes(customer.phone)}
-                                                    onCheckedChange={(checked) => {
-                                                        const phone = customer.phone
-                                                        if (!phone) return
-                                                        if (checked) {
-                                                            setSelectedPhones(prev => prev.includes(phone) ? prev : [...prev, phone])
-                                                        } else {
-                                                            setSelectedPhones(prev => prev.filter(p => p !== phone))
-                                                        }
-                                                    }}
-                                                    className="border-gray-300 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
-                                                    onClick={(e) => e.stopPropagation()} // Prevent double trigger with div
-                                                />
-                                                <div className="flex flex-col">
-                                                    <span className="font-bold text-gray-900 group-hover:text-orange-600 transition-colors">{customer.name || 'Unknown User'}</span>
-                                                    <span className="text-xs text-gray-500 font-medium">{customer.phone}</span>
-                                                </div>
-                                            </div>
-                                            {selectedPhones.includes(customer.phone) && (
-                                                <Badge className="bg-orange-100 text-orange-600 hover:bg-orange-100 border-none font-bold text-[10px]">
-                                                    Selected
-                                                </Badge>
-                                            )}
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </ScrollArea>
-
-                        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                            <div className="text-sm font-bold text-gray-500">
-                                {selectedPhones.length} Customers Selected
-                            </div>
-                            <div className="flex gap-3">
-                                <Button variant="ghost" onClick={() => setIsFlashSaleDialogOpen(false)} className="rounded-xl font-bold h-11 px-6">
-                                    Cancel
-                                </Button>
-                                <Button
-                                    onClick={handleSendFlashSale}
-                                    disabled={isSendingFlashSale || selectedPhones.length === 0}
-                                    className={cn(
-                                        "rounded-xl font-bold h-11 px-8 shadow-lg transition-all",
-                                        isFlashSale
-                                            ? "bg-gray-900 hover:bg-gray-800 text-white shadow-gray-200"
-                                            : "bg-orange-500 hover:bg-orange-600 text-white shadow-orange-500/20"
-                                    )}
-                                >
-                                    {isSendingFlashSale ? (
-                                        <div className="flex items-center gap-2">
-                                            <div className="h-4 w-4 animate-spin border-2 border-white border-t-transparent rounded-full" />
-                                            Broadcasting...
-                                        </div>
-                                    ) : (
-                                        isFlashSale ? "Deactivate & Notify" : "Activate & Send"
-                                    )}
-                                </Button>
-                            </div>
-                        </div>
-                    </div>
-                </DialogContent>
-            </Dialog>
 
             {/* NEW: Automatic Approval Popup */}
             <Dialog open={isApprovalDialogOpen} onOpenChange={setIsApprovalDialogOpen}>
@@ -1535,12 +1123,7 @@ export default function AdminDashboard() {
                                     {selectedApproval?.order_items?.some((i: any) => i.status !== 'pending') ? "Merge New Items?" : "New Order Alert!"}
                                 </DialogTitle>
                             </div>
-                            <div className="flex flex-col items-end gap-2">
                                 <Badge className="bg-white/20 text-white border-0 font-bold px-3 py-1 uppercase tracking-wider">#{selectedApproval?.bill_id}</Badge>
-                                {selectedApproval?.order_items?.some((i: any) => i.status !== 'pending') && (
-                                    <Badge className="bg-yellow-400 text-black border-0 font-black px-2 py-0.5 text-[9px] uppercase tracking-widest animate-pulse">Bill Update</Badge>
-                                )}
-                            </div>
                         </div>
                         <p className="text-red-100 font-bold opacity-90 italic">
                             {selectedApproval?.order_items?.some((i: any) => i.status !== 'pending') 
@@ -1565,21 +1148,20 @@ export default function AdminDashboard() {
                             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">Items</p>
                             <div className="max-h-[200px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                                 {selectedApproval?.order_items?.map((item: any) => (
-                                    <div key={item.id} className="flex justify-between items-center p-3 bg-white border border-gray-100 rounded-xl">
-                                        <div className="flex items-center gap-3">
-                                            <span className="h-6 w-6 bg-red-50 text-red-600 rounded-full flex items-center justify-center text-[10px] font-black">{item.quantity}</span>
-                                            <span className="text-sm font-bold text-gray-800">{item.item_name}</span>
+                                        <div className="flex justify-between items-center p-3 bg-white border border-gray-100 rounded-xl">
+                                            <div className="flex items-center gap-3">
+                                                <span className="h-6 w-6 bg-red-50 text-red-600 rounded-full flex items-center justify-center text-[10px] font-black">{item.quantity}</span>
+                                                <span className="text-sm font-bold text-gray-800">{item.item_name}</span>
+                                            </div>
                                         </div>
-                                        <span className="text-sm font-black text-gray-900">₹{item.total?.toFixed(2)}</span>
-                                    </div>
-                                ))}
+                                    ))}
+                                </div>
                             </div>
-                        </div>
 
-                        <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                            <span className="text-lg font-black text-gray-900">Grand Total</span>
-                            <span className="text-2xl font-black text-red-600">₹{selectedApproval?.total?.toFixed(2)}</span>
-                        </div>
+                            <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                                <span className="text-lg font-black text-gray-900 uppercase tracking-widest text-[10px]">Banquet Selection</span>
+                                <span className="text-sm font-bold text-red-600">PENDING CONFIRMATION</span>
+                            </div>
                     </div>
 
                     <div className="p-8 pt-0 grid grid-cols-2 gap-4">
@@ -1611,7 +1193,7 @@ export default function AdminDashboard() {
                         <CreditCard className="h-12 w-12 mx-auto mb-3 opacity-90 relative z-10" />
                         <DialogTitle className="text-2xl font-black relative z-10">Split Settlement</DialogTitle>
                         <DialogDescription className="text-purple-100 font-bold opacity-80 relative z-10">
-                            Bill #{selectedOrder?.bill_id} • Total ₹{selectedOrder?.total || 0}
+                            Order #{selectedOrder?.bill_id}
                         </DialogDescription>
                     </div>
 
@@ -1671,7 +1253,7 @@ export default function AdminDashboard() {
                                 {processingPayment ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : <Check className="h-6 w-6 mr-3" />}
                                 { (Number(splitCash) + Number(splitUpi)) === Number(selectedOrder?.total || 0) 
                                     ? 'Collect Split Payment' 
-                                    : `Total: ₹${(Number(splitCash) + Number(splitUpi)).toFixed(2)}`}
+                                    : `Total: Confirmed`}
                             </Button>
                             <Button 
                                 variant="ghost" 

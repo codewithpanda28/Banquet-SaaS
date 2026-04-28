@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { ShoppingBag, Utensils, Box, MapPin, Bell, Check, Trash2, ArrowRight, Clock, Flame } from 'lucide-react'
+import { ShoppingBag, Utensils, Bell, Check, Trash2, ArrowRight, Clock, Flame } from 'lucide-react'
 import { useRestaurant } from '@/hooks/useRestaurant'
 import { useCartStore } from '@/store/cartStore'
 import { useNotificationStore } from '@/store/notificationStore'
@@ -61,8 +61,6 @@ export function Header() {
 
     const orderTypeConfig = {
         dine_in: { label: 'Dine In', icon: Utensils, color: 'text-orange-600', bg: 'bg-orange-50' },
-        take_away: { label: 'Takeaway', icon: Box, color: 'text-blue-600', bg: 'bg-blue-50' },
-        home_delivery: { label: 'Delivery', icon: MapPin, color: 'text-emerald-600', bg: 'bg-emerald-50' },
     }
 
     const currentType = orderType ? orderTypeConfig[orderType as keyof typeof orderTypeConfig] : { label: 'Order Type', icon: ShoppingBag, color: 'text-gray-600', bg: 'bg-gray-50' }

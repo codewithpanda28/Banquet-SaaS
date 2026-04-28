@@ -32,13 +32,16 @@ export default function UnifiedReportsPage() {
     const [dateRange, setDateRange] = useState('7')
     const [orders, setOrders] = useState<any[]>([])
     const [restaurant, setRestaurant] = useState<any>(null)
-    const [stats, setStats] = useState({
-        totalRevenue: 0,
+    const [stats, setStats] = useState<{
+        totalOrders: number,
+        totalCustomers: number,
+        ordersChange: number,
+        totalVolume: number
+    }>({
         totalOrders: 0,
-        avgOrderValue: 0,
         totalCustomers: 0,
-        revenueChange: 0,
         ordersChange: 0,
+        totalVolume: 0
     })
     const [topItems, setTopItems] = useState<any[]>([])
     const [revenueByType, setRevenueByType] = useState<any[]>([])
@@ -92,14 +95,28 @@ export default function UnifiedReportsPage() {
             const revenueChange = prevRevenue > 0 ? ((totalRevenue - prevRevenue) / prevRevenue) * 100 : 0
             const ordersChange = prevOrderCount > 0 ? ((totalOrdersCount - prevOrderCount) / prevOrderCount) * 100 : 0
 
+            const typeSales: Record<string, { type: string, count: number }> = {
+                dine_in: { type: 'dine_in', count: 0 },
+                delivery: { type: 'delivery', count: 0 },
+                takeaway: { type: 'takeaway', count: 0 }
+            }
+            const custSales: Record<string, { name: string, phone: string, orders: number }> = {}
+
+            ordersData?.forEach(o => {
+                if (typeSales[o.order_type]) typeSales[o.order_type].count++
+                
+                const name = o.customers?.name || o.customer_name || 'Guest'
+                const phone = o.customers?.phone || o.phone || 'N/A'
+                if (!custSales[name]) custSales[name] = { name, phone, orders: 0 }
+                custSales[name].orders++
+            })
+
             setOrders(ordersData || [])
             setStats({
-                totalRevenue,
                 totalOrders: totalOrdersCount,
-                avgOrderValue,
                 totalCustomers: customerCount || 0,
-                revenueChange,
                 ordersChange,
+                totalVolume: ordersData?.reduce((sum, o) => sum + (o.order_items?.length || 0), 0) || 0
             })
 
             const itemSales = ordersData?.flatMap(o => o.order_items || []).reduce((acc: any, item: any) => {
@@ -114,22 +131,8 @@ export default function UnifiedReportsPage() {
                 .slice(0, 5)
             setTopItems(sortedItems)
 
-            const typeSales = completedOrders.reduce((acc: any, o) => {
-                const type = o.order_type || 'dine_in'
-                if (!acc[type]) acc[type] = { type, revenue: 0, count: 0 }
-                acc[type].revenue += o.total || 0
-                acc[type].count += 1
-                return acc
-            }, {})
-            setRevenueByType(Object.values(typeSales))
+            setRevenueByType(Object.values(typeSales).map((s: any) => ({ ...s, revenue: 0 })))
 
-            // Payment Method Breakdown
-            const payments = completedOrders.reduce((acc: any, o) => {
-                const method = o.payment_method || 'Unpaid'
-                acc[method] = (acc[method] || 0) + (o.total || 0)
-                return acc
-            }, {})
-            setPaymentMethods(Object.entries(payments).map(([name, value]) => ({ name, value })))
 
             // Wait Time Analysis (Prep Time)
             const prepTimes = completedOrders
@@ -148,25 +151,16 @@ export default function UnifiedReportsPage() {
                 .select('*, menu_items(menu_categories(name))')
                 .in('order_id', completedOrders.map(o => o.id))
 
-            const catStats: Record<string, { name: string, revenue: number, count: number }> = {}
+            const catStats: Record<string, { name: string, count: number }> = {}
             itemDetails?.forEach((item: any) => {
                 const catName = item.menu_items?.menu_categories?.name || 'Uncategorized'
-                if (!catStats[catName]) catStats[catName] = { name: catName, revenue: 0, count: 0 }
-                catStats[catName].revenue += item.total || 0
+                if (!catStats[catName]) catStats[catName] = { name: catName, count: 0 }
                 catStats[catName].count += 1
             })
-            setCategorySales(Object.values(catStats).sort((a, b) => b.revenue - a.revenue))
+            setCategorySales(Object.values(catStats).sort((a: any, b: any) => b.count - a.count))
 
             // Top Customers Breakdown
-            const custSales: Record<string, { name: string, phone: string, total: number, orders: number }> = {}
-            completedOrders.forEach((o) => {
-                const name = o.customers?.name || o.customer_name || 'Guest'
-                const phone = o.customers?.phone || 'N/A'
-                if (!custSales[phone]) custSales[phone] = { name, phone, total: 0, orders: 0 }
-                custSales[phone].total += o.total || 0
-                custSales[phone].orders += 1
-            })
-            setTopCustomers(Object.values(custSales).sort((a, b) => b.total - a.total).slice(0, 5))
+            setTopCustomers(Object.values(custSales).sort((a: any, b: any) => b.orders - a.orders).slice(0, 5))
 
         } catch (error) {
             console.error('Fetch error:', error)
@@ -182,15 +176,13 @@ export default function UnifiedReportsPage() {
             return
         }
 
-        const headers = ["Date", "Order ID", "Customer", "Amount", "Status", "Type", "Payment"]
+        const headers = ["Date", "Order ID", "Customer", "Status", "Type"]
         const csvData = orders.map(o => [
             format(new Date(o.created_at), 'dd MMM yyyy HH:mm'),
             o.id.slice(0, 8),
             o.customers?.name || o.customer_name || 'Guest',
-            o.total,
             o.status.toUpperCase(),
-            o.order_type.toUpperCase(),
-            o.payment_method || 'PENDING'
+            o.order_type.toUpperCase()
         ])
 
         const content = [headers, ...csvData].map(e => e.join(",")).join("\n")
@@ -231,9 +223,7 @@ export default function UnifiedReportsPage() {
                     phone: restaurant.report_whatsapp_number,
                     report_data: {
                         date_range: `${dateRange} Days`,
-                        revenue: stats.totalRevenue,
                         orders: stats.totalOrders,
-                        avg_ticket: Math.round(stats.avgOrderValue),
                         customers: stats.totalCustomers,
                         top_items: topItems.map(i => `${i.name} (${i.quantity} units)`).join(', ')
                     },
@@ -263,13 +253,11 @@ export default function UnifiedReportsPage() {
             const ordersCount = dayOrders.length
             return {
                 name: dateStr,
-                revenue,
                 orders: ordersCount,
-                goal: revenue * 1.15, // Dynamic target line
-                alt_value: (revenue / (stats.totalRevenue || 1)) * 100
+                alt_value: (ordersCount / (stats.totalOrders || 1)) * 100
             }
         })
-    }, [orders, dateRange, stats.totalRevenue])
+    }, [orders, dateRange, stats.totalOrders])
 
     const hourlyData = useMemo(() => {
         const hours = Array.from({ length: 24 }, (_, i) => ({ hour: `${i}:00`, count: 0 }))
@@ -315,20 +303,15 @@ export default function UnifiedReportsPage() {
         { subject: 'Value', value: 72 },
     ]
 
-    const financialBreakdown = useMemo(() => {
+    const operationalBreakdown = useMemo(() => {
         const completed = orders.filter(o => o.status === 'completed')
         const cancelled = orders.filter(o => o.status === 'cancelled')
-        const processing = orders.filter(o => ['pending', 'processing', 'out_for_delivery'].includes(o.status))
-        
-        const revGained = completed.reduce((sum, o) => sum + (o.total || 0), 0)
-        const revLost = cancelled.reduce((sum, o) => sum + (o.total || 0), 0)
-        const revPipeline = processing.reduce((sum, o) => sum + (o.total || 0), 0)
+        const processing = orders.filter(o => !['completed', 'cancelled'].includes(o.status))
 
         return [
-            { label: 'Revenue Gained', value: `+₹${revGained.toLocaleString()}`, color: 'text-emerald-500' },
-            { label: 'Revenue Lost (Canceled)', value: `-₹${revLost.toLocaleString()}`, color: 'text-rose-500' },
-            { label: 'In Pipeline', value: `₹${revPipeline.toLocaleString()}`, color: 'text-blue-500' },
-            { label: 'Net Period MRR', value: `₹${(revGained - revLost).toLocaleString()}`, color: 'text-gray-900', isNet: true },
+            { label: 'Completed Orders', value: completed.length.toString(), color: 'text-emerald-500' },
+            { label: 'Cancelled Orders', value: cancelled.length.toString(), color: 'text-rose-500' },
+            { label: 'Live Orders', value: processing.length.toString(), color: 'text-blue-500' },
         ]
     }, [orders])
 
@@ -374,17 +357,12 @@ export default function UnifiedReportsPage() {
                     <TabsTrigger value="analytics" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 font-bold text-sm flex items-center gap-2 transition-all">
                         <BarChart3 size={16} /> Live Analytics
                     </TabsTrigger>
-                    <TabsTrigger value="financials" className="rounded-xl px-6 h-10 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-emerald-700 font-bold text-sm flex items-center gap-2 transition-all">
-                        <DollarSign size={16} /> Financials
-                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="overview" className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                         {[
-                            { label: 'Total Revenue', value: `₹${stats.totalRevenue.toLocaleString()}`, change: stats.revenueChange, icon: DollarSign, color: '#10b981', chartKey: 'revenue' },
-                            { label: 'Orders', value: stats.totalOrders.toString(), change: stats.ordersChange, icon: ShoppingCart, color: '#3b82f6', chartKey: 'orders' },
-                            { label: 'Avg Order Value', value: `₹${Math.round(stats.avgOrderValue)}`, icon: Activity, color: '#f59e0b', chartKey: 'revenue' },
+                            { label: 'Total Orders', value: stats.totalOrders.toString(), change: stats.ordersChange, icon: ShoppingCart, color: '#3b82f6', chartKey: 'orders' },
                             { label: 'Total Customers', value: stats.totalCustomers.toString(), icon: Users, color: '#8b5cf6', chartKey: 'orders' },
                         ].map((s, i) => (
                             <Card key={i} className="border-0 shadow-sm rounded-3xl bg-white border border-gray-50 hover:shadow-md transition-shadow overflow-hidden group">
@@ -428,46 +406,23 @@ export default function UnifiedReportsPage() {
                         <Card className="md:col-span-2 lg:col-span-3 rounded-3xl border-0 shadow-sm bg-white p-8 overflow-hidden relative group">
                             <div className="flex justify-between items-center mb-8">
                                 <div>
-                                    <CardTitle className="text-3xl font-black tracking-tight">₹{stats.totalRevenue.toLocaleString()}</CardTitle>
+                                    <CardTitle className="text-3xl font-black tracking-tight">{stats.totalOrders} Orders</CardTitle>
                                     <div className="flex items-center gap-2 mt-1">
-                                        <Badge className="bg-emerald-500 text-white border-0 font-bold text-[10px]">GROWTH</Badge>
-                                        <span className="text-[10px] font-bold text-emerald-600">+{stats.revenueChange.toFixed(1)}% vs. Prev Period</span>
-                                    </div>
-                                </div>
-                                <div className="flex gap-2">
-                                    <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-400">
-                                        <History size={14} />
+                                        <Badge className="bg-emerald-500 text-white border-0 font-bold text-[10px]">VOLUME</Badge>
+                                        <span className="text-[10px] font-bold text-emerald-600">+{stats.ordersChange.toFixed(1)}% vs. Prev Period</span>
                                     </div>
                                 </div>
                             </div>
                             <div className="h-[350px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={dailyTrend}>
-                                        <defs>
-                                            <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                                                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                                            </linearGradient>
-                                        </defs>
+                                    <BarChart data={dailyTrend}>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                                         <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 700 }} dy={10} />
                                         <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 700 }} />
-                                        <Tooltip 
-                                            contentStyle={{ 
-                                                borderRadius: '20px', 
-                                                border: 'none', 
-                                                boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' 
-                                            }}
-                                            labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
-                                        />
-                                        <Area type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={4} fillOpacity={1} fill="url(#colorRevenue)" />
-                                        <Line type="monotone" dataKey="goal" stroke="#64748b" strokeWidth={2} strokeDasharray="5 5" dot={false} />
-                                    </AreaChart>
+                                        <Tooltip />
+                                        <Bar dataKey="orders" fill="#10b981" radius={[8, 8, 0, 0]} />
+                                    </BarChart>
                                 </ResponsiveContainer>
-                            </div>
-                            <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-between">
-                                <Button variant="link" className="font-extrabold text-xs text-emerald-600 p-0 h-auto uppercase tracking-widest">View Detailed Growth Report →</Button>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Progress to goal: {((stats.totalRevenue / targetRevenue) * 100).toFixed(1)}%</p>
                             </div>
                         </Card>
 
@@ -477,8 +432,8 @@ export default function UnifiedReportsPage() {
                                     <p className="text-[10px] font-black uppercase tracking-widest text-gray-600">Market Breakdown</p>
                                 </div>
                                 <div className="p-6 space-y-4">
-                                    {financialBreakdown.map((item, i) => (
-                                        <div key={i} className={cn("flex justify-between items-center py-2", !item.isNet && "border-b border-gray-50")}>
+                                    {operationalBreakdown.map((item, i) => (
+                                        <div key={i} className={cn("flex justify-between items-center py-2", i !== operationalBreakdown.length - 1 && "border-b border-gray-50")}>
                                             <span className="text-xs font-bold text-gray-500">{item.label}</span>
                                             <span className={cn("text-sm font-black", item.color)}>{item.value}</span>
                                         </div>
@@ -532,7 +487,6 @@ export default function UnifiedReportsPage() {
                                                 <p className="font-bold text-gray-900 group-hover:text-emerald-600 transition-colors uppercase text-[11px] tracking-tight">{item.name}</p>
                                                 <p className="text-[9px] text-gray-400 font-bold">{item.quantity} SOLD</p>
                                             </div>
-                                            <p className="font-bold text-gray-900">₹{item.revenue.toLocaleString()}</p>
                                         </div>
                                         <div className="h-1.5 w-full bg-gray-50 rounded-full overflow-hidden">
                                             <div
@@ -547,7 +501,7 @@ export default function UnifiedReportsPage() {
 
                         <Card className="rounded-3xl border-0 shadow-sm bg-white p-6">
                             <CardTitle className="text-lg font-bold flex items-center gap-2 mb-6">
-                                <DollarSign className="text-blue-500 h-5 w-5" /> Revenue Mix
+                                <ShoppingCart className="text-blue-500 h-5 w-5" /> Service Mix
                             </CardTitle>
                             <div className="space-y-4">
                                 {revenueByType.map((type, i) => (
@@ -559,19 +513,14 @@ export default function UnifiedReportsPage() {
                                         <div className="flex-1">
                                             <div className="flex justify-between items-center mb-0.5">
                                                 <span className="font-bold text-gray-900 uppercase text-[10px] tracking-widest">{type.type.replace('_', ' ')}</span>
-                                                <span className="font-bold text-lg text-gray-900">₹{type.revenue.toLocaleString()}</span>
+                                                <span className="font-bold text-lg text-gray-900">{type.count} Orders</span>
                                             </div>
-                                            <div className="flex justify-between items-center text-[9px] font-bold text-gray-400">
-                                                <span>{type.count} Orders</span>
-                                                <span className="text-emerald-600 leading-none">{((type.revenue / stats.totalRevenue) * 100).toFixed(1)}% Weight</span>
+                                            <div className="w-full bg-gray-200 rounded-full h-1 mt-2">
+                                                <div className="bg-emerald-500 h-1 rounded-full" style={{ width: `${((type.count / stats.totalOrders) * 100) || 0}%` }} />
                                             </div>
                                         </div>
                                     </div>
                                 ))}
-                                <div className="p-4 rounded-2xl bg-gray-900 text-white flex justify-between items-center">
-                                    <span className="font-bold uppercase tracking-widest text-[9px] text-gray-400">Net Revenue</span>
-                                    <span className="text-2xl font-bold tracking-tight">₹{stats.totalRevenue.toLocaleString()}</span>
-                                </div>
                             </div>
                         </Card>
                     </div>
@@ -580,17 +529,16 @@ export default function UnifiedReportsPage() {
                         <Card className="lg:col-span-2 rounded-3xl border-0 shadow-sm bg-white p-8 border border-gray-50">
                             <div className="flex justify-between items-center mb-8">
                                 <CardTitle className="text-xl font-black flex items-center gap-2">
-                                    <Users className="text-emerald-500 h-5 w-5" /> Patron Leaderboard
+                                    <Users className="text-emerald-500 h-5 w-5" /> Frequent Patrons
                                 </CardTitle>
-                                <Badge className="bg-gray-100 text-gray-500 border-0 font-bold uppercase text-[9px]">Highest Spenders</Badge>
+                                <Badge className="bg-gray-100 text-gray-500 border-0 font-bold uppercase text-[9px]">Repeat Guests</Badge>
                             </div>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left">
                                     <thead>
                                         <tr className="border-b border-gray-50">
                                             <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Customer</th>
-                                            <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Orders</th>
-                                            <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right text-emerald-600">Total Spent</th>
+                                            <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Orders placed</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
@@ -601,10 +549,9 @@ export default function UnifiedReportsPage() {
                                                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{c.phone}</p>
                                                 </td>
                                                 <td className="py-5 text-right text-sm font-bold text-gray-600">{c.orders} Visit(s)</td>
-                                                <td className="py-5 text-right text-sm font-black text-gray-900">₹{c.total.toLocaleString()}</td>
                                             </tr>
                                         )) : (
-                                            <tr><td colSpan={3} className="py-10 text-center text-xs font-bold text-gray-400">Analysis Pending...</td></tr>
+                                            <tr><td colSpan={2} className="py-10 text-center text-xs font-bold text-gray-400">Analysis Pending...</td></tr>
                                         )}
                                     </tbody>
                                 </table>
@@ -668,7 +615,7 @@ export default function UnifiedReportsPage() {
                                                 boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' 
                                             }} 
                                         />
-                                        <Area type="monotone" dataKey="revenue" stroke="#10b981" strokeWidth={3} fill="url(#areaGradSubtle)" animationDuration={1500} />
+                                        <Area type="monotone" dataKey="orders" stroke="#10b981" strokeWidth={3} fill="url(#areaGradSubtle)" animationDuration={1500} />
                                     </AreaChart>
                                 </ResponsiveContainer>
                             </div>
@@ -708,7 +655,7 @@ export default function UnifiedReportsPage() {
                                                         o.status === 'cancelled' ? 'bg-rose-100 text-rose-700' : 'bg-gray-100 text-gray-600')}>
                                                         {o.status}
                                                     </Badge>
-                                                    <p className="text-xs font-extrabold text-gray-900 tracking-tight">₹{o.total.toLocaleString()}</p>
+                                                    <p className="text-xs font-extrabold text-gray-900 tracking-tight">{o.order_items?.length || 0} Items</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -830,84 +777,11 @@ export default function UnifiedReportsPage() {
                 </TabsContent>
                 <TabsContent value="financials" className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
                     <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                        <Card className="p-8 rounded-3xl border-0 shadow-sm bg-white border border-gray-50 col-span-1 lg:col-span-2">
-                            <CardTitle className="text-xl font-black mb-1 flex items-center gap-2">
-                                <Wallet className="text-emerald-500" /> Payment Distribution
-                            </CardTitle>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-8">Revenue Share by Method</p>
-                            <div className="grid md:grid-cols-2 gap-8 items-center">
-                                <div className="h-[250px]">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
-                                            <Pie
-                                                data={paymentMethods}
-                                                innerRadius={60}
-                                                outerRadius={100}
-                                                paddingAngle={5}
-                                                dataKey="value"
-                                                stroke="none"
-                                            >
-                                                {paymentMethods.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                                ))}
-                                            </Pie>
-                                            <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
-                                            <Legend verticalAlign="middle" align="right" layout="vertical" />
-                                        </PieChart>
-                                    </ResponsiveContainer>
-                                </div>
-                                <div className="space-y-4">
-                                    {paymentMethods.map((pm, i) => (
-                                        <div key={i} className="flex justify-between items-center p-4 rounded-2xl bg-gray-50">
-                                            <div className="flex items-center gap-3">
-                                                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                                                <span className="font-bold text-xs uppercase tracking-wider">{pm.name}</span>
-                                            </div>
-                                            <span className="font-black text-sm">₹{pm.value.toLocaleString()}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </Card>
-
-                        <Card className="p-8 rounded-3xl border-0 shadow-sm bg-gray-900 text-white border border-gray-50">
-                            <CardTitle className="text-xl font-black mb-1 flex items-center gap-2">
-                                <Target className="text-orange-500" /> Sales Quota
-                            </CardTitle>
-                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-12">Target Accomplishment</p>
-                            <div className="flex flex-col items-center justify-center space-y-8">
-                                <div className="relative h-48 w-48">
-                                    <svg className="h-full w-full" viewBox="0 0 100 100">
-                                        <circle className="text-gray-800" strokeWidth="10" stroke="currentColor" fill="transparent" r="40" cx="50" cy="50" />
-                                        <circle 
-                                            className="text-orange-500" 
-                                            strokeWidth="10" 
-                                            strokeDasharray={2 * Math.PI * 40} 
-                                            strokeDashoffset={2 * Math.PI * 40 * (1 - Math.min(stats.totalRevenue / targetRevenue, 1))} 
-                                            strokeLinecap="round" 
-                                            stroke="currentColor" 
-                                            fill="transparent" 
-                                            r="40" cx="50" cy="50" 
-                                            transform="rotate(-90 50 50)" 
-                                        />
-                                    </svg>
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                        <span className="text-3xl font-black">{Math.round((stats.totalRevenue / targetRevenue) * 100)}%</span>
-                                        <span className="text-[8px] font-bold text-gray-400 uppercase">Reached</span>
-                                    </div>
-                                </div>
-                                <div className="text-center">
-                                    <p className="text-2xl font-black">₹{stats.totalRevenue.toLocaleString()}</p>
-                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-1">Goal: ₹{targetRevenue.toLocaleString()}</p>
-                                </div>
-                            </div>
-                        </Card>
-
                         <Card className="lg:col-span-3 p-8 rounded-3xl border-0 shadow-sm bg-white border border-gray-50">
                             <CardTitle className="text-xl font-black mb-1 flex items-center gap-2">
                                 <Package className="text-blue-500" /> Category Performance
                             </CardTitle>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-8">Revenue Contribution by Menu Categories</p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-8">Service Volume by Menu Categories</p>
                             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
                                 {categorySales.slice(0, 8).map((cat, i) => (
                                     <div key={i} className="p-6 rounded-3xl bg-gray-50 border border-gray-100 group hover:bg-gray-900 hover:text-white transition-all cursor-default">
@@ -921,7 +795,7 @@ export default function UnifiedReportsPage() {
                                         </div>
                                         <h4 className="font-black text-sm uppercase tracking-tight mb-1 truncate">{cat.name}</h4>
                                         <div className="flex items-baseline gap-1">
-                                            <span className="text-xl font-black">₹{cat.revenue.toLocaleString()}</span>
+                                            <span className="text-xl font-black">{cat.count} Orders</span>
                                         </div>
                                     </div>
                                 ))}
@@ -983,36 +857,18 @@ export default function UnifiedReportsPage() {
                             </div>
                         </Card>
 
-                        <Card className="p-8 rounded-3xl border-0 shadow-sm bg-gradient-to-br from-indigo-600 to-indigo-800 text-white flex flex-col justify-between">
-                            <div>
-                                <CardTitle className="text-2xl font-black tracking-tight leading-tight mb-2">AI Revenue Forecasting</CardTitle>
-                                <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest opacity-80">Next 7 Days Projection</p>
-                            </div>
-                            <div className="space-y-4 py-8">
-                                <div className="flex justify-between items-end">
-                                    <div className="space-y-1">
-                                        <p className="text-[10px] font-bold text-indigo-300 uppercase">Estimated Growth</p>
-                                        <p className="text-4xl font-black tracking-tighter">₹{Math.round(stats.totalRevenue * 1.15).toLocaleString()}</p>
-                                    </div>
-                                    <TrendingUp className="h-12 w-12 text-white/20" />
-                                </div>
-                                <Badge className="bg-white/10 text-white border-0 py-2 px-4 rounded-xl font-bold text-[10px] uppercase tracking-widest backdrop-blur-md">92.4% Confidence Score</Badge>
-                            </div>
-                            <p className="text-[9px] font-bold text-indigo-300 italic">Based on current {stats.ordersChange >= 0 ? 'bullish' : 'bearish'} trend in transaction volume.</p>
-                        </Card>
                         <Card className="p-8 rounded-3xl border-0 shadow-sm bg-white border border-gray-50 col-span-1 lg:col-span-3">
                             <CardTitle className="text-xl font-black mb-1 flex items-center gap-2">
-                                <History className="text-indigo-500" /> Daily Revenue Log
+                                <History className="text-indigo-500" /> Daily Traffic Log
                             </CardTitle>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-8">Raw Transaction Data by Date</p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-8">Operational Load by Date</p>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left">
                                     <thead>
                                         <tr className="border-b border-gray-100">
                                             <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Date Period</th>
-                                            <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Transactions</th>
-                                            <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Average Order</th>
-                                            <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right text-emerald-600">Total Net</th>
+                                            <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Orders</th>
+                                            <th className="pb-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">Capacity Used</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-50">
@@ -1020,8 +876,7 @@ export default function UnifiedReportsPage() {
                                             <tr key={i} className="group hover:bg-gray-50/50 transition-colors">
                                                 <td className="py-4 text-sm font-bold text-gray-900">{day.name}</td>
                                                 <td className="py-4 text-right text-sm font-bold text-gray-600">{day.orders} Orders</td>
-                                                <td className="py-4 text-right text-sm font-bold text-gray-600">₹{day.orders > 0 ? (day.revenue / day.orders).toFixed(0) : 0}</td>
-                                                <td className="py-4 text-right text-sm font-black text-gray-900">₹{day.revenue.toLocaleString()}</td>
+                                                <td className="py-4 text-right text-sm font-bold text-gray-600">{Math.min(Math.round((day.orders / 50) * 100), 100)}%</td>
                                             </tr>
                                         ))}
                                     </tbody>

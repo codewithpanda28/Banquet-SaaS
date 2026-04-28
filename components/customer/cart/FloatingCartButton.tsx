@@ -64,9 +64,9 @@ export function FloatingCartButton() {
                                 <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">
                                     {count} {count === 1 ? 'Item' : 'Items'}
                                 </span>
-                                <span className="font-bold text-xl leading-none">
-                                    ₹{total.toFixed(2)}
-                                </span>
+                                    <span className="font-bold text-xl leading-none hidden">
+                                        ₹{total.toFixed(2)}
+                                    </span>
                             </div>
                         </div>
 

@@ -26,7 +26,6 @@ import {
     Loader2
 } from 'lucide-react'
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
-import { handleWhatsAppCoupon } from '@/lib/webhook'
 import { toast } from 'sonner'
 import {
     Dialog,
@@ -189,28 +188,10 @@ export default function LoyaltyHubPage() {
                     : `₹${selectedExistingCoupon.discount_value} OFF`;
             }
 
-            // 2. Send via WhatsApp
-            const expiryDateObj = new Date(Date.now() + 7 * 86400000);
-            const expiryDisplay = new Intl.DateTimeFormat('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(expiryDateObj);
-            
-            const fullMessage = `🎁 *LOYAL COUPON FOR YOU!* 🎁\n\nHello *${selectedCustomer.name}*,\n\nUse this exclusive coupon on your next visit!\n\n⭐ Reward: *${rewardText}*\n🎟️ Code: *${finalCode}*\n⏰ Valid until: *${expiryDisplay}*\n\nSee you soon! 🍕`;
+            // 2. Automated Notification removed as requested. 
+            // The customer will see this in their history/profile if implemented.
 
-            await handleWhatsAppCoupon(
-                selectedCustomer.name, 
-                selectedCustomer.phone, 
-                finalCode, 
-                rewardText, 
-                RESTAURANT_ID as string
-            )
-            
-            // 3. 📱 Direct WhatsApp Draft
-            const cleanPhone = selectedCustomer.phone.replace(/\D/g, '').slice(-10);
-            const waNumber = cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`;
-            const waMessage = encodeURIComponent(fullMessage);
-            
-            window.open(`https://wa.me/${waNumber}?text=${waMessage}`, '_blank');
-
-            toast.success(`Loyal Coupon ${isCreatingNew ? 'created' : 'reused'}! WhatsApp draft opened. 🎁`)
+            toast.success(`Loyal Coupon ${isCreatingNew ? 'created' : 'reused'}! 🎁`)
             setSelectedCustomer(null)
             setIsCreatingNew(true)
             setSelectedExistingCoupon(null)

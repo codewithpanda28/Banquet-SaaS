@@ -15,6 +15,7 @@ const STATUS_STEPS = [
     { id: 'confirmed', label: 'Order Received', description: 'Kitchen has received your order.', icon: CheckCircle2, color: 'text-blue-500', bg: 'bg-blue-500/10' },
     { id: 'preparing', label: 'Preparing Food', description: 'Chefs are cooking your delicious meal.', icon: ChefHat, color: 'text-orange-500', bg: 'bg-orange-500/10' },
     { id: 'ready', label: 'Ready to Serve', description: 'Your food is ready. Enjoy your meal!', icon: Utensils, color: 'text-green-500', bg: 'bg-green-500/10' },
+    { id: 'completed', label: 'Order Finished', description: 'Your banquet experience is completed. Visit again!', icon: PartyPopper, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
 ]
 
 export default function TrackOrderPage() {
@@ -40,7 +41,8 @@ export default function TrackOrderPage() {
                 case 'confirmed': playStatusSound('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'); break; 
                 case 'preparing': playStatusSound('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'); break;
                 case 'ready': playStatusSound('https://assets.mixkit.co/active_storage/sfx/1063/1063-preview.mp3'); break; // Crisper Hotel Bell
-                case 'served': playStatusSound('https://assets.mixkit.co/active_storage/sfx/1063/1063-preview.mp3'); setShowConfetti(true); break;
+                case 'served':
+                case 'completed': playStatusSound('https://assets.mixkit.co/active_storage/sfx/1063/1063-preview.mp3'); setShowConfetti(true); break;
                 case 'cancelled': playStatusSound('https://assets.mixkit.co/active_storage/sfx/951/951-preview.mp3'); break; // Error Buzz
             }
         }
@@ -48,35 +50,35 @@ export default function TrackOrderPage() {
 
     if (loading) {
         return (
-            <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 gap-6">
+            <div className="flex flex-col items-center justify-center min-h-screen bg-[#FCFBF7] gap-8">
                 <div className="relative">
-                    <div className="w-20 h-20 border-4 border-orange-200 rounded-full animate-spin border-t-orange-500" />
+                    <div className="w-24 h-24 border-4 border-[#D4AF37]/20 rounded-full animate-spin border-t-[#D4AF37]" />
                     <div className="absolute inset-0 flex items-center justify-center">
-                        <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+                        <Loader2 className="w-8 h-8 text-[#D4AF37] animate-spin" />
                     </div>
                 </div>
-                <p className="text-slate-400 font-medium animate-pulse tracking-wide uppercase text-xs">Loading Order...</p>
+                <p className="text-[#8B6508]/40 font-black animate-pulse tracking-[0.3em] uppercase text-[10px]">Consulting Order Logs</p>
             </div>
         )
     }
 
     if (error || !order) {
         return (
-            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-8 text-center space-y-8">
-                <div className="w-32 h-32 bg-orange-100 rounded-full flex items-center justify-center">
-                    <Utensils className="w-16 h-16 text-orange-500 opacity-50" />
+            <div className="min-h-screen bg-[#FCFBF7] flex flex-col items-center justify-center p-8 text-center space-y-10">
+                <div className="w-32 h-32 bg-white border border-[#D4AF37]/20 rounded-full flex items-center justify-center shadow-lg">
+                    <Utensils className="w-16 h-16 text-[#D4AF37] opacity-20" />
                 </div>
-                <div>
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">Order Not Found</h1>
-                    <p className="text-slate-500 mt-3 font-medium text-lg max-w-xs mx-auto">
-                        {error || "We couldn't find the order you are looking for."}
+                <div className="space-y-3">
+                    <h1 className="text-3xl font-serif font-bold text-[#1A1A1A] tracking-tight">Record Not Found</h1>
+                    <p className="text-[#8B6508]/60 font-medium text-lg max-w-xs mx-auto">
+                        {error || "We couldn't find the banquet record you are looking for."}
                     </p>
                 </div>
                 <Button
                     onClick={() => router.push('/customer/menu')}
-                    className="rounded-full px-10 h-14 bg-slate-900 hover:bg-black text-white font-bold shadow-xl transition-transform active:scale-95"
+                    className="rounded-full px-12 h-16 bg-[#D4AF37] hover:bg-[#B8860B] text-white font-black uppercase tracking-widest text-[11px] shadow-xl shadow-[#D4AF37]/20 transition-all active:scale-95"
                 >
-                    Order Something Else
+                    Return to Selection
                 </Button>
             </div>
         )
@@ -84,21 +86,19 @@ export default function TrackOrderPage() {
 
     if (order.status === 'cancelled') {
         return (
-            <div className="min-h-screen bg-red-50 flex flex-col items-center justify-center p-8 text-center space-y-8">
-                <div className="w-32 h-32 bg-red-100 rounded-full flex items-center justify-center animate-bounce duration-1000">
-                    <div className="w-24 h-24 bg-red-200 rounded-full flex items-center justify-center">
-                        <span className="text-6xl">💔</span>
-                    </div>
+            <div className="min-h-screen bg-white flex flex-col items-center justify-center p-8 text-center space-y-10">
+                <div className="w-32 h-32 bg-red-50 rounded-full flex items-center justify-center animate-bounce duration-[2000ms] border border-red-100">
+                    <span className="text-6xl">🥀</span>
                 </div>
-                <div>
-                    <h1 className="text-3xl font-black text-red-900 tracking-tight">Order Cancelled</h1>
-                    <p className="text-red-700/80 mt-3 font-medium text-lg">We couldn't fulfill your order this time.</p>
+                <div className="space-y-3">
+                    <h1 className="text-3xl font-serif font-bold text-red-900 tracking-tight">Order Revoked</h1>
+                    <p className="text-red-700/60 font-medium text-lg italic">Regrettably, this order could not be fulfilled.</p>
                 </div>
                 <Button
                     onClick={() => router.push('/customer/menu')}
-                    className="rounded-full px-10 h-14 bg-red-600 hover:bg-red-700 text-white font-bold shadow-lg shadow-red-200 transition-transform active:scale-95"
+                    className="rounded-full px-12 h-16 bg-slate-900 hover:bg-black text-white font-black uppercase tracking-widest text-[11px] transition-all"
                 >
-                    Return to Menu
+                    Back to Menu
                 </Button>
             </div>
         )
@@ -106,91 +106,87 @@ export default function TrackOrderPage() {
 
     let currentStepIndex = 0;
     if (order.status === 'preparing') currentStepIndex = 1;
-    if (['ready', 'served', 'completed'].includes(order.status)) currentStepIndex = 2;
+    if (['ready', 'served'].includes(order.status)) currentStepIndex = 2;
+    if (order.status === 'completed') currentStepIndex = 3;
 
     const activeStep = STATUS_STEPS[currentStepIndex]
     const isCompleted = ['served', 'completed'].includes(order.status)
+
     return (
-        <div className="min-h-screen bg-slate-50/50 pb-36 relative font-sans">
+        <div className="min-h-screen bg-[#FCFBF7] pb-36 relative font-sans">
             {/* Background Decorations */}
-            <div className="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-orange-50 to-transparent -z-10 overflow-hidden" />
-            <div className="absolute -top-24 -right-24 w-64 h-64 bg-yellow-200/20 rounded-full blur-3xl -z-10" />
-            <div className="absolute top-48 -left-24 w-64 h-64 bg-orange-200/20 rounded-full blur-3xl -z-10" />
+            <div className="absolute top-0 left-0 w-full h-[30rem] bg-gradient-to-b from-[#F4EBD0]/30 to-transparent -z-10" />
 
             {/* Header */}
-            <header className="px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between bg-white border-b border-slate-100 mb-4">
+            <header className="px-6 py-6 flex items-center justify-between bg-white/80 backdrop-blur-md border-b border-[#D4AF37]/10 mb-8 sticky top-0 z-50">
                 <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => router.push('/customer/menu')}
-                    className="rounded-full h-9 w-9 sm:h-10 sm:w-10 hover:bg-black/5 hover:text-black transition-colors text-slate-600"
+                    className="rounded-full h-10 w-10 hover:bg-[#F4EBD0]/50 text-[#8B6508]"
                 >
-                    <ArrowLeft className="w-5 h-5 sm:w-6 sm:h-6" />
+                    <ArrowLeft className="w-6 h-6" />
                 </Button>
                 <div className="flex-1 text-center">
-                    <span className="text-[10px] font-black tracking-[0.2em] text-slate-400 uppercase">Live Tracking Status</span>
+                    <span className="text-[10px] font-black tracking-[0.4em] text-[#D4AF37] uppercase">Live Status</span>
                 </div>
-                <div className="w-9 sm:w-10 flex justify-end pr-1 sm:pr-0">
+                <div className="w-10 flex justify-end">
                     {order.table_id && (
-                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-orange-100 flex items-center justify-center border-2 border-orange-200 shadow-sm shrink-0">
-                            <span className="text-[9px] sm:text-[10px] font-black text-orange-700">T-{order.restaurant_tables?.table_number || '?'}</span>
+                        <div className="w-10 h-10 rounded-full bg-[#F4EBD0] flex items-center justify-center border-2 border-[#D4AF37]/30 shadow-sm">
+                            <span className="text-[10px] font-black text-[#8B6508]">T-{order.restaurant_tables?.table_number || '?'}</span>
                         </div>
                     )}
                 </div>
             </header>
 
-            <main className="px-6 pt-12 space-y-12 max-w-lg mx-auto relative">
-                {/* 🏷️ Top Branding & Order ID */}
+            <main className="px-8 space-y-12 max-w-lg mx-auto relative">
+                {/* Official ID */}
                 <div className="flex flex-col items-center text-center">
-                    <div className="bg-white border border-slate-100 shadow-sm rounded-3xl px-6 py-3 flex flex-col items-center animate-in slide-in-from-top-4 duration-500">
-                        <span className="text-[9px] font-black tracking-[0.3em] text-slate-400 uppercase mb-1">Official Order ID</span>
-                        <span className="text-xl font-mono font-black text-slate-900 tracking-[0.2em]">
+                    <div className="bg-white border border-[#D4AF37]/10 shadow-xl shadow-[#D4AF37]/5 rounded-[2rem] px-8 py-4 flex flex-col items-center animate-in slide-in-from-top-4 duration-700">
+                        <span className="text-[9px] font-black tracking-[0.3em] text-[#D4AF37] uppercase mb-2">Banquet Order Record</span>
+                        <span className="text-2xl font-mono font-black text-[#1A1A1A] tracking-[0.2em]">
                             #{billId.slice(-6).toUpperCase()}
                         </span>
                     </div>
                 </div>
 
                 {/* Hero Status */}
-                <div className="flex flex-col items-center text-center space-y-8">
+                <div className="flex flex-col items-center text-center space-y-10">
                     <motion.div
                         initial={{ scale: 0.8, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
-                        transition={{ type: "spring", bounce: 0.5 }}
+                        transition={{ type: "spring", bounce: 0.4 }}
                         className="relative"
                     >
                         <div className={cn(
-                            "w-32 h-32 rounded-full flex items-center justify-center bg-white shadow-2xl relative z-10",
-                            activeStep.color
+                            "w-40 h-40 rounded-full flex items-center justify-center bg-white shadow-2xl relative z-10 border border-[#D4AF37]/20",
+                            "text-[#D4AF37]"
                         )}>
-                            <activeStep.icon className="w-16 h-16" strokeWidth={1.5} />
+                            <activeStep.icon className="w-20 h-20" strokeWidth={1} />
                         </div>
-                        {/* Ripple Effect */}
+                        
                         {!isCompleted && (
-                            <>
-                                <div className={cn("absolute inset-0 rounded-full opacity-20 animate-ping duration-[3s]", activeStep.bg.replace('/10', ''))} />
-                                <div className={cn("absolute -inset-4 rounded-full opacity-10 animate-pulse", activeStep.bg.replace('/10', ''))} />
-                            </>
+                            <div className="absolute inset-0 rounded-full bg-[#D4AF37]/10 animate-ping duration-[4s]" />
                         )}
 
-                        {/* Timer Badge */}
                         {!isCompleted && order.status !== 'ready' && (
                             <motion.div
                                 initial={{ y: 10, opacity: 0 }}
                                 animate={{ y: 0, opacity: 1 }}
-                                className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 bg-black text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-lg whitespace-nowrap"
+                                className="absolute -bottom-4 left-1/2 -translate-x-1/2 z-20 bg-[#1A1A1A] text-white px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xl whitespace-nowrap"
                             >
-                                <Clock className="w-3 h-3 text-orange-400" />
+                                <Clock className="w-3 h-3 text-[#D4AF37]" />
                                 <span>~{order.estimated_time || 20} mins</span>
                             </motion.div>
                         )}
                     </motion.div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                         <motion.h1
                             key={activeStep.label}
                             initial={{ y: 10, opacity: 0 }}
                             animate={{ y: 0, opacity: 1 }}
-                            className="text-3xl font-black text-slate-900 tracking-tight"
+                            className="text-4xl font-serif font-bold text-[#1A1A1A] tracking-tight"
                         >
                             {activeStep.label}
                         </motion.h1>
@@ -198,158 +194,130 @@ export default function TrackOrderPage() {
                             key={activeStep.description}
                             initial={{ y: 10, opacity: 0 }}
                             animate={{ y: 0, opacity: 1 }}
-                            className="text-slate-500 font-medium text-lg"
+                            className="text-[#8B6508]/60 font-medium italic text-lg leading-relaxed max-w-[280px]"
                         >
                             {activeStep.description}
                         </motion.p>
                     </div>
                 </div>
 
-                {/* Timeline */}
-                <div className="relative py-4">
-                    <div className="absolute left-7 top-0 bottom-0 w-0.5 bg-slate-200/70 rounded-full" />
-                    <div className="space-y-8 relative">
-                        {STATUS_STEPS.map((step, index) => {
-                            const isCurrent = index === currentStepIndex
-                            const isPast = index < currentStepIndex || isCompleted
-                            const isFuture = index > currentStepIndex && !isCompleted
+                {/* Tracking Steps */}
+                <div className="bg-white rounded-[2.5rem] p-10 border border-[#D4AF37]/10 shadow-xl shadow-[#D4AF37]/5 space-y-10 relative overflow-hidden">
+                    <div className="absolute left-14 top-16 bottom-16 w-0.5 bg-[#F4EBD0]" />
+                    
+                    {STATUS_STEPS.map((step, idx) => {
+                        const isDone = idx < currentStepIndex
+                        const isActive = idx === currentStepIndex
+                        const Icon = step.icon
 
-                            return (
-                                <motion.div
-                                    key={step.id}
-                                    initial={{ x: -10, opacity: 0 }}
-                                    animate={{ x: 0, opacity: 1 }}
-                                    transition={{ delay: index * 0.1 }}
-                                    className="flex items-center gap-6 relative"
-                                >
-                                    {/* Icon Bubble */}
-                                    <div className={cn(
-                                        "w-14 h-14 rounded-full flex items-center justify-center border-4 relative z-10 transition-all duration-500 shrink-0",
-                                        isCurrent ? "bg-orange-500 border-orange-500 shadow-xl scale-110" :
-                                            isPast ? "bg-orange-500 border-orange-500 shadow-md" :
-                                                "bg-slate-100 border-slate-100"
+                        return (
+                            <div key={step.id} className="flex gap-8 relative z-10">
+                                <div className={cn(
+                                    "w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-500 border shadow-sm",
+                                    isDone ? "bg-emerald-50 border-emerald-100 text-emerald-500" :
+                                    isActive ? "bg-[#D4AF37] border-[#D4AF37] text-white shadow-lg shadow-[#D4AF37]/20 scale-110" :
+                                    "bg-[#FCFBF7] border-[#F4EBD0] text-[#D4AF37]/30"
+                                )}>
+                                    {isDone ? <CheckCircle2 className="w-6 h-6" /> : <Icon className="w-6 h-6" />}
+                                </div>
+                                <div className="flex-1 space-y-1 py-1">
+                                    <h3 className={cn(
+                                        "text-sm font-black uppercase tracking-widest",
+                                        isActive ? "text-[#1A1A1A]" : "text-[#8B6508]/40"
                                     )}>
-                                        {isPast ? (
-                                            <CheckCircle2 className="w-6 h-6 text-white" />
-                                        ) : (
-                                            <step.icon className={cn(
-                                                "w-6 h-6 transition-colors",
-                                                isCurrent ? "text-white" : "text-slate-400"
-                                            )} />
-                                        )}
-                                    </div>
-
-                                    {/* Text */}
-                                    <div className={cn(
-                                        "flex-1 p-4 rounded-xl transition-all duration-300",
-                                        isCurrent ? "" : "opacity-60 grayscale-[0.5]"
-                                    )}>
-                                        <h3 className={cn(
-                                            "font-bold text-sm text-slate-600"
-                                        )}>
-                                            {step.label}
-                                        </h3>
-                                        <p className="text-xs text-slate-400 mt-0.5">{step.description}</p>
-                                    </div>
-                                </motion.div>
-                            )
-                        })}
-                    </div>
+                                        {step.label}
+                                    </h3>
+                                    {isActive && (
+                                        <p className="text-xs text-[#8B6508]/60 leading-relaxed font-medium">
+                                            {step.description}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )
+                    })}
                 </div>
 
-                {/* Order Summary Receipt */}
-                <motion.div
-                    layout
-                    className="bg-white rounded-3xl shadow-xl shadow-slate-200/50 overflow-hidden border border-slate-100"
-                >
-                    <div className="bg-slate-900 px-6 py-4 flex items-center justify-between text-white">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-white/10 p-2 rounded-xl">
-                                <ShoppingBag className="w-5 h-5 text-orange-400" />
+                {/* Success Message for Completed Orders */}
+                {order.status === 'completed' && (
+                    <motion.div
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        className="p-10 bg-gradient-to-br from-emerald-600 to-green-700 rounded-[2.5rem] text-white text-center space-y-4 shadow-2xl relative overflow-hidden"
+                    >
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-16 -mt-16" />
+                        <PartyPopper className="w-16 h-16 mx-auto mb-2 text-white/90" />
+                        <h2 className="text-2xl font-black uppercase tracking-widest leading-none">Order Finished!</h2>
+                        <p className="text-sm font-medium text-white/80 leading-relaxed italic">
+                            Your banquet experience has been successfully completed. We hope you enjoyed your meal!
+                        </p>
+                        <div className="pt-2">
+                             <Button 
+                                onClick={() => router.push('/customer/menu')}
+                                className="w-full h-14 bg-white text-emerald-700 hover:bg-emerald-50 font-black uppercase tracking-widest rounded-2xl shadow-lg transition-all active:scale-95"
+                             >
+                                Back to Selection
+                             </Button>
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* Items Summary */}
+                <div className="space-y-6">
+                    <button 
+                        onClick={() => setExpandDetail(!expandDetail)}
+                        className="w-full flex items-center justify-between p-6 bg-white rounded-[2rem] border border-[#D4AF37]/10 shadow-sm"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 bg-[#F4EBD0] rounded-xl flex items-center justify-center text-[#8B6508]">
+                                <ShoppingBag className="w-5 h-5" />
                             </div>
-                            <div>
-                                <p className="font-bold text-sm">Your Order</p>
-                                <p className="text-xs text-slate-400">{items.length} Items</p>
+                            <div className="text-left">
+                                <p className="text-[10px] font-black text-[#D4AF37] uppercase tracking-[0.2em]">Selection Detail</p>
+                                <p className="text-sm font-bold text-[#1A1A1A]">{items.length} Offerings</p>
                             </div>
                         </div>
-                        <p className="font-mono font-bold text-lg text-orange-400">₹{order.total.toFixed(2)}</p>
-                    </div>
+                        {expandDetail ? <ChevronUp className="w-5 h-5 text-[#D4AF37]" /> : <ChevronDown className="w-5 h-5 text-[#D4AF37]" />}
+                    </button>
 
-                    <div className="p-6 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
-                        <div className="space-y-4">
-                            {/* Summary Preview (First 2 items) */}
-                            {!expandDetail && items.slice(0, 2).map((item) => (
-                                <div key={item.id} className="flex justify-between items-center text-sm">
-                                    <div className="flex items-center gap-3">
-                                        <span className="font-bold text-slate-400 text-xs bg-slate-100 px-2 py-1 rounded-md">{item.quantity}x</span>
-                                        <span className="font-medium text-slate-700">{item.item_name}</span>
-                                    </div>
-                                    <span className="font-mono text-slate-500">₹{Number(item.total).toFixed(2)}</span>
-                                </div>
-                            ))}
-
-                            <AnimatePresence>
-                                {expandDetail && (
-                                    <motion.div
-                                        initial={{ height: 0, opacity: 0 }}
-                                        animate={{ height: "auto", opacity: 1 }}
-                                        exit={{ height: 0, opacity: 0 }}
-                                        className="space-y-4 pt-1"
-                                    >
-                                        {/* Full List */}
-                                        {items.map((item) => (
-                                            <div key={item.id} className="flex justify-between items-center text-sm">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="font-bold text-slate-400 text-xs bg-slate-100 px-2 py-1 rounded-md min-w-[32px] text-center">{item.quantity}x</span>
-                                                    <div className="flex flex-col">
-                                                        <span className="font-medium text-slate-700">{item.item_name}</span>
-                                                        {item.special_instructions && (
-                                                            <span className="text-[10px] text-orange-600 font-medium italic">Note: {item.special_instructions}</span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <span className="font-mono text-slate-500">₹{Number(item.total).toFixed(2)}</span>
+                    <AnimatePresence>
+                        {expandDetail && (
+                            <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                className="overflow-hidden bg-white/50 rounded-[2rem] border border-[#D4AF37]/5"
+                            >
+                                <div className="p-8 space-y-4">
+                                    {items.map((item: any) => (
+                                        <div key={item.id} className="flex justify-between items-center text-sm">
+                                            <div className="flex items-center gap-4">
+                                                <span className="w-8 h-8 rounded-lg bg-white border border-[#F4EBD0] flex items-center justify-center text-[10px] font-black text-[#8B6508] shadow-sm">
+                                                    {item.quantity}
+                                                </span>
+                                                <span className="font-medium text-[#1A1A1A]">{item.item_name}</span>
                                             </div>
-                                        ))}
-
-                                        <div className="border-t border-dashed border-slate-200 my-4" />
-
-                                        <div className="flex justify-between items-center text-sm">
-                                            <span className="text-slate-500">Subtotal</span>
-                                            <span className="font-mono font-bold">₹{order.subtotal.toFixed(2)}</span>
+                                            <span className="font-black text-[#D4AF37] text-xs">INCLUDED</span>
                                         </div>
-                                        <div className="flex justify-between items-center text-sm">
-                                            <span className="text-slate-500">SGST ({order.sgst_percentage || 2.5}%)</span>
-                                            <span className="font-mono font-bold">₹{(order.sgst_amount || 0).toFixed(2)}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center text-sm">
-                                            <span className="text-slate-500">CGST ({order.cgst_percentage || 2.5}%)</span>
-                                            <span className="font-mono font-bold">₹{(order.cgst_amount || 0).toFixed(2)}</span>
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-
-                        <Button
-                            variant="ghost"
-                            className="w-full mt-4 text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
-                            onClick={() => setExpandDetail(!expandDetail)}
-                        >
-                            {expandDetail ? <span className="flex items-center gap-2">Show Less <ChevronUp className="w-3 h-3" /></span> : <span className="flex items-center gap-2">View Full Receipt <ChevronDown className="w-3 h-3" /></span>}
-                        </Button>
-                    </div>
-                </motion.div>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
             </main>
 
-            {/* Floating Action Bar */}
-            <div className="fixed bottom-6 left-6 right-6 z-40 bg-white/80 backdrop-blur-xl p-2 rounded-[2rem] shadow-2xl shadow-orange-900/10 border border-white/50 flex items-center justify-center gap-2">
-                <Button
-                    className="flex-1 h-12 rounded-[1.5rem] bg-slate-900 hover:bg-black text-white font-bold shadow-lg transition-all active:scale-95"
-                    onClick={() => router.push('/customer/menu')}
-                >
-                    Order More
-                </Button>
+            {/* Footer CTA */}
+            <div className="fixed bottom-0 left-0 right-0 p-8 bg-white/90 backdrop-blur-md border-t border-[#D4AF37]/10 z-50">
+                <div className="max-w-lg mx-auto">
+                    <Button 
+                        onClick={() => router.push('/customer/menu')}
+                        size="lg"
+                        className="w-full h-16 rounded-full text-[11px] font-black uppercase tracking-[0.3em] bg-[#1A1A1A] text-white hover:bg-black transition-all active:scale-[0.98] border-none shadow-2xl"
+                    >
+                        Explore More Delicacies
+                    </Button>
+                </div>
             </div>
 
             {showConfetti && (

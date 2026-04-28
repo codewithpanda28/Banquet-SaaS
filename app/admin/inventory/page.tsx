@@ -17,13 +17,12 @@ import {
 import { supabase, RESTAURANT_ID } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { triggerAutomationWebhook } from '@/lib/webhook'
 import { format } from 'date-fns'
 
 interface InventoryItem {
     id: string; name: string; category: string; unit: string;
     current_stock: number; min_stock: number; max_stock: number;
-    cost_per_unit: number; supplier?: string; last_restocked?: string;
+    supplier?: string; last_restocked?: string;
     created_at: string
 }
 
@@ -47,7 +46,7 @@ export default function InventoryPage() {
     const [form, setForm] = useState({
         name: '', category: 'Vegetables', unit: 'kg',
         current_stock: '', min_stock: '', max_stock: '',
-        cost_per_unit: '', supplier: ''
+        supplier: ''
     })
 
     const isSyncingRef = useRef(false)
@@ -97,7 +96,6 @@ export default function InventoryPage() {
             current_stock: parseFloat(form.current_stock) || 0,
             min_stock: parseFloat(form.min_stock) || 0,
             max_stock: parseFloat(form.max_stock) || 999,
-            cost_per_unit: parseFloat(form.cost_per_unit) || 0,
             supplier: form.supplier || null,
             last_restocked: new Date().toISOString()
         }
@@ -127,21 +125,6 @@ export default function InventoryPage() {
         else {
             toast.success(`Stock ${adjustType === 'add' ? 'added' : 'reduced'}!`)
 
-            // TRIGGER WEBHOOK
-            await triggerAutomationWebhook('add-stock', {
-                action: 'add-stock',
-                items: [{
-                    name: adjustItem.name,
-                    quantity: qty,
-                    unit: adjustItem.unit,
-                    cost: adjustItem.cost_per_unit * qty
-                }],
-                item_id: adjustItem.id,
-                type: adjustType,
-                new_stock: newStock,
-                restaurant_id: RESTAURANT_ID
-            })
-
             setAdjustItem(null)
             setAdjustQty('')
             fetchItems()
@@ -156,7 +139,7 @@ export default function InventoryPage() {
     }
 
     function resetForm() {
-        setForm({ name: '', category: 'Vegetables', unit: 'kg', current_stock: '', min_stock: '', max_stock: '', cost_per_unit: '', supplier: '' })
+        setForm({ name: '', category: 'Vegetables', unit: 'kg', current_stock: '', min_stock: '', max_stock: '', supplier: '' })
     }
 
     const [parsedItems, setParsedItems] = useState<{ name: string, qty: number, unit: string, price: number }[]>([])
@@ -182,51 +165,8 @@ export default function InventoryPage() {
                 reader.readAsDataURL(file)
             })
 
-            // Step 2: Use triggerAutomationWebhook for consistency and proxying
-            // This sends to /api/webhook which then forwards to n8n
-            console.log('📡 Sending bill scan request to internal proxy...');
-            const response = await triggerAutomationWebhook('inventory-upload' as any, {
-                file_name: file.name,
-                file_type: file.type,
-                file_size: file.size,
-                image_base64: base64,
-                restaurant_id: RESTAURANT_ID,
-                timestamp: new Date().toISOString()
-            });
-
-            if (response.error || response.success === false) {
-                console.error('❌ Proxy reported error:', response);
-                throw new Error(response.detail || response.error || 'Webhook trigger failed');
-            }
-
-            // The actual data from n8n is nested in response.result (if using our proxy) 
-            // or just in response if it's a direct response from older versions
-            const data = response.result || response;
-
-            // Step 3: Parse response — n8n should return { items: [{name, qty, unit, price}] }
-            let extractedItems: { name: string, qty: number, unit: string, price: number }[] = []
-
-            const rawItems = Array.isArray(data) ? data : (data.items || []);
-
-            if (Array.isArray(rawItems) && rawItems.length > 0) {
-                extractedItems = rawItems.map((item: any) => ({
-                    name: item.name || item.item_name || item.product || '',
-                    qty: parseFloat(item.qty || item.quantity || item.amount || 0),
-                    unit: item.unit || item.uom || 'kg',
-                    price: parseFloat(item.price || item.rate || item.cost || item.unit_price || 0)
-                })).filter(item => item.name)
-            }
-
-            if (extractedItems.length === 0) {
-                console.warn('⚠️ No items extracted from response:', data);
-                toast.error('Koi item nahi mila bill mein. Please clear photo upload karo.')
-                setScanning(false)
-                return
-            }
-
-            setParsedItems(extractedItems)
-            setScannedText(`${extractedItems.length} items nikale gaye bill se ✅`)
-            toast.success(`Bill scan hua! ${extractedItems.length} items mile 🎉`)
+            // Webhook removed as requested. Manual entry or direct API required.
+            throw new Error('Bill scanning is currently disabled (No Automation).')
 
         } catch (err: any) {
             console.error('❌ Bill scan critical error:', err)
@@ -261,7 +201,6 @@ export default function InventoryPage() {
                     return supabase.from('inventory_items')
                         .update({
                             current_stock: (existing.current_stock || 0) + item.qty,
-                            cost_per_unit: item.price,
                             last_restocked: new Date().toISOString()
                         })
                         .eq('id', existing.id)
@@ -274,7 +213,6 @@ export default function InventoryPage() {
                         current_stock: item.qty,
                         min_stock: 2,
                         max_stock: 50,
-                        cost_per_unit: item.price,
                         last_restocked: new Date().toISOString()
                     })
                 }
@@ -311,7 +249,7 @@ export default function InventoryPage() {
     })
 
     const lowStockItems = items.filter(i => i.current_stock <= i.min_stock)
-    const totalValue = items.reduce((s, i) => s + i.current_stock * i.cost_per_unit, 0)
+    const totalVolume = items.reduce((s, i) => s + i.current_stock, 0)
 
     const stockLevel = (item: InventoryItem) => {
         if (item.current_stock <= item.min_stock) return 'low'
@@ -346,7 +284,7 @@ export default function InventoryPage() {
                 {[
                     { label: 'Total SKUs', value: items.length, bg: 'bg-blue-50', color: 'text-blue-700' },
                     { label: 'Low Stock Alerts', value: lowStockItems.length, bg: 'bg-red-50', color: 'text-red-700' },
-                    { label: 'Inventory Value', value: `₹${totalValue.toLocaleString()}`, bg: 'bg-green-50', color: 'text-green-700' },
+                    { label: 'Total Volume', value: totalVolume, bg: 'bg-green-50', color: 'text-green-700' },
                     { label: 'Categories', value: [...new Set(items.map(i => i.category))].length, bg: 'bg-purple-50', color: 'text-purple-700' },
                 ].map(s => (
                     <Card key={s.label} className={cn('border-0', s.bg)}>
@@ -418,7 +356,7 @@ export default function InventoryPage() {
                                         <div className="flex gap-1">
                                             <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => {
                                                 setEditingItem(item)
-                                                setForm({ name: item.name, category: item.category, unit: item.unit, current_stock: String(item.current_stock), min_stock: String(item.min_stock), max_stock: String(item.max_stock), cost_per_unit: String(item.cost_per_unit), supplier: item.supplier || '' })
+                                                setForm({ name: item.name, category: item.category, unit: item.unit, current_stock: String(item.current_stock), min_stock: String(item.min_stock), max_stock: String(item.max_stock), supplier: item.supplier || '' })
                                                 setDialogOpen(true)
                                             }}><Edit className="h-3.5 w-3.5" /></Button>
                                             <Button size="icon" variant="ghost" className="h-7 w-7 text-red-400" onClick={() => deleteItem(item.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
@@ -444,7 +382,7 @@ export default function InventoryPage() {
                                     </div>
 
                                     <div className="flex justify-between items-center text-xs text-gray-400 mb-3">
-                                        <span>₹{item.cost_per_unit}/{item.unit}</span>
+                                        <span>Stock Level Tracked</span>
                                         {item.last_restocked && <span>Last: {format(new Date(item.last_restocked), 'MMM d')}</span>}
                                     </div>
 
@@ -492,10 +430,6 @@ export default function InventoryPage() {
                             <div className="space-y-1">
                                 <Label className="text-xs font-bold uppercase text-gray-400">Current Stock *</Label>
                                 <Input type="number" value={form.current_stock} onChange={e => setForm({ ...form, current_stock: e.target.value })} placeholder="0" className="h-10" />
-                            </div>
-                            <div className="space-y-1">
-                                <Label className="text-xs font-bold uppercase text-gray-400">Cost per Unit (₹)</Label>
-                                <Input type="number" value={form.cost_per_unit} onChange={e => setForm({ ...form, cost_per_unit: e.target.value })} placeholder="0" className="h-10" />
                             </div>
                             <div className="space-y-1">
                                 <Label className="text-xs font-bold uppercase text-gray-400">Min Stock (Alert)</Label>

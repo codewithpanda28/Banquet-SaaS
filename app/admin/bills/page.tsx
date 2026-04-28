@@ -159,18 +159,14 @@ export default function BillsPage() {
             }
 
             // CSV Generation with Escaping
-            const headers = ['Bill ID', 'Customer', 'Phone', 'Subtotal', 'SGST', 'CGST', 'Total', 'Payment', 'Status', 'Date']
+            const headers = ['Order ID', 'Customer', 'Phone', 'Items Count', 'Status', 'Date']
             const rows = oldOrders.map((o: any) => {
                 const cust = Array.isArray(o.customers) ? o.customers[0] : o.customers
                 return [
                     o.bill_id || '',
                     cust?.name || o.customer_name || 'Walk-in',
                     cust?.phone || o.customer_phone || '',
-                    o.subtotal || '',
-                    o.sgst_amount || 0,
-                    o.cgst_amount || 0,
-                    o.total || '',
-                    o.payment_method || '',
+                    o.order_items?.length || 0,
                     o.status || '',
                     format(parseDate(o.created_at), 'dd/MM/yyyy HH:mm')
                 ]
@@ -289,23 +285,17 @@ export default function BillsPage() {
                     <p><strong>Customer:</strong> ${customer?.name || 'Walk-in'}</p>
                     ${order.payment_method ? `<p><strong>Paid via:</strong> ${order.payment_method.toUpperCase()}</p>` : ''}
                     <table>
-                        <thead><tr><th>Item</th><th style="text-align:right">Qty</th><th style="text-align:right">Total</th></tr></thead>
+                        <thead><tr><th>Item</th><th style="text-align:right">Qty</th></tr></thead>
                         <tbody>
                             ${order.order_items?.map((item: any) => `
                                 <tr>
                                     <td>${item.item_name}</td>
                                     <td style="text-align:right">${item.quantity}</td>
-                                    <td style="text-align:right">₹${item.total.toFixed(2)}</td>
                                 </tr>
                             `).join('') || ''}
                         </tbody>
                     </table>
                     <div class="total-section">
-                        <p style="text-align:right">Subtotal: ₹${(order.subtotal || order.total - (order.tax || 0)).toFixed(2)}</p>
-                        <p style="text-align:right">SGST (${order.sgst_percentage || 2.5}%): ₹${(order.sgst_amount || 0).toFixed(2)}</p>
-                        <p style="text-align:right">CGST (${order.cgst_percentage || 2.5}%): ₹${(order.cgst_amount || 0).toFixed(2)}</p>
-                        ${order.discount > 0 ? `<p style="text-align:right">Discount: -₹${order.discount.toFixed(2)}</p>` : ''}
-                        <div class="grand-total" style="text-align:right">Total: ₹${order.total.toFixed(2)}</div>
                     </div>
                     <div class="footer"><p>Thank you for your business!</p></div>
                 </div>
@@ -503,7 +493,7 @@ export default function BillsPage() {
                         <div className="relative w-full md:w-96">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                             <Input
-                                placeholder="Search Bill ID, Phone or Name..."
+                                placeholder="Search Order ID, Phone or Name..."
                                 className="pl-10 h-11 bg-white border-gray-200"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -512,12 +502,7 @@ export default function BillsPage() {
                         <div className="flex items-center gap-4 text-sm text-gray-500 font-medium">
                             <div className="flex items-center gap-2">
                                 <div className="h-2 w-2 rounded-full bg-green-500" />
-                                <span>{filteredOrders.length} Paid Bills</span>
-                            </div>
-                            <div className="h-4 w-px bg-gray-200" />
-                            <div className="flex items-center gap-2">
-                                <span className="text-gray-900 font-bold">₹{filteredOrders.reduce((sum, o) => sum + Number(o.total || 0), 0).toFixed(2)}</span>
-                                <span>Revenue</span>
+                                <span>{filteredOrders.length} Completed Orders</span>
                             </div>
                         </div>
                     </div>
@@ -533,10 +518,9 @@ export default function BillsPage() {
                                             className="rounded-md"
                                         />
                                     </th>
-                                    <th className="p-4 text-xs font-bold uppercase tracking-wider text-gray-400">Bill ID</th>
+                                    <th className="p-4 text-xs font-bold uppercase tracking-wider text-gray-400">Order ID</th>
                                     <th className="p-4 text-xs font-bold uppercase tracking-wider text-gray-400">Customer</th>
-                                    <th className="p-4 text-xs font-bold uppercase tracking-wider text-gray-400">Method</th>
-                                    <th className="p-4 text-xs font-bold uppercase tracking-wider text-gray-400">Amount</th>
+                                    <th className="p-4 text-xs font-bold uppercase tracking-wider text-gray-400">Items</th>
                                     <th className="p-4 text-xs font-bold uppercase tracking-wider text-gray-400">Time</th>
                                     <th className="p-4 text-xs font-bold uppercase tracking-wider text-gray-400 text-right">Action</th>
                                 </tr>
@@ -575,19 +559,9 @@ export default function BillsPage() {
                                                         <span className="text-[10px] text-gray-400 font-medium">{customer?.phone || 'No phone'}</span>
                                                     </div>
                                                 </td>
-                                                <td className="p-4">
-                                                    <Badge variant="outline" className={cn(
-                                                        "uppercase text-[10px] font-bold tracking-wider",
-                                                        order.payment_method === 'upi' ? "bg-blue-50 text-blue-600 border-blue-100" :
-                                                        order.payment_method === 'cash' ? "bg-green-50 text-green-600 border-green-100" :
-                                                        "bg-purple-50 text-purple-600 border-purple-100"
-                                                    )}>
-                                                        {order.payment_method || 'N/A'}
-                                                    </Badge>
-                                                </td>
-                                                <td className="p-4">
-                                                    <span className="font-black text-gray-900">₹{Number(order.total || 0).toFixed(0)}</span>
-                                                </td>
+                                                 <td className="p-4">
+                                                     <span className="font-bold text-gray-900">{order.order_items?.length || 0}</span>
+                                                 </td>
                                                 <td className="p-4 text-sm text-gray-500">{format(parseDate(order.created_at), 'hh:mm a')}</td>
                                                 <td className="p-4 text-right">
                                                     <div className="flex justify-end gap-2">
@@ -612,7 +586,7 @@ export default function BillsPage() {
                        <div className="bg-white">
                            <div className="p-6 border-b border-gray-100 flex justify-between items-center">
                                <div>
-                                   <DialogTitle className="text-xl font-bold text-gray-900 line-clamp-1">Bill Details</DialogTitle>
+                                   <DialogTitle className="text-xl font-bold text-gray-900 line-clamp-1">Order Details</DialogTitle>
                                    <p className="text-xs text-gray-500">{selectedOrder.bill_id}</p>
                                </div>
                                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={() => setSelectedOrder(null)}>
@@ -632,33 +606,26 @@ export default function BillsPage() {
                                            </h4>
                                        </div>
                                    </div>
-                                   <div className="grid grid-cols-2 gap-4 text-[11px] font-medium text-gray-500 bg-white/50 p-2 rounded-xl">
-                                       <div className="flex items-center gap-2">
-                                           <Smartphone className="h-3 w-3" />
-                                           <span>{(Array.isArray(selectedOrder.customers) ? selectedOrder.customers[0] : selectedOrder.customers)?.phone || selectedOrder.customer_phone || 'No phone'}</span>
-                                       </div>
-                                       <div className="flex items-center gap-2">
-                                           <Wallet className="h-3 w-3" />
-                                           <span className="uppercase">{selectedOrder.payment_method || 'Cash'}</span>
-                                       </div>
-                                   </div>
+                                    <div className="grid grid-cols-1 gap-4 text-[11px] font-medium text-gray-500 bg-white/50 p-2 rounded-xl">
+                                        <div className="flex items-center gap-2">
+                                            <Smartphone className="h-3 w-3" />
+                                            <span>{(Array.isArray(selectedOrder.customers) ? selectedOrder.customers[0] : selectedOrder.customers)?.phone || selectedOrder.customer_phone || 'No phone'}</span>
+                                        </div>
+                                    </div>
                                </div>
 
-                               <div className="space-y-4">
+                                <div className="space-y-4">
                                    {selectedOrder.order_items?.map((item: any) => (
                                        <div key={item.id} className="flex justify-between items-center text-sm">
                                            <div className="flex gap-3 items-center"><span className="h-6 w-6 bg-gray-100 rounded-full flex items-center justify-center text-[10px] font-bold">{item.quantity}</span><span>{item.item_name}</span></div>
-                                           <span className="font-bold text-gray-900">₹{item.total.toFixed(2)}</span>
                                        </div>
                                    ))}
                                </div>
-                               <div className="border-t border-dashed border-gray-200 pt-4 space-y-2">
-                                   <div className="flex justify-between text-sm"><span>Subtotal</span><span>₹{(selectedOrder.subtotal || selectedOrder.total - (selectedOrder.tax || 0)).toFixed(2)}</span></div>
-                                   <div className="flex justify-between text-sm"><span>SGST</span><span>₹{(selectedOrder.sgst_amount || 0).toFixed(2)}</span></div>
-                                   <div className="flex justify-between text-sm"><span>CGST</span><span>₹{(selectedOrder.cgst_amount || 0).toFixed(2)}</span></div>
-                                   <div className="flex justify-between text-lg font-black text-primary border-t pt-2"><span>Total</span><span>₹{selectedOrder.total.toFixed(2)}</span></div>
+                               <div className="border-t border-dashed border-gray-200 pt-4 space-y-2 text-center">
+                                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Banquet Service</p>
+                                   <p className="text-xs text-gray-500 italic">Inclusive Guest Experience</p>
                                </div>
-                               <Button className="w-full h-12 rounded-xl" onClick={() => handlePrintBills([selectedOrder])}><Printer className="mr-2 h-4 w-4" /> Print Bill</Button>
+                               <Button className="w-full h-12 rounded-xl" onClick={() => handlePrintBills([selectedOrder])}><Printer className="mr-2 h-4 w-4" /> Print Order</Button>
                            </div>
                        </div>
                    )}

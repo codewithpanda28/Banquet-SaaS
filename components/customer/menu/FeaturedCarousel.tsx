@@ -85,7 +85,7 @@ export function FeaturedCarousel({ items, onAdd }: FeaturedCarouselProps) {
                                         )}
                                     </div>
                                     <h3 className="font-bold text-lg leading-tight mb-1 shadow-black drop-shadow-md">{item.name}</h3>
-                                    <p className="font-bold text-xl text-amber-400 drop-shadow-sm">₹{item.price}</p>
+                                    <p className="font-bold text-xl text-amber-400 drop-shadow-sm hidden">₹{item.price}</p>
                                 </div>
 
                                 <Button

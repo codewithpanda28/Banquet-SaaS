@@ -292,7 +292,7 @@ export function UpsellModal({ triggerItemId, restaurantId, onClose }: UpsellModa
                                             {suggestion.message || `Goes perfectly with your order!`}
                                         </p>
 
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 hidden">
                                             <span className="font-black text-orange-600 text-sm">₹{price}</span>
                                             {hasDiscount && (
                                                 <span className="text-[10px] text-gray-400 line-through">₹{suggestion.item.price}</span>

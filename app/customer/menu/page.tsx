@@ -340,6 +340,48 @@ function MenuContent() {
         }
     }
 
+    // Real-time Order Status Notifications for Customer
+    useEffect(() => {
+        if (!currentCustomerId) return
+
+        const orderChannel = supabase.channel(`customer-order-updates-${currentCustomerId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'orders',
+                    filter: `customer_id=eq.${currentCustomerId}`
+                },
+                (payload) => {
+                    const newOrder = payload.new as any
+                    const oldOrder = payload.old as any
+
+                    if (newOrder.status === 'completed' && oldOrder.status !== 'completed') {
+                        toast.success('Order Completed! 🎉', {
+                            description: `Order #${newOrder.bill_id} has been finished. Enjoy your meal!`,
+                            duration: 8000,
+                        })
+                        checkSessionStatus()
+                    } else if (newOrder.status === 'ready' && oldOrder.status !== 'ready') {
+                        toast.info('Order Ready! 🍽️', {
+                            description: `Your order #${newOrder.bill_id} is ready to be served.`,
+                            duration: 8000,
+                        })
+                    } else if (newOrder.status === 'preparing' && oldOrder.status !== 'preparing') {
+                        toast.info('Cooking Started! 👨‍🍳', {
+                            description: `The kitchen is now preparing your order #${newOrder.bill_id}.`,
+                        })
+                    }
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(orderChannel)
+        }
+    }, [currentCustomerId, checkSessionStatus])
+
     useEffect(() => {
         checkSessionStatus()
 
@@ -393,13 +435,11 @@ function MenuContent() {
     }, []);
 
 
-    // Handle initialization and order type selection logic
     useEffect(() => {
-        const refCode = searchParams.get('ref')
-        if (refCode) {
-            sessionStorage.setItem('referred_by_code', refCode)
-            console.log('📢 [MENU] Referred by:', refCode)
-        }
+        // ENFORCE DINE IN FOR BANQUET
+        setOrderType('dine_in')
+        sessionStorage.setItem('orderTypeConfirmed', 'true')
+        setShowOrderTypeModal(false)
 
         const checkTableStatusAndRedirect = async (tNum: number) => {
             const { data: tableData } = await supabase
@@ -410,7 +450,6 @@ function MenuContent() {
                 .single()
 
             if (tableData?.status === 'occupied') {
-                // If occupied and we don't have a confirmed session link, redirect to scan
                 const isConfirmed = sessionStorage.getItem('orderTypeConfirmed')
                 if (!isConfirmed) {
                     router.replace(`/customer/scan?table=${tNum}`)
@@ -419,48 +458,14 @@ function MenuContent() {
             }
         }
 
-        // If type provided in URL, respect it
-        if (typeParam && ['dine_in', 'take_away', 'home_delivery'].includes(typeParam)) {
-            setOrderType(typeParam as any)
-            if (tableParam) {
-                const tNum = parseInt(tableParam)
-                if (!isNaN(tNum)) {
-                    const tId = searchParams.get('tableId') || 'qr-scan'
-                    setTableInfo(tNum, tId)
-                    checkTableStatusAndRedirect(tNum)
-                    console.log(`📍 [MENU] Table set to: ${tNum}`)
-                }
-            }
-            sessionStorage.setItem('orderTypeConfirmed', 'true')
-            return
-        }
-
-        // If table provided, check its status
         if (tableParam) {
             const tNum = parseInt(tableParam)
             if (!isNaN(tNum)) {
                 const tId = searchParams.get('tableId') || 'qr-scan'
                 setTableInfo(tNum, tId)
                 checkTableStatusAndRedirect(tNum)
-                console.log(`📍 [MENU] Table set to: ${tNum}`)
             }
         }
-
-        // Show modal if not confirmed in session
-        const isConfirmed = sessionStorage.getItem('orderTypeConfirmed')
-        if (!isConfirmed) {
-            setOrderType(null)
-            setShowOrderTypeModal(true)
-        } else {
-            setShowOrderTypeModal(false)
-        }
-
-        // Delay slightly to allow state to settle
-        const timer = setTimeout(() => {
-            if (!isConfirmed) setShowOrderTypeModal(true)
-        }, 800)
-
-        return () => clearTimeout(timer)
     }, [tableParam, typeParam, setTableInfo, setOrderType, router])
 
     // Set initial active category
@@ -539,17 +544,28 @@ function MenuContent() {
     }
 
     return (
-        <div className="min-h-screen bg-white pb-32 selection:bg-orange-100 selection:text-orange-900">
-            {/* ✨ Premium Background Elements */}
-            <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
-                <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-orange-100/30 rounded-full blur-[120px] -translate-y-1/2" />
-                <div className="absolute top-1/2 right-0 w-[400px] h-[400px] bg-indigo-50/40 rounded-full blur-[100px] translate-x-1/2" />
-                <div className="absolute bottom-1/4 left-0 w-[300px] h-[300px] bg-rose-50/30 rounded-full blur-[80px] -translate-x-1/2" />
+        <div className="min-h-screen bg-[#FCFBF7] pb-32 selection:bg-[#F4EBD0] selection:text-[#8B6508] font-sans">
+            {/* ✨ Premium Banquet Header */}
+            <div className="bg-white border-b border-[#D4AF37]/20 shadow-sm pt-8 pb-6 px-6 text-center relative overflow-hidden">
+                {/* Decorative Pattern Overlay */}
+                <div className="absolute inset-0 opacity-[0.03] pointer-events-none" 
+                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 0l30 30-30 30-30-30z' fill='%23D4AF37' fill-rule='evenodd'/%3E%3C/svg%3E")` }}>
+                </div>
+                
+                <div className="relative z-10">
+                    <p className="text-[#D4AF37] font-black text-[10px] uppercase tracking-[0.4em] mb-2 animate-in fade-in slide-in-from-bottom-2 duration-700">
+                        Welcome to Our Elegant
+                    </p>
+                    <h1 className="text-3xl font-serif font-bold text-[#1A1A1A] mb-1 tracking-tight">
+                        {restaurant?.name || 'Grand Banquet'}
+                    </h1>
+                    <div className="h-0.5 w-12 bg-gradient-to-r from-transparent via-[#D4AF37] to-transparent mx-auto mt-3"></div>
+                </div>
             </div>
 
-            {/* 🏆 Referral & Loyalty Floating Badges (Pinned to viewport) */}
+            {/* 🏆 Referral & Loyalty Floating Badges (Pinned to viewport) - Hidden for Banquet */}
             <div ref={floatingRef} className={cn(
-                "z-[100] flex flex-col items-end gap-2.5 transition-all duration-500",
+                "z-[100] flex flex-col items-end gap-2.5 transition-all duration-500 hidden",
                 "fixed right-0 top-1/2 -translate-y-1/2 floating-nav-container"
             )}>
                 {/* Points Button */}
@@ -747,37 +763,37 @@ function MenuContent() {
                 />
             </div>
 
-            <div className="relative z-10 px-4 pt-8 pb-2">
-                {/* 🔍 Search Bar Section */}
-                <div className="max-w-2xl mx-auto space-y-6 mb-10">
-                    <div className="relative bg-white/70 backdrop-blur-md shadow-xl shadow-slate-200/50 rounded-2xl border border-white overflow-hidden group focus-within:ring-2 ring-indigo-500/20 transition-all duration-500">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 group-focus-within:text-indigo-600 transition-colors pointer-events-none" />
+            <div className="relative z-10 px-4 pt-6 pb-2">
+                {/* 🔍 Sophisticated Search Section */}
+                <div className="max-w-2xl mx-auto space-y-4 mb-8">
+                    <div className="relative bg-white shadow-lg shadow-[#D4AF37]/5 rounded-2xl border border-[#D4AF37]/20 overflow-hidden group focus-within:ring-2 ring-[#D4AF37]/20 transition-all duration-500">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-[#D4AF37] group-focus-within:text-[#8B6508] transition-colors pointer-events-none" />
                         <Input
-                            placeholder="Discover your next favorite dish..."
+                            placeholder="Search for a delicacy..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pl-12 h-14 bg-transparent border-0 focus-visible:ring-0 text-base font-bold text-slate-950 placeholder:text-slate-400 placeholder:font-medium"
+                            className="pl-12 h-14 bg-transparent border-0 focus-visible:ring-0 text-base font-medium text-slate-900 placeholder:text-slate-400"
                         />
                     </div>
 
-                    {/* Dietary Filters (Veg/Non-Veg) */}
+                    {/* Dietary Filters */}
                     {showDietaryToggle && !searchQuery && (
                         <div className="flex justify-center">
-                            <div className="bg-white/80 backdrop-blur-md p-1 rounded-2xl border border-white shadow-sm flex gap-1">
+                            <div className="bg-[#F4EBD0]/30 backdrop-blur-md p-1 rounded-full border border-[#D4AF37]/10 flex gap-1">
                                 {(['all', 'veg', 'non-veg'] as const).map((type) => (
                                     <button
                                         key={type}
                                         onClick={() => setDietaryFilter(type)}
                                         className={cn(
-                                            "px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+                                            "px-5 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all",
                                             dietaryFilter === type 
-                                                ? "bg-slate-900 text-white shadow-lg" 
-                                                : "text-slate-500 hover:bg-slate-100"
+                                                ? "bg-[#D4AF37] text-white shadow-md shadow-[#D4AF37]/20" 
+                                                : "text-[#8B6508]/60 hover:bg-[#F4EBD0]/50"
                                         )}
                                     >
                                         <div className="flex items-center gap-1.5">
-                                            {type === 'veg' && <div className="w-1.5 h-1.5 rounded-full bg-green-500" />}
-                                            {type === 'non-veg' && <div className="w-1.5 h-1.5 rounded-full bg-red-500" />}
+                                            {type === 'veg' && <div className="w-1.5 h-1.5 rounded-full bg-green-600" />}
+                                            {type === 'non-veg' && <div className="w-1.5 h-1.5 rounded-full bg-red-600" />}
                                             {type}
                                         </div>
                                     </button>
@@ -787,20 +803,20 @@ function MenuContent() {
                     )}
                 </div>
 
-                {/* Items Grid */}
-                <div className="px-4 pb-4">
-                    <div className="flex items-center justify-between mb-4 mt-2">
-                        <h2 className="text-xl font-black tracking-tight text-foreground">
-                            {categories.find(c => c.id === activeCategory)?.name || 'Menu'}
+                {/* Cuisine Listings */}
+                <div className="px-2 pb-4">
+                    <div className="flex items-center justify-between mb-6 px-2">
+                        <h2 className="text-xl font-serif font-bold text-[#1A1A1A] flex items-center gap-2">
+                            <span className="w-1 h-6 bg-[#D4AF37] rounded-full"></span>
+                            {categories.find(c => c.id === activeCategory)?.name || 'Cuisine Selection'}
                         </h2>
-                        <span className="text-xs font-bold text-muted-foreground bg-secondary/50 px-2 py-1 rounded-full">
-                            {filteredItems.length} items
+                        <span className="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest bg-[#F4EBD0]/30 px-3 py-1 rounded-full border border-[#D4AF37]/10">
+                            {filteredItems.length} Offerings
                         </span>
                     </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         {filteredItems.length > 0 ? (
-                            filteredItems.map((item) => (
+                            filteredItems.map(item => (
                                 <MenuItemCard
                                     key={item.id}
                                     item={item}
@@ -808,10 +824,10 @@ function MenuContent() {
                                 />
                             ))
                         ) : (
-                            <div className="col-span-full py-20 text-center text-muted-foreground flex flex-col items-center gap-4">
+                            <div className="col-span-full py-20 text-center text-[#8B6508]/50 flex flex-col items-center gap-4">
                                 <Search className="h-12 w-12 opacity-10" />
-                                <p className="font-medium">No items found matching your taste.</p>
-                                <Button variant="outline" onClick={() => setSearchQuery('')}>Clear Search</Button>
+                                <p className="font-medium">No delicacies found matching your taste.</p>
+                                <Button variant="outline" onClick={() => setSearchQuery('')} className="border-[#D4AF37]/30 text-[#8B6508]">Clear Search</Button>
                             </div>
                         )}
                     </div>
@@ -825,218 +841,21 @@ function MenuContent() {
                 onClose={() => setIsModalOpen(false)}
             />
 
-            {/* Order Type Selection Modal - Narrower and more compact */}
-            <Dialog open={showOrderTypeModal} onOpenChange={setShowOrderTypeModal}>
-                <DialogContent className="max-w-[340px] w-[90%] p-0 overflow-hidden border-none shadow-[0_20px_50px_rgba(0,0,0,0.2)] bg-white/95 backdrop-blur-xl rounded-[2.5rem] fixed left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 outline-none group [&>button]:hidden">
-                    <DialogTitle className="sr-only">Select Order Mode</DialogTitle>
-                    <div className="p-6 pb-8 flex flex-col items-center gap-6">
-                        {/* Header Section */}
-                        <div className="relative group/icon">
-                            <div className="h-20 w-20 bg-gradient-to-br from-orange-50 to-orange-100/50 rounded-full flex items-center justify-center relative z-10 border border-orange-100/50 shadow-inner">
-                                <Utensils className="h-8 w-8 text-orange-500" />
-                            </div>
-                            <div className="absolute inset-0 bg-orange-400/10 rounded-full blur-2xl transition-all duration-500" />
-                        </div>
+            {/* Order Mode Selection Modal - DISABLED FOR BANQUET */}
 
-                        <div className="space-y-1 text-center">
-                            <h2 className="text-2xl font-black text-gray-900 tracking-tight">Welcome! 👋</h2>
-                            <p className="text-gray-500 font-medium text-sm px-2">
-                                Choose your order mode
-                            </p>
-                        </div>
-
-                        {/* Options Grid - Narrower */}
-                        <div className="grid grid-cols-1 gap-3 w-full px-2">
-                            {/* Dine In Card */}
-                            <button
-                                className="group relative w-full p-3 rounded-2xl bg-white border border-gray-100 hover:border-orange-200 hover:bg-orange-50/30 shadow-sm transition-all duration-300 flex items-center gap-4 active:scale-[0.97]"
-                                onClick={() => handleOrderTypeSelection('dine_in')}
-                            >
-                                <div className="h-10 w-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600 transition-all duration-300">
-                                    <Utensils className="h-5 w-5" />
-                                </div>
-                                <div className="flex-1 text-left">
-                                    <p className="font-black text-gray-900 text-base">Dine In</p>
-                                </div>
-                                <ChevronRight className="h-4 w-4 text-gray-300" />
-                            </button>
-
-                            {/* Take Away Card */}
-                            <button
-                                className="group relative w-full p-3 rounded-2xl bg-white border border-gray-100 hover:border-blue-200 hover:bg-blue-50/30 shadow-sm transition-all duration-300 flex items-center gap-4 active:scale-[0.97]"
-                                onClick={() => handleOrderTypeSelection('take_away')}
-                            >
-                                <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 transition-all duration-300">
-                                    <ShoppingBag className="h-5 w-5" />
-                                </div>
-                                <div className="flex-1 text-left">
-                                    <p className="font-black text-gray-900 text-base">Take Away</p>
-                                </div>
-                                <ChevronRight className="h-4 w-4 text-gray-300" />
-                            </button>
-
-                            {/* Home Delivery Card */}
-                            <button
-                                className="group relative w-full p-3 rounded-2xl bg-white border border-gray-100 hover:border-green-200 hover:bg-green-50/30 shadow-sm transition-all duration-300 flex items-center gap-4 active:scale-[0.97]"
-                                onClick={() => handleOrderTypeSelection('home_delivery')}
-                            >
-                                <div className="h-10 w-10 rounded-xl bg-green-50 flex items-center justify-center text-green-600 transition-all duration-300">
-                                    <Truck className="h-5 w-5" />
-                                </div>
-                                <div className="flex-1 text-left">
-                                    <p className="font-black text-gray-900 text-base">Home Delivery</p>
-                                </div>
-                                <ChevronRight className="h-4 w-4 text-gray-300" />
-                            </button>
-                        </div>
-                    </div>
-                </DialogContent>
-            </Dialog>
-
-            {/* 🏆 Loyalty Milestone Details - Customer Modal */}
+            {/* Loyalty Milestone Details - Hidden for Banquet but code preserved */}
             <Dialog open={isLoyaltyInfoOpen} onOpenChange={setIsLoyaltyInfoOpen}>
                 <DialogContent className="max-w-[340px] w-[90%] p-0 overflow-hidden border-none shadow-3xl bg-white rounded-[2.5rem] fixed left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 outline-none">
                     <DialogHeader className="p-0">
-                        <div className="bg-gradient-to-br from-indigo-600 to-purple-700 p-6 text-white text-center relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl -mr-12 -mt-12" />
-                            <Star className="h-8 w-8 mx-auto mb-2 text-yellow-400 fill-yellow-400 animate-pulse" />
-                            <DialogTitle className="text-xl font-black tracking-tight italic">Rewards Program</DialogTitle>
-                            <DialogDescription className="text-indigo-100 text-[9px] font-bold uppercase tracking-widest mt-1">Unlock Exclusive Perks</DialogDescription>
+                        <div className="bg-[#1A1A1A] p-6 text-white text-center relative overflow-hidden">
+                            <Star className="h-8 w-8 mx-auto mb-2 text-[#D4AF37] fill-[#D4AF37]" />
+                            <DialogTitle className="text-xl font-serif font-bold tracking-tight">Rewards Program</DialogTitle>
                         </div>
                     </DialogHeader>
-
-                    <div className="p-6 pt-2 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
-                        {/* Integrated Progress & Points Card */}
-                        {/* 🎫 Exclusive Coupons Section */}
-
-                        <div className="bg-slate-50 p-6 rounded-[2.5rem] border border-slate-100 shadow-inner space-y-4">
-                            <div className="flex justify-between items-center">
-                                <div className="space-y-1">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Your Balance</p>
-                                    <p className="text-3xl font-black text-gray-900 tracking-tight">{loyaltyPoints} <span className="text-xs text-indigo-500 font-bold uppercase ml-1">Pts</span></p>
-                                </div>
-                                <div className="h-14 w-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-100">
-                                    <Trophy className="h-7 w-7 text-yellow-500 fill-yellow-500" />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Rewards Progress List - "The Lalach Engine" */}
-                        <div className="space-y-5">
-                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-2 flex items-center justify-between">
-                                Available Perks 🎁
-                                <span className="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-full">{availableRewards.length} Tiers</span>
-                            </h3>
-                            
-                            <div className="space-y-4">
-                                {availableRewards.length === 0 ? (
-                                    <div className="py-10 text-center text-slate-300 font-bold text-[10px] uppercase tracking-widest italic">
-                                        No rewards active yet.
-                                    </div>
-                                ) : (
-                                    availableRewards.map((reward, i) => {
-                                        const isUnlocked = loyaltyPoints >= reward.threshold;
-                                        const progress = Math.min((loyaltyPoints / reward.threshold) * 100, 100);
-
-                                        return (
-                                            <div key={reward.id} className={cn(
-                                                "relative p-4 rounded-[2rem] border transition-all duration-500",
-                                                isUnlocked 
-                                                    ? "bg-indigo-50 border-indigo-100 shadow-lg shadow-indigo-100/50" 
-                                                    : "bg-white border-slate-100"
-                                            )}>
-                                                <div className="flex items-center gap-4">
-                                                    <div className="h-16 w-16 rounded-2xl bg-slate-100 border border-slate-50 overflow-hidden shrink-0 relative">
-                                                        {reward.reward_image ? (
-                                                            <img src={reward.reward_image} className="w-full h-full object-cover" alt={reward.reward_name} />
-                                                        ) : (
-                                                            <div className="w-full h-full flex items-center justify-center bg-slate-50">
-                                                                <Star className="h-6 w-6 text-slate-200" />
-                                                            </div>
-                                                        )}
-                                                        {isUnlocked && (
-                                                            <div className="absolute inset-0 bg-indigo-600/20 flex items-center justify-center backdrop-blur-[2px]">
-                                                                <div className="bg-white rounded-full p-1 shadow-lg">
-                                                                    <Zap className="h-4 w-4 text-indigo-600 fill-indigo-600" />
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center gap-2 mb-0.5">
-                                                            <span className={cn(
-                                                                "text-[9px] font-black uppercase tracking-widest",
-                                                                isUnlocked ? "text-indigo-600" : "text-slate-400"
-                                                            )}>
-                                                                {reward.threshold} Points Required
-                                                            </span>
-                                                        </div>
-                                                        <p className={cn(
-                                                            "font-black text-base tracking-tight truncate",
-                                                            isUnlocked ? "text-indigo-900" : "text-slate-900"
-                                                        )}>
-                                                            {reward.reward_name}
-                                                        </p>
-                                                        
-                                                        {/* Individual Tier Progress */}
-                                                        {!isUnlocked ? (
-                                                            <div className="mt-3 space-y-1.5">
-                                                                <div className="flex justify-between text-[8px] font-bold text-slate-400 tracking-widest uppercase">
-                                                                    <span>Progress</span>
-                                                                    <span>{reward.threshold - loyaltyPoints} to go</span>
-                                                                </div>
-                                                                <div className="h-1.5 w-full bg-slate-50 rounded-full overflow-hidden border border-slate-100 shadow-inner">
-                                                                    <div 
-                                                                        className="h-full bg-indigo-500 rounded-full transition-all duration-1000"
-                                                                        style={{ width: `${progress}%` }}
-                                                                    />
-                                                                </div>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="mt-3">
-                                                                {claimedTicket && claimedTicket.id === reward.id ? (
-                                                                    <div className="bg-green-600 text-white p-3 rounded-2xl text-center shadow-lg animate-in zoom-in-95 duration-300 relative group/ticket cursor-pointer active:scale-95 transition-all"
-                                                                        onClick={() => {
-                                                                            navigator.clipboard.writeText(claimedTicket.code);
-                                                                            toast.success('Redemption code copied! 📋');
-                                                                        }}
-                                                                    >
-                                                                        <p className="text-[10px] font-black uppercase tracking-widest opacity-80">REDEMPTION CODE</p>
-                                                                        <div className="flex items-center justify-center gap-2 mt-1">
-                                                                            <p className="text-xl font-black font-mono tracking-tighter">{claimedTicket.code}</p>
-                                                                            <Copy className="h-4 w-4 opacity-50" />
-                                                                        </div>
-                                                                        <p className="text-[8px] font-bold opacity-80 mt-1 uppercase tracking-tight">Tap to Copy & show the waiter</p>
-                                                                    </div>
-                                                                ) : (
-                                                                    <Button 
-                                                                        variant="default" 
-                                                                        size="sm" 
-                                                                        className="w-full h-10 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 active:scale-95 transition-all"
-                                                                        onClick={() => handleClaimReward(reward)}
-                                                                        disabled={!!claimingRewardId}
-                                                                    >
-                                                                        {claimingRewardId === reward.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "CLAIM REWARD NOW"}
-                                                                    </Button>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })
-                                )}
-                            </div>
-                        </div>
+                    <div className="p-8 text-center">
+                        <p className="text-sm text-[#8B6508]/60 italic">Loyalty features are currently being refined for the banquet experience.</p>
+                        <Button className="mt-8 w-full rounded-full bg-[#1A1A1A]" onClick={() => setIsLoyaltyInfoOpen(false)}>Close</Button>
                     </div>
-
-                    <Button 
-                            className="w-full h-14 rounded-2xl bg-slate-900 hover:bg-black text-white font-black text-[11px] uppercase tracking-[0.2em] shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3"
-                            onClick={() => setIsLoyaltyInfoOpen(false)}
-                        >
-                            Earn More Points <ChevronRight className="h-4 w-4" />
-                        </Button>
                 </DialogContent>
             </Dialog>
         </div>
@@ -1046,8 +865,8 @@ function MenuContent() {
 export default function MenuPage() {
     return (
         <Suspense fallback={
-            <div className="flex items-center justify-center min-h-screen bg-neutral-50">
-                <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+            <div className="flex items-center justify-center min-h-screen bg-[#FCFBF7]">
+                <div className="w-12 h-12 border-4 border-[#D4AF37] border-t-transparent rounded-full animate-spin" />
             </div>
         }>
             <MenuContent />

@@ -8,21 +8,21 @@
  *
  * Get Service Role Key from:
  *   Supabase Dashboard → Settings → API → service_role (secret)
- *   URL: https://supabase.com/dashboard/project/syimbjztkwjdettdjybw/settings/api
+ *   URL: https://supabase.com/dashboard/project/skgwlzcrhnjbozbuwklc/settings/api
  */
 
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const SUPABASE_URL = 'syimbjztkwjdettdjybw.supabase.co';
+const SUPABASE_URL = 'skgwlzcrhnjbozbuwklc.supabase.co';
 const SERVICE_KEY = process.argv[2];
 
 if (!SERVICE_KEY || SERVICE_KEY.length < 100) {
   console.log('\n❌ Service Role Key missing or invalid!');
   console.log('━'.repeat(60));
   console.log('📋 HOW TO GET IT:');
-  console.log('   1. Go to: https://supabase.com/dashboard/project/syimbjztkwjdettdjybw/settings/api');
+  console.log('   1. Go to: https://supabase.com/dashboard/project/skgwlzcrhnjbozbuwklc/settings/api');
   console.log('   2. Scroll to "Project API keys" section');
   console.log('   3. Copy the "service_role" key (marked as secret)');
   console.log('   4. Run: node setup_production.js eyJhbGci...');
@@ -121,7 +121,7 @@ function executeSQL(sql, migrationName) {
 
     const options = {
       hostname: 'api.supabase.com',
-      path: '/v1/projects/syimbjztkwjdettdjybw/database/query',
+      path: '/v1/projects/skgwlzcrhnjbozbuwklc/database/query',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

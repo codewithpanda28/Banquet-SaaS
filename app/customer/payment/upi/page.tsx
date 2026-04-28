@@ -39,26 +39,7 @@ function UPIPaymentContent() {
             setActiveButton(type)
             const isCash = type === 'cash'
             
-            // 📡 [Automation] Manual Trigger from Confirmation
-            const storedKey = `webhook_pending_${billId}`;
-            const storedData = sessionStorage.getItem(storedKey);
-            
-            if (storedData) {
-                const webhookData = JSON.parse(storedData)
-                console.log('📡 [UPI] Manual Webhook Trigger:', webhookData)
-                const { triggerAutomationWebhook } = await import('@/lib/webhook')
-                
-                // CRITICAL: Must be 'new-order' for n8n filters
-                await triggerAutomationWebhook('new-order', {
-                    ...webhookData,
-                    action: 'new-order',
-                    payment_confirmation: isCash ? 'cash' : 'online_self_reported',
-                    payment_status: isCash ? 'unpaid' : 'client_verified',
-                    is_manual_trigger: true
-                })
-                
-                sessionStorage.removeItem(storedKey)
-            }
+            // 📡 [Automation] Manual Trigger removed as requested
 
             toast.success(isCash ? 'Order Confirmed! Pay at Counter. 💰' : 'Thank you! Order Received. ✅')
             router.replace(`/customer/track/${billId}`)

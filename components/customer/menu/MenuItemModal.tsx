@@ -98,7 +98,7 @@ export function MenuItemModal({ item, isOpen, onClose }: MenuItemModalProps) {
                         <div className="space-y-2">
                             <div className="flex justify-between items-start gap-3">
                                 <DialogTitle className="text-2xl font-black leading-tight text-foreground">{item.name}</DialogTitle>
-                                <div className="flex flex-col items-end shrink-0">
+                                <div className="flex flex-col items-end shrink-0 hidden">
                                     {item.discounted_price ? (
                                         <>
                                             <span className="text-sm text-muted-foreground line-through decoration-red-500/50">₹{item.price}</span>
@@ -171,7 +171,7 @@ export function MenuItemModal({ item, isOpen, onClose }: MenuItemModalProps) {
                         onClick={handleAddToCart}
                         className="flex-1 h-12 rounded-xl text-base font-bold shadow-lg shadow-primary/25 hover:shadow-primary/40 active:scale-[0.98] transition-all"
                     >
-                        Add Item - ₹{((item.discounted_price || item.price) * quantity).toFixed(2)}
+                        Add to Order
                     </Button>
                 </div>
             </DialogContent>
