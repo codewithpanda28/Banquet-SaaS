@@ -664,6 +664,15 @@ export default function AdminDashboard() {
                     .from('restaurant_tables')
                     .update({ status: 'available' })
                     .eq('id', selectedOrder.table_id)
+
+                // Also mark the specific 'seated' booking for this table as completed
+                // This ensures the QR scan doesn't see it as "occupied" after payment
+                await supabase
+                    .from('table_bookings')
+                    .update({ status: 'completed' })
+                    .eq('table_id', selectedOrder.table_id)
+                    .eq('status', 'seated')
+                    .eq('booking_date', new Date().toISOString().split('T')[0])
             }
 
             // Update local state for immediate UI feedback
